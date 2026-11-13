@@ -197,6 +197,7 @@
       "actions": {
         "talk": "話しかける",
         "zoomIn": "近づく",
+        "zoomOut": "全体を見る",
         "resetView": "視点を戻す",
         "list": "通常の表示に戻る",
         "clockOut": "退社する"

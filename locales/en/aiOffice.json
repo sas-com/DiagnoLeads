@@ -197,6 +197,7 @@
       "actions": {
         "talk": "Talk",
         "zoomIn": "Closer",
+        "zoomOut": "Step back",
         "resetView": "Reset view",
         "list": "Back to the normal view",
         "clockOut": "Leave"

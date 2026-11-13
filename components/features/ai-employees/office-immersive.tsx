@@ -19,6 +19,7 @@ import {
   Sun,
   UserPlus,
   ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { useFormatter, useTimeZone, useTranslations } from 'next-intl';
 import {
@@ -302,7 +303,7 @@ export function OfficeImmersive({
     setDragging(false);
   };
   const zoomBy = (factor: number) => {
-    const next = Math.max(1, Math.min(ZOOM_MAX, zoom * factor));
+    const next = Math.max(home.out, Math.min(ZOOM_MAX, zoom * factor));
     setZoom(next);
     setPan((current) => clampPan(current.x, current.y, next));
   };
@@ -599,6 +600,10 @@ export function OfficeImmersive({
                   <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
                     <ZoomIn className="h-6 w-6" aria-hidden="true" />
                     {t('actions.zoomIn')}
+                  </HudButton>
+                  <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
+                    <ZoomOut className="h-6 w-6" aria-hidden="true" />
+                    {t('actions.zoomOut')}
                   </HudButton>
                   <HudButton onClick={resetView} hotkey="0">
                     <ScanSearch className="h-6 w-6" aria-hidden="true" />

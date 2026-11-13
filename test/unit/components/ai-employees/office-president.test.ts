@@ -7,6 +7,7 @@ import {
   PRESIDENT_TASKS_MAX,
   cameraOffset,
   firstRoleToVisit,
+  HOME_CLOSE_UP,
   homeView,
   hourIn,
   isNightHour,
@@ -103,14 +104,17 @@ describe('the president’s office', () => {
     expect(offset).toEqual({ x: 320 - 1000, y: 400 - 350 });
   });
 
-  it('starts with the whole floor in view on a wide screen, covering the screen on a narrow one', () => {
+  it('starts closer than the whole floor on a wide screen, covering the screen on a narrow one', () => {
     const aspect = 10 / 7;
     // 1440 x 900: the floor that covers the screen is 1440 wide, the one that fits is 900 * 10 / 7
     const wide = homeView({ w: 1440, h: 900 }, aspect);
-    expect(wide.zoom).toBeCloseTo((900 * aspect) / 1440, 5);
-    expect(wide).toMatchObject({ x: 0, y: -45 });
+    expect(wide.zoom).toBeCloseTo(((900 * aspect) / 1440) * HOME_CLOSE_UP, 5);
+    expect(wide).toMatchObject({ x: 0, y: -27 });
+    // Stepping back as far as the camera goes brings the whole floor into view
+    expect(wide.zoom * wide.out).toBeCloseTo((900 * aspect) / 1440, 5);
     // A screen wider than the floor: the floor already fits by its height
-    expect(homeView({ w: 2560, h: 1080 }, aspect).zoom).toBeCloseTo((1080 * aspect) / 2560, 5);
-    expect(homeView({ w: 390, h: 844 }, aspect)).toEqual({ zoom: 1, x: 0, y: 0 });
+    const ultra = homeView({ w: 2560, h: 1080 }, aspect);
+    expect(ultra.zoom * ultra.out).toBeCloseTo((1080 * aspect) / 2560, 5);
+    expect(homeView({ w: 390, h: 844 }, aspect)).toEqual({ zoom: 1, x: 0, y: 0, out: 1 });
   });
 });
