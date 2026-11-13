@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "notification_preferences_user_org_unique" ON "notification_preferences" USING btree ("user_id","organization_id");
