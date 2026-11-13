@@ -64,3 +64,4 @@ drizzle/meta/*
 .claude/settings.local.json
 # Worktrees created by claude --worktree
 .claude/worktrees/
+storybook-static/
