@@ -31,8 +31,16 @@ import {
   useRef,
   useState,
 } from 'react';
+import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
-import { AREA_RECTS, FLOOR_DEPTH, FLOOR_WIDTH, areaOf, spotOf } from './office-map-layout';
+import {
+  AREA_RECTS,
+  DESK_SEATS,
+  FLOOR_DEPTH,
+  FLOOR_WIDTH,
+  areaOf,
+  spotOf,
+} from './office-map-layout';
 import {
   type TalkChoice,
   cameraOffset,
@@ -46,19 +54,12 @@ import {
 } from './office-president';
 import { STATUS_LIGHT, shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
+import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
+import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from './office-rooms';
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
 
-type Stage = 'title' | 'world' | 'talk';
-
-/** The dark glass of the HUD with its brass line on top and a cut corner */
-const PANEL =
-  'border-t-2 border-[#e9cf9a] bg-[linear-gradient(180deg,rgba(16,21,34,0.92)_0%,rgba(10,14,24,0.84)_100%)] text-[#f5f1e8] backdrop-blur-md [clip-path:polygon(0_0,100%_0,100%_calc(100%-14px),calc(100%-14px)_100%,0_100%)]';
-const CAP = 'text-xs font-bold tracking-[0.2em] text-[#e9cf9a] uppercase';
-const KEY =
-  'inline-flex h-6 min-w-6 items-center justify-center rounded border border-[#f5f1e8]/50 px-1.5 text-xs font-bold';
-const FOCUS =
-  'focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-[#ffd43d]';
+type Stage = 'title' | 'world' | 'talk' | 'room';
 
 /** How far the office can be dragged past the edge of the screen */
 const PAN_MARGIN = { x: 320, y: 200 };
@@ -70,6 +71,8 @@ const ZOOM_MAX = 2;
 const ZOOM_STEP = 1.25;
 /** How close the camera comes in a conversation */
 const TALK_ZOOM = 2.1;
+/** How close the camera comes in a room: the desk stays in view beside the room's board */
+const ROOM_ZOOM = 1.9;
 
 /**
  * The full-screen office (Refs #1109): the user enters the office as the president of the
@@ -118,6 +121,9 @@ export function OfficeImmersive({
   // What the AI employee said to the last answer, and whether the answer was carried out
   const [outcome, setOutcome] = useState<{ text: string; ok: boolean } | null>(null);
   const [dragging, setDragging] = useState(false);
+  // The room the president is in (stage 'room'), and what its keys do
+  const [room, setRoom] = useState<OfficeRoom>(OFFICE_ROOMS[0]);
+  const roomKeys = useRef<RoomKeys | null>(null);
 
   const statuses = statusByRole(employees);
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
@@ -188,6 +194,10 @@ export function OfficeImmersive({
     }
     onExit();
   }, [onExit]);
+  const enterRoom = (next: OfficeRoom) => {
+    setRoom(next);
+    setStage('room');
+  };
   const talkTo = (role: AiEmployeeRole) => {
     setSelected(role);
     setOutcome(null);
@@ -202,7 +212,7 @@ export function OfficeImmersive({
   const choices: TalkChoice[] = answered ? ['leave'] : talkChoices(selectedStatus, canManage);
   const busy = hire.isPending || update.isPending;
   const stepBack = () => {
-    if (stage === 'talk') setStage('world');
+    if (stage === 'talk' || stage === 'room') setStage('world');
     else if (stage === 'world') setStage('title');
     else leave();
   };
@@ -245,7 +255,17 @@ export function OfficeImmersive({
       } else if (event.key === '0') {
         event.preventDefault();
         resetView();
+      } else {
+        const entered = roomOfKey(event.key);
+        if (entered) {
+          event.preventDefault();
+          enterRoom(entered);
+        }
       }
+      return;
+    }
+    if (stage === 'room') {
+      roomKeys.current?.(event);
       return;
     }
     if (stage === 'talk' && /^[1-9]$/.test(event.key)) {
@@ -263,22 +283,44 @@ export function OfficeImmersive({
   const spot = spotOf(selected, selectedStatus);
   const [spotX, spotY] = project(spot.x, spot.y);
   const home = homeView(size, SCENE_WIDTH / SCENE_HEIGHT);
-  const scale = stage === 'talk' ? TALK_ZOOM : stage === 'world' ? home.zoom * zoom : 1.08;
-  const camera =
+  const scale =
     stage === 'talk'
+      ? TALK_ZOOM
+      : stage === 'room'
+        ? ROOM_ZOOM
+        : stage === 'world'
+          ? home.zoom * zoom
+          : 1.08;
+  // In a room the camera rests on the desk of the room's AI employee, left of the board
+  const [roomDeskX, roomDeskY] = project(
+    DESK_SEATS[ROOM_ROLES[room]].x,
+    DESK_SEATS[ROOM_ROLES[room]].y
+  );
+  const camera =
+    stage === 'room'
       ? cameraOffset({
           width,
           height,
           scale,
-          px: spotX / SCENE_WIDTH,
-          py: (spotY - 45) / SCENE_HEIGHT,
-          targetX: size.w * 0.32,
-          targetY: size.h * 0.42,
+          px: roomDeskX / SCENE_WIDTH,
+          py: (roomDeskY - 45) / SCENE_HEIGHT,
+          targetX: size.w * 0.15,
+          targetY: size.h * 0.3,
         })
-      : {
-          x: (size.w - width * scale) / 2 + (stage === 'world' ? home.x + pan.x : 0),
-          y: (size.h - height * scale) / 2 + (stage === 'world' ? home.y + pan.y : 0),
-        };
+      : stage === 'talk'
+        ? cameraOffset({
+            width,
+            height,
+            scale,
+            px: spotX / SCENE_WIDTH,
+            py: (spotY - 45) / SCENE_HEIGHT,
+            targetX: size.w * 0.32,
+            targetY: size.h * 0.42,
+          })
+        : {
+            x: (size.w - width * scale) / 2 + (stage === 'world' ? home.x + pan.x : 0),
+            y: (size.h - height * scale) / 2 + (stage === 'world' ? home.y + pan.y : 0),
+          };
 
   // The office can be dragged a little past the edge of the screen, to see what the panels cover
   const clampPan = (x: number, y: number, s: number) => {
@@ -590,6 +632,29 @@ export function OfficeImmersive({
               {/* The map of the floor */}
               <FloorMap statuses={statuses} selected={selected} label={t('map')} />
 
+              {/* The floor guide: the rooms that hold work */}
+              <nav
+                aria-label={t('floorGuide')}
+                className="absolute inset-x-0 bottom-32 flex justify-center gap-2 lg:top-5 lg:bottom-auto"
+              >
+                {OFFICE_ROOMS.map((entry) => (
+                  <button
+                    key={entry}
+                    type="button"
+                    onClick={() => enterRoom(entry)}
+                    className={cn(
+                      'flex min-h-11 items-center gap-2.5 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-3.5 text-left text-sm hover:bg-[rgba(36,44,64,0.95)]',
+                      FOCUS
+                    )}
+                  >
+                    <span className={KEY}>{ROOM_KEYS[entry]}</span>
+                    <span className="font-bold">{tOffice(`rooms.${entry}`)}</span>
+                    <span className="text-[#d8d2c4]">{t(`room.work.${entry}`)}</span>
+                    <DoorOpen className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                  </button>
+                ))}
+              </nav>
+
               {/* The actions */}
               <div className="absolute inset-x-0 bottom-6 flex flex-col items-center">
                 <div className="flex gap-2.5">
@@ -663,6 +728,45 @@ export function OfficeImmersive({
                   {t('actions.talk')}
                 </button>
               </div>
+            </>
+          )}
+
+          {stage === 'room' && (
+            <>
+              {/* The room darkens towards its board; the desk stays in the light */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(6,10,20,0.15)_0%,rgba(6,10,20,0.45)_30%,rgba(6,10,20,0.82)_100%)]"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(6,10,20,0.85)_0%,rgba(6,10,20,0)_100%)]"
+              />
+              <div className="absolute top-4 left-6">
+                <p className={CAP}>{tOffice(`rooms.${room}`)}</p>
+                <h2 className="text-xl font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)]">
+                  {t(`room.work.${room}`)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStage('world')}
+                className={cn(
+                  'absolute top-5 right-6 flex min-h-11 items-center gap-2.5 px-2 text-sm font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)] hover:text-white',
+                  FOCUS
+                )}
+              >
+                <span className={cn(KEY, 'bg-[#0a0e18]/60')}>Esc</span>
+                {t('room.back')}
+              </button>
+              <OfficeRoomLeads
+                organizationId={organizationId}
+                role={ROOM_ROLES[room]}
+                status={statuses[ROOM_ROLES[room]]}
+                employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
+                keysRef={roomKeys}
+                onOpenLead={leave}
+              />
             </>
           )}
 

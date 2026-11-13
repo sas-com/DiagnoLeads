@@ -226,6 +226,64 @@
         },
         "resumedTraining": "{name}、研修に戻ります。仕事の準備ができしだい働き始めます。",
         "trainingFirst": "採用しても、仕事の準備ができるまでは研修中です。"
+      },
+      "floorGuide": "フロア案内",
+      "room": {
+        "back": "フロアへ戻る",
+        "work": {
+          "marketing": "リード管理"
+        },
+        "guide": {
+          "employee": "{name}が、この部屋を受け持っています。",
+          "training": "{name}は研修中で、まだこの部屋の仕事を受け持っていません。数字はボードから読み上げています。",
+          "paused": "{name}は休止中です。数字はボードから読み上げています。",
+          "vacant": "{role}は空席です。数字はボードから読み上げています。"
+        },
+        "leads": {
+          "board": "見込み客ボード",
+          "report": "今週の新しい見込み客は {newThisWeek} 件です。相談の申込は {consultation} 件、まだ着手していないものは {needsAction} 件あります。",
+          "reportLoading": "ボードの数字を読んでいます。",
+          "reportUnavailable": "ボードの数字を読めませんでした。",
+          "ask": {
+            "needsAction": "まだ着手していないものを見せて",
+            "consultation": "相談の申込を見せて",
+            "newThisWeek": "今週の新しいものを見せて",
+            "mine": "自分の担当を見せて",
+            "all": "全部見せて"
+          },
+          "views": {
+            "needsAction": "まだ着手していない（新規）",
+            "consultation": "相談の申込あり",
+            "newThisWeek": "今週の新規",
+            "mine": "自分の担当",
+            "all": "すべて"
+          },
+          "count": "{count} 件",
+          "keys": {
+            "rows": "行を選ぶ",
+            "open": "開く"
+          },
+          "columns": {
+            "lead": "会社・名前",
+            "mql": "MQL段階",
+            "status": "状態",
+            "assignee": "担当",
+            "created": "登録日"
+          },
+          "noCompany": "会社名なし",
+          "noLevel": "—",
+          "unassigned": "担当未定",
+          "empty": "この絞り込みに当たる見込み客はいません。",
+          "loading": "読み込んでいます",
+          "error": "見込み客を読めませんでした。時間をおいて、もう一度開いてください。",
+          "forbidden": "見込み客を見る権限がありません。管理者に確かめてください。",
+          "range": "{total} 件中 {from}〜{to} 件",
+          "openHint": "行を開くと、通常の表示でリードの詳細に進みます。",
+          "openList": "通常の表示の一覧で開く",
+          "prev": "前へ",
+          "next": "次へ",
+          "page": "{page} / {pages}"
+        }
       }
     },
     "enterOffice": "出社する（全画面）",

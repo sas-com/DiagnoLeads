@@ -226,6 +226,64 @@
         },
         "resumedTraining": "{name}, back to training. I will start working once my work is ready.",
         "trainingFirst": " Until its work is ready, a new hire stays in training."
+      },
+      "floorGuide": "Floor guide",
+      "room": {
+        "back": "Back to the floor",
+        "work": {
+          "marketing": "Leads"
+        },
+        "guide": {
+          "employee": "{name} looks after this room.",
+          "training": "{name} is in training and does not look after this room yet. The figures are read from the board.",
+          "paused": "{name} is paused. The figures are read from the board.",
+          "vacant": "The {role} seat is vacant. The figures are read from the board."
+        },
+        "leads": {
+          "board": "Lead board",
+          "report": "New leads this week: {newThisWeek}. Consultation requests: {consultation}. Not started yet: {needsAction}.",
+          "reportLoading": "Reading the figures from the board.",
+          "reportUnavailable": "The figures could not be read from the board.",
+          "ask": {
+            "needsAction": "Show me what nobody has started on",
+            "consultation": "Show me the consultation requests",
+            "newThisWeek": "Show me this week's new leads",
+            "mine": "Show me my own leads",
+            "all": "Show me everything"
+          },
+          "views": {
+            "needsAction": "Not started yet (new)",
+            "consultation": "Consultation requested",
+            "newThisWeek": "New this week",
+            "mine": "Assigned to me",
+            "all": "All"
+          },
+          "count": "{count, plural, one {# lead} other {# leads}}",
+          "keys": {
+            "rows": "choose a row",
+            "open": "open"
+          },
+          "columns": {
+            "lead": "Company and name",
+            "mql": "MQL level",
+            "status": "Status",
+            "assignee": "Assignee",
+            "created": "Created"
+          },
+          "noCompany": "No company name",
+          "noLevel": "—",
+          "unassigned": "Unassigned",
+          "empty": "No leads match this view.",
+          "loading": "Loading",
+          "error": "The leads could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see leads. Please ask an administrator.",
+          "range": "{from}–{to} of {total}",
+          "openHint": "Opening a row goes to the lead's page in the normal view.",
+          "openList": "Open the list in the normal view",
+          "prev": "Previous",
+          "next": "Next",
+          "page": "{page} / {pages}"
+        }
       }
     },
     "enterOffice": "Enter the office (full screen)",
