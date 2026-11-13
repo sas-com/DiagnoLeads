@@ -228,6 +228,7 @@
         "trainingFirst": " Until its work is ready, a new hire stays in training."
       }
     },
-    "enterOffice": "Enter the office (full screen)"
+    "enterOffice": "Enter the office (full screen)",
+    "installApp": "Install as an app"
   }
 }

@@ -8,10 +8,11 @@ import { authClient } from '@/lib/auth/client';
 import { summarizeOffice } from '@/lib/features/ai-employees/office';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { trpc } from '@/lib/trpc/client';
-import { Building2, Loader2, Lock } from 'lucide-react';
+import { Building2, Download, Loader2, Lock } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { DeskSheet, OFFICE_REFRESH_MS } from './desk-sheet';
+import { isAppWindow, launchedAsApp, useInstallApp } from './office-app';
 import { OfficeImmersive } from './office-immersive';
 import { OfficeMap } from './office-map';
 
@@ -31,6 +32,11 @@ export function OfficeScreen() {
   const { organizationId: contextOrgId, organization } = useOrganization();
   const { data: session } = authClient.useSession();
   const [immersive, setImmersive] = useState(false);
+  const { install } = useInstallApp();
+  // Opened as the app (the installed app, or its start URL): the office is the first screen
+  useEffect(() => {
+    if (launchedAsApp(window.location.search, isAppWindow(window))) setImmersive(true);
+  }, []);
   const enterRef = useRef<HTMLButtonElement>(null);
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const office = trpc.aiEmployees.office.useQuery(
@@ -63,6 +69,12 @@ export function OfficeScreen() {
                   }),
                 })}
               </span>
+              {install && (
+                <Button type="button" variant="outline" className="min-h-11" onClick={install}>
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  {t('installApp')}
+                </Button>
+              )}
               <Button
                 ref={enterRef}
                 type="button"

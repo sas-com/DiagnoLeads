@@ -228,6 +228,7 @@
         "trainingFirst": "採用しても、仕事の準備ができるまでは研修中です。"
       }
     },
-    "enterOffice": "出社する（全画面）"
+    "enterOffice": "出社する（全画面）",
+    "installApp": "アプリとしてインストール"
   }
 }
