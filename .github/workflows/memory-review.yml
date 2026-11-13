@@ -20,6 +20,9 @@ on:
 permissions:
   contents: read
   issues: write
+  # The search API leaves out kinds the token cannot read, so without this every month counts
+  # 0 merged PRs even though the repository is public (#1122)
+  pull-requests: read
 
 concurrency:
   group: memory-review
@@ -60,6 +63,9 @@ jobs:
           read -r prs incomplete <<< "$counts"
           if [ "$prs" -gt 1000 ] || [ "$incomplete" = "true" ]; then
             echo "::warning::Search returned $prs PRs (incomplete=$incomplete); only the first 1000 are read"
+          fi
+          if [ "$prs" -eq 0 ]; then
+            echo "::warning::Search returned no merged PRs for $from..$to; check the token's permissions"
           fi
           echo "PRS=$prs" >> "$GITHUB_ENV"
 
