@@ -10,6 +10,7 @@ import {
   AI_STAT_POINTS,
   AI_TONES,
   type AiEmployeeProfile,
+  type AiEmployeeProfilePatch,
   ROBOT_LOOK_PARTS,
   ROBOT_LOOK_PART_NAMES,
   type RobotLook,
@@ -75,6 +76,8 @@ export function OfficeStudio({
   const [draft, setDraft] = useState<AiEmployeeProfile>(employee.profile);
   const [tab, setTab] = useState<StudioTab>('look');
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const changed = (part: keyof AiEmployeeProfile) =>
+    JSON.stringify(draft[part]) !== JSON.stringify(saved[part]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
 
   const update = trpc.aiEmployees.update.useMutation({
@@ -93,7 +96,13 @@ export function OfficeStudio({
   const setLook = (look: RobotLook) => change({ ...draft, look });
   const save = () => {
     if (update.isPending || !dirty) return;
-    update.mutate({ organizationId, employeeId: employee.id, profile: draft });
+    // Only the parts that changed are sent: a part somebody else saved meanwhile is left alone
+    const profile: AiEmployeeProfilePatch = {};
+    if (changed('look')) profile.look = draft.look;
+    if (changed('tone')) profile.tone = draft.tone;
+    if (changed('stats')) profile.stats = draft.stats;
+    if (changed('workStyle')) profile.workStyle = draft.workStyle;
+    update.mutate({ organizationId, employeeId: employee.id, profile });
   };
 
   // The studio's keys: the numbers open the tabs. Esc with unsaved changes warns once.

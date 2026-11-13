@@ -16,6 +16,8 @@ import {
   stepAiStat,
 } from '@/lib/features/ai-employees/types/profile';
 import { updateAiEmployeeSchema } from '@/lib/features/ai-employees/types/schemas';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const look = {
@@ -144,5 +146,20 @@ describe('randomRobotLook', () => {
       expect(last[part]).toBe(ROBOT_LOOK_PARTS[part].at(-1));
     }
     expect(aiEmployeeProfilePatchSchema.safeParse({ look: randomRobotLook() }).success).toBe(true);
+  });
+});
+
+describe('the migration of the AI employee tables', () => {
+  const sql = readFileSync(resolve(__dirname, '../../../../drizzle/0039_ai_employees.sql'), 'utf8');
+
+  it('adds the profile with a default, so rows written without it stay valid', () => {
+    expect(sql).toContain(`"profile" jsonb DEFAULT '{}'::jsonb NOT NULL`);
+  });
+
+  it('turns row level security on for both tables, like the other tables of an organization', () => {
+    // No policies: the app connects as the owner. This keeps other database roles out (the
+    // Supabase Data API roles lose their grants in scripts/supabase/prepare.sql as well)
+    expect(sql).toContain('ALTER TABLE "ai_employees" ENABLE ROW LEVEL SECURITY;');
+    expect(sql).toContain('ALTER TABLE "ai_employee_runs" ENABLE ROW LEVEL SECURITY;');
   });
 });

@@ -33,4 +33,6 @@ ALTER TABLE "ai_employees" ADD CONSTRAINT "ai_employees_organization_id_organiza
 ALTER TABLE "ai_employees" ADD CONSTRAINT "ai_employees_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "ai_employee_runs_employee_started_idx" ON "ai_employee_runs" USING btree ("employee_id","started_at");--> statement-breakpoint
 CREATE INDEX "ai_employee_runs_organization_started_idx" ON "ai_employee_runs" USING btree ("organization_id","started_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "ai_employees_organization_role_unique" ON "ai_employees" USING btree ("organization_id","role");
+CREATE UNIQUE INDEX "ai_employees_organization_role_unique" ON "ai_employees" USING btree ("organization_id","role");--> statement-breakpoint
+ALTER TABLE "ai_employees" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "ai_employee_runs" ENABLE ROW LEVEL SECURITY;

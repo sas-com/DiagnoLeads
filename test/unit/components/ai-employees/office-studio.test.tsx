@@ -212,6 +212,16 @@ describe('the studio', () => {
     );
   });
 
+  it('sends only the parts that changed, so a part saved by someone else meanwhile stays', async () => {
+    const { user, office, board } = await openStudio();
+    await user.keyboard('2');
+    await user.click(within(board).getByRole('button', { name: /簡潔/ }));
+    await user.click(within(office).getByRole('button', { name: '保存する' }));
+    expect(mocks.updates).toEqual([
+      { organizationId: ORG_ID, employeeId: EMPLOYEE_ID, profile: { tone: 'brisk' } },
+    ]);
+  });
+
   it('never spends more ability points than there are', async () => {
     const { user, board } = await openStudio();
     await user.keyboard('3');
