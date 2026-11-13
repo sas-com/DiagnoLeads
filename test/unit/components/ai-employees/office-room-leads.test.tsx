@@ -56,6 +56,7 @@ const mocks = vi.hoisted(() => ({
   deleted: [] as { organizationId: string; id: string }[],
   canEdit: true,
   failRecord: false,
+  failDelete: false,
   contactsFail: false,
   refreshed: vi.fn(),
 }));
@@ -134,9 +135,13 @@ vi.mock('@/lib/trpc/client', () => ({
         }),
       },
       deleteContact: {
-        useMutation: (options: { onSuccess?: () => void } = {}) => ({
+        useMutation: (options: { onSuccess?: () => void; onError?: () => void } = {}) => ({
           isPending: false,
           mutate: (input: { organizationId: string; id: string }) => {
+            if (mocks.failDelete) {
+              options.onError?.();
+              return;
+            }
             mocks.deleted.push(input);
             mocks.records = mocks.records.filter((r) => r.id !== input.id);
             options.onSuccess?.();
@@ -215,6 +220,7 @@ describe('the marketing room', () => {
     mocks.deleted.length = 0;
     mocks.canEdit = true;
     mocks.failRecord = false;
+    mocks.failDelete = false;
     mocks.contactsFail = false;
     mocks.refreshed.mockClear();
   });
@@ -405,6 +411,7 @@ describe('the customer file in the room', () => {
     mocks.deleted.length = 0;
     mocks.canEdit = true;
     mocks.failRecord = false;
+    mocks.failDelete = false;
     mocks.contactsFail = false;
     mocks.refreshed.mockClear();
   });
@@ -431,7 +438,7 @@ describe('the customer file in the room', () => {
     expect(document.activeElement?.textContent).toContain('まだ連絡の記録がありません');
     // Esc now closes the file, so only the file shows the key; the way to the floor is a button
     expect(within(office).getByRole('button', { name: 'フロアへ戻る' })).toBeInTheDocument();
-    expect(within(file).getByRole('button', { name: /Esc.*ボードに戻る/ })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /Esc.*ボードに戻る/ })).toBeInTheDocument();
   });
 
   it('goes back to the board with Esc, the focus on the row it came from, then to the floor', async () => {
@@ -458,33 +465,72 @@ describe('the customer file in the room', () => {
     expect(mocks.refreshed).toHaveBeenCalled();
   });
 
-  it('records with the number keys, and the same key pressed again goes back instead of recording twice', async () => {
+  it('records with the number keys, and no key records twice or turns into the undo', async () => {
     const { user, office } = await openFile();
     await user.keyboard('1');
     expect(mocks.recorded.map((input) => input.kind)).toEqual(['call']);
-    const choices = within(office)
-      .getAllByRole('button')
-      .filter((button) => /ボードに戻る|取り消す|電話した/.test(button.textContent ?? ''));
-    expect(choices.map((button) => button.textContent)).toEqual(
-      expect.arrayContaining(['1ボードに戻る', '2いまの記録を取り消す'])
+    // The contacts keep their places and keys, closed; the undo has its own key; Esc goes back
+    const called = within(office).getByRole('button', { name: /電話した/ });
+    expect(called).toHaveTextContent('1電話した');
+    expect(called).toHaveAttribute('aria-disabled', 'true');
+    expect(within(office).getByRole('button', { name: /メールした/ })).toHaveTextContent(
+      '2メールした'
     );
-    expect(within(office).queryByRole('button', { name: /電話した/ })).not.toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /いまの記録を取り消す/ })).toHaveTextContent(
+      'Zいまの記録を取り消す'
+    );
+    // The focus is on the report, off the closed button
+    expect(document.activeElement?.textContent).toContain('「電話した」を記録しました');
 
-    await user.keyboard('1');
+    await user.keyboard('123');
+    await user.click(called);
     expect(mocks.recorded).toHaveLength(1);
     expect(mocks.deleted).toHaveLength(0);
-    expect(within(office).getByRole('region', { name: '見込み客ボード' })).toBeInTheDocument();
+    // Nothing went back either: the file is still open
+    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
   });
 
-  it('takes the record back, and offers the answers again', async () => {
+  it('takes the record back with its own key, and opens the answers again', async () => {
     const { user, office, file } = await openFile();
+    await user.keyboard('z');
+    expect(mocks.deleted).toHaveLength(0);
     await user.keyboard('3');
     expect(mocks.recorded.map((input) => input.kind)).toEqual(['no_answer']);
-    await user.click(within(office).getByRole('button', { name: /いまの記録を取り消す/ }));
+    await user.keyboard('z');
     expect(mocks.deleted).toEqual([{ organizationId: ORG_ID, id: 'contact-1' }]);
     expect(within(office).getByText('記録を取り消しました。')).toBeInTheDocument();
     expect(within(file).getByText('まだ記録がありません。')).toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /電話した/ })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /電話した/ })).not.toHaveAttribute(
+      'aria-disabled'
+    );
+    expect(
+      within(office).queryByRole('button', { name: /いまの記録を取り消す/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the record in hand when the undo fails, so it can be asked for again', async () => {
+    const { user, office } = await openFile();
+    await user.keyboard('2');
+    mocks.failDelete = true;
+    await user.click(within(office).getByRole('button', { name: /いまの記録を取り消す/ }));
+    expect(
+      within(office).getByText('取り消せませんでした。記録は残っています。もう一度お願いします。')
+    ).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /メールした/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    mocks.failDelete = false;
+    await user.keyboard('Z');
+    expect(mocks.deleted).toEqual([{ organizationId: ORG_ID, id: 'contact-1' }]);
+    expect(mocks.recorded).toHaveLength(1);
+  });
+
+  it('shows who holds the room over the file too', async () => {
+    const { office } = await openFile();
+    expect(
+      within(office).getByText('マーケターは空席です。数字は記録から読み上げています。')
+    ).toBeInTheDocument();
   });
 
   it('reads the last contact from the records', async () => {
@@ -527,10 +573,11 @@ describe('the customer file in the room', () => {
     const { user, office } = await openFile();
     expect(within(office).getByText('連絡を記録する権限がありません。')).toBeInTheDocument();
     expect(within(office).queryByRole('button', { name: /電話した/ })).not.toBeInTheDocument();
-    await user.keyboard('2');
-    await user.keyboard('3');
+    await user.keyboard('123z');
     expect(mocks.recorded).toHaveLength(0);
-    await user.keyboard('1');
+    // The numbers never go back: only Esc does
+    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
     expect(within(office).getByRole('region', { name: '見込み客ボード' })).toBeInTheDocument();
   });
 

@@ -285,7 +285,8 @@ export function OfficeImmersive({
       return;
     }
     if (stage === 'room' || stage === 'studio') {
-      roomKeys.current?.(event);
+      // Esc reaches the room once, through onEscapeKeyDown: here it would be handled twice
+      if (event.key !== 'Escape') roomKeys.current?.(event);
       return;
     }
     if (stage === 'talk' && /^[1-9]$/.test(event.key)) {
@@ -839,7 +840,6 @@ export function OfficeImmersive({
                   employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
                   look={looks[ROOM_ROLES[room]]}
                   keysRef={roomKeys}
-                  onBack={() => setStage('world')}
                   onOpenNormal={leave}
                 />
               )}

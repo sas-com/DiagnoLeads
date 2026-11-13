@@ -5,12 +5,14 @@ import {
   LEAD_BOARD_VIEWS,
   LEAD_REPORT_VIEWS,
   OFFICE_ROOMS,
+  DUE_KEYS,
+  FILE_KEYS,
   daysOverdue,
-  dueChoiceOfKey,
-  dueChoices,
+  dueActionOfKey,
+  dueActionOpen,
   dueState,
-  fileChoiceOfKey,
-  fileChoices,
+  fileActionOfKey,
+  fileActionOpen,
   ROOM_KEYS,
   ROOM_ROLES,
   leadBoardFilters,
@@ -51,10 +53,10 @@ describe('roomGuide', () => {
   it('lets only an AI employee that works or waits for work hold the room', () => {
     expect(roomGuide('working')).toBe('employee');
     expect(roomGuide('idle')).toBe('employee');
-    expect(roomGuide('attention')).toBe('employee');
   });
 
-  it('says so when the AI employee is in training, paused or not hired', () => {
+  it('says so when the AI employee is stuck, in training, paused or not hired', () => {
+    expect(roomGuide('attention')).toBe('attention');
     expect(roomGuide('training')).toBe('training');
     expect(roomGuide('paused')).toBe('paused');
     expect(roomGuide('vacant')).toBe('vacant');
@@ -139,54 +141,82 @@ describe('nextRow', () => {
   });
 });
 
-describe('the choices over an open file', () => {
-  it('record a contact, or go back', () => {
-    expect(fileChoices(true, false)).toEqual(['call', 'email', 'no_answer', 'back']);
+describe('the keys of an open file', () => {
+  const open = { canEdit: true, recorded: false, busy: false };
+
+  it('keep their meaning: a number is always the same contact, the undo has its own key', () => {
+    expect(FILE_KEYS).toEqual({ call: '1', email: '2', no_answer: '3', undo: 'Z' });
+    expect(fileActionOfKey('1')).toBe('call');
+    expect(fileActionOfKey('2')).toBe('email');
+    expect(fileActionOfKey('3')).toBe('no_answer');
+    expect(fileActionOfKey('z')).toBe('undo');
+    expect(fileActionOfKey('Z')).toBe('undo');
+    for (const key of ['4', '0', 'Enter', 'Escape', ' ']) expect(fileActionOfKey(key)).toBeNull();
   });
 
-  it('put the way back first once a contact was recorded: no second record, no undo by the same key', () => {
-    const after = fileChoices(true, true);
-    expect(after).toEqual(['back', 'undo']);
-    for (const key of ['1', '2', '3']) {
-      expect(['call', 'email', 'no_answer']).not.toContain(fileChoiceOfKey(key, after));
+  it('record a contact while nothing was recorded, and undo nothing', () => {
+    for (const contact of ['call', 'email', 'no_answer'] as const) {
+      expect(fileActionOpen(contact, open)).toBe(true);
     }
-    expect(fileChoiceOfKey('1', after)).toBe('back');
+    expect(fileActionOpen('undo', open)).toBe(false);
   });
 
-  it('leave only the way back without the right to change leads', () => {
-    expect(fileChoices(false, false)).toEqual(['back']);
+  it('close the contacts once one was recorded: no second record by the same key, only the undo', () => {
+    const after = { ...open, recorded: true };
+    for (const contact of ['call', 'email', 'no_answer'] as const) {
+      expect(fileActionOpen(contact, after)).toBe(false);
+    }
+    expect(fileActionOpen('undo', after)).toBe(true);
   });
 
-  it('are answered with their number keys', () => {
-    const choices = fileChoices(true, false);
-    expect(fileChoiceOfKey('1', choices)).toBe('call');
-    expect(fileChoiceOfKey('4', choices)).toBe('back');
-    expect(fileChoiceOfKey('5', choices)).toBeNull();
-    expect(fileChoiceOfKey('Enter', choices)).toBeNull();
+  it('carry nothing out while an answer is on its way, or without the right to change leads', () => {
+    for (const action of ['call', 'email', 'no_answer', 'undo'] as const) {
+      expect(fileActionOpen(action, { ...open, recorded: true, busy: true })).toBe(false);
+      expect(fileActionOpen(action, { ...open, busy: true })).toBe(false);
+      expect(fileActionOpen(action, { ...open, canEdit: false })).toBe(false);
+      expect(fileActionOpen(action, { ...open, canEdit: false, recorded: true })).toBe(false);
+    }
   });
 });
 
-describe('the choices over a due next action', () => {
-  it('mark it as done or leave it for later', () => {
-    expect(dueChoices({ canEdit: true, justDone: false, finished: false })).toEqual([
-      'done',
-      'later',
-    ]);
+describe('the keys of the reception', () => {
+  const open = { canEdit: true, justDone: false, finished: false, busy: false };
+
+  it('keep their meaning: 1 marks, 2 goes on, the undo has its own key', () => {
+    expect(DUE_KEYS).toEqual({ done: '1', next: '2', undo: 'Z' });
+    expect(dueActionOfKey('1')).toBe('done');
+    expect(dueActionOfKey('2')).toBe('next');
+    expect(dueActionOfKey('z')).toBe('undo');
+    for (const key of ['3', '0', 'Enter', 'Escape']) expect(dueActionOfKey(key)).toBeNull();
   });
 
-  it('go on first right after a mark: the same key never marks the next one unseen', () => {
-    const after = dueChoices({ canEdit: true, justDone: true, finished: false });
-    expect(after).toEqual(['next', 'undo']);
-    expect(dueChoiceOfKey('1', after)).toBe('next');
-    for (const key of ['1', '2', '3']) expect(dueChoiceOfKey(key, after)).not.toBe('done');
+  it('mark one as done or go on', () => {
+    expect(dueActionOpen('done', open)).toBe(true);
+    expect(dueActionOpen('next', open)).toBe(true);
+    expect(dueActionOpen('undo', open)).toBe(false);
+  });
+
+  it('close marking right after a mark: the same key never marks the next one unseen', () => {
+    const after = { ...open, justDone: true };
+    expect(dueActionOpen('done', after)).toBe(false);
+    expect(dueActionOpen('next', after)).toBe(true);
+    expect(dueActionOpen('undo', after)).toBe(true);
   });
 
   it('let a member without the right to change leads only go on', () => {
-    expect(dueChoices({ canEdit: false, justDone: false, finished: false })).toEqual(['later']);
+    const reader = { ...open, canEdit: false };
+    expect(dueActionOpen('done', reader)).toBe(false);
+    expect(dueActionOpen('undo', { ...reader, justDone: true })).toBe(false);
+    expect(dueActionOpen('next', reader)).toBe(true);
   });
 
-  it('leave only the way back once all were seen', () => {
-    expect(dueChoices({ canEdit: true, justDone: true, finished: true })).toEqual(['back']);
+  it('carry nothing out once all were seen, or while an answer is on its way', () => {
+    const finished = { ...open, finished: true };
+    expect(dueActionOpen('done', finished)).toBe(false);
+    expect(dueActionOpen('next', finished)).toBe(false);
+    for (const action of ['done', 'next', 'undo'] as const) {
+      expect(dueActionOpen(action, { ...open, justDone: true, busy: true })).toBe(false);
+    }
   });
 });
 

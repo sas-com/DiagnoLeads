@@ -7,11 +7,14 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
+import { ROOM_BOARD, ROOM_FRAME, RoomChoiceButton } from './office-room-parts';
 import {
-  type FileChoice,
+  FILE_CONTACT_CHOICES,
+  FILE_KEYS,
+  type FileAction,
   type FileContactChoice,
-  fileChoiceOfKey,
-  fileChoices,
+  fileActionOfKey,
+  fileActionOpen,
 } from './office-rooms';
 
 export type BoardLead = RouterOutputs['leads']['list']['items'][number];
@@ -29,7 +32,8 @@ export const LEAD_STATUS_COLORS: Record<string, string> = {
 };
 
 type Outcome =
-  | { kind: 'recorded'; contact: FileContactChoice; id: string }
+  // undoFailed: the undo did not go through, so the record is still there and can be undone again
+  | { kind: 'recorded'; contact: FileContactChoice; id: string; undoFailed?: boolean }
   | { kind: 'undone' }
   | { kind: 'failed' };
 
@@ -39,13 +43,15 @@ type Outcome =
  * the lead page's own API, so the work ends inside the office.
  *
  * What the room says about the file comes from the records only. An answer is carried out at
- * once, so it can be undone, and after it the first choice is the way back: the same key pressed
- * once too often neither records twice nor takes the record back.
+ * once, so it can be undone. Every key keeps its meaning (`FILE_KEYS`): after a record the
+ * contacts are closed and the undo sits on its own key, so the same key pressed once too often
+ * neither records twice nor takes the record back.
  */
 export function OfficeLeadFile({
   organizationId,
   lead,
   header,
+  guide,
   keysRef,
   onClose,
   onOpenDetail,
@@ -54,6 +60,8 @@ export function OfficeLeadFile({
   lead: BoardLead;
   /** Whose room this is: shown over the report, like over the board */
   header: ReactNode;
+  /** The line that says who holds the room, shown over the report like in the room */
+  guide?: ReactNode;
   /** Filled with the file's key handler while the file is open */
   keysRef: MutableRefObject<RoomKeys | null>;
   onClose: () => void;
@@ -93,32 +101,36 @@ export function OfficeLeadFile({
       setOutcome({ kind: 'undone' });
       refresh();
     },
-    onError: () => setOutcome({ kind: 'failed' }),
+    // The record is still there: keep it in hand, so the undo can be asked for again
+    onError: () =>
+      setOutcome((current) =>
+        current?.kind === 'recorded' ? { ...current, undoFailed: true } : { kind: 'failed' }
+      ),
   });
   const busy = record.isPending || remove.isPending;
   const canEdit = contacts.data?.canEdit === true;
   const recorded = outcome?.kind === 'recorded';
-  const choices = fileChoices(canEdit, recorded);
+  const state = { canEdit, recorded, busy };
 
-  const answer = (choice: FileChoice) => {
-    if (busy) return;
-    if (choice === 'back') {
-      onClose();
-      return;
-    }
-    if (choice === 'undo') {
+  const answer = (action: FileAction) => {
+    if (!fileActionOpen(action, state)) return;
+    if (action === 'undo') {
       if (outcome?.kind === 'recorded') remove.mutate({ organizationId, id: outcome.id });
-      return;
+    } else {
+      record.mutate({ organizationId, leadId: lead.id, kind: action });
     }
-    record.mutate({ organizationId, leadId: lead.id, kind: choice });
+    // The answer is in the report: the focus goes there, off a button that is closed now
+    reportRef.current?.focus();
   };
 
-  // The file's keys: the numbers answer. Enter and Tab are left to the focused control.
+  // The file's keys: each one keeps its meaning, and one that is closed right now does nothing
+  // (it is still used up, so it never reaches the room behind the file). Enter and Tab are left
+  // to the focused control; Esc goes back, and is the room's.
   const onFileKey: RoomKeys = (event) => {
-    const choice = fileChoiceOfKey(event.key, choices);
-    if (!choice) return false;
+    const action = fileActionOfKey(event.key);
+    if (!action) return false;
     event.preventDefault();
-    answer(choice);
+    answer(action);
     return true;
   };
   const latestKeys = useRef(onFileKey);
@@ -147,7 +159,9 @@ export function OfficeLeadFile({
   const latest = contacts.data?.recent[0];
   const report =
     outcome?.kind === 'recorded'
-      ? t('recorded', { kind: tKinds(outcome.contact) })
+      ? outcome.undoFailed
+        ? t('undoFailed')
+        : t('recorded', { kind: tKinds(outcome.contact) })
       : outcome?.kind === 'undone'
         ? t('undone')
         : outcome?.kind === 'failed'
@@ -167,50 +181,61 @@ export function OfficeLeadFile({
   const marks = lead.mqlLevel === 'interest' ? 2 : lead.mqlLevel === 'fit' ? 1 : 0;
 
   return (
-    <div className="absolute inset-x-4 top-20 bottom-4 flex flex-col gap-4 overflow-y-auto lg:inset-x-6 lg:bottom-6 lg:flex-row lg:items-end lg:overflow-visible">
+    <div className={ROOM_FRAME}>
       {/* What the room says about the file, and what the president answers */}
       <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
         {header}
-        <div ref={reportRef} tabIndex={-1} className="outline-none">
+        <div ref={reportRef} tabIndex={-1} className="space-y-2 outline-none">
+          {guide}
           <p className="text-base leading-relaxed font-medium" aria-live="polite">
             {report}
           </p>
-          {contacts.data && !canEdit && (
-            <p className="mt-2 text-sm text-[#d8d2c4]">{t('readOnly')}</p>
-          )}
+          {contacts.data && !canEdit && <p className="text-sm text-[#d8d2c4]">{t('readOnly')}</p>}
         </div>
         <h3 className={CAP}>{tImmersive('talk.you')}</h3>
         <ul className="space-y-2">
-          {choices.map((choice, index) => {
-            const main = index === 0 && (recorded || !canEdit);
-            return (
+          {/* The contacts keep their places and keys; they are closed while the records are read,
+              after a record, and while an answer is on its way. Hidden from who may not
+              record, and when the records could not be read */}
+          {(canEdit || (!contacts.data && !contacts.isError)) &&
+            FILE_CONTACT_CHOICES.map((choice) => (
               <li key={choice}>
-                <button
-                  type="button"
-                  aria-disabled={busy}
+                <RoomChoiceButton
+                  keyCap={FILE_KEYS[choice]}
+                  closed={!fileActionOpen(choice, state)}
+                  waiting={busy || !contacts.data}
                   onClick={() => answer(choice)}
-                  className={cn(
-                    'flex min-h-11 w-full items-center gap-3 border px-3 text-left text-sm font-bold aria-disabled:cursor-wait aria-disabled:opacity-60',
-                    main
-                      ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130]'
-                      : 'border-[#f5f1e8]/35 bg-[#f5f1e8]/5 hover:border-[#e9cf9a] hover:bg-[#f5f1e8]/15',
-                    FOCUS
-                  )}
                 >
-                  <span className={cn(KEY, main && 'border-[#1b2130]/60')}>{index + 1}</span>
                   {t(`choices.${choice}`)}
-                </button>
+                </RoomChoiceButton>
               </li>
-            );
-          })}
+            ))}
+          {recorded && (
+            <li>
+              <RoomChoiceButton
+                keyCap={FILE_KEYS.undo}
+                closed={!fileActionOpen('undo', state)}
+                waiting={busy}
+                onClick={() => answer('undo')}
+              >
+                {t('choices.undo')}
+              </RoomChoiceButton>
+            </li>
+          )}
+          <li>
+            <RoomChoiceButton
+              keyCap="Esc"
+              main={recorded || (contacts.data !== undefined && !canEdit)}
+              onClick={onClose}
+            >
+              {t('choices.back')}
+            </RoomChoiceButton>
+          </li>
         </ul>
       </div>
 
       {/* The file on the room's table */}
-      <section
-        aria-label={t('label', { company })}
-        className="flex min-h-[30rem] min-w-0 flex-1 flex-col border border-[#e9cf9a]/45 border-t-[3px] border-t-[#e9cf9a] bg-[linear-gradient(180deg,rgba(12,17,30,0.96)_0%,rgba(9,13,24,0.94)_100%)] shadow-[0_30px_60px_rgba(2,5,12,0.6)] lg:self-stretch"
-      >
+      <section aria-label={t('label', { company })} className={ROOM_BOARD}>
         <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2 border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
           <div className="min-w-0 space-y-1.5">
             <p className={CAP}>{t('title')}</p>
@@ -246,17 +271,6 @@ export function OfficeLeadFile({
               </span>
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className={cn(
-              'flex min-h-11 shrink-0 items-center gap-2.5 px-2 text-sm font-bold hover:text-white',
-              FOCUS
-            )}
-          >
-            <span className={KEY}>Esc</span>
-            {t('choices.back')}
-          </button>
         </header>
 
         <div className="grid min-h-0 flex-1 gap-x-8 gap-y-6 overflow-y-auto px-5 py-5 md:grid-cols-[18rem_minmax(0,1fr)]">

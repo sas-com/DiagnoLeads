@@ -236,6 +236,7 @@
         },
         "guide": {
           "employee": "{name} looks after this room.",
+          "attention": "The work of {name} has stopped. The figures are read from the records.",
           "training": "{name} is in training and does not look after this room yet. The figures are read from the records.",
           "paused": "{name} is paused. The figures are read from the records.",
           "vacant": "The {role} seat is vacant. The figures are read from the records."
@@ -314,7 +315,8 @@
           "contactsEmpty": "No records yet.",
           "by": "recorded by {name}",
           "openDetail": "Open the details in the normal view",
-          "detailHint": "Hearings, next actions and edits are done on the details page in the normal view."
+          "detailHint": "Hearings, next actions and edits are done on the details page in the normal view.",
+          "undoFailed": "The record could not be undone and is still there. Please try again."
         },
         "due": {
           "board": "Due today",
@@ -334,8 +336,7 @@
             "done": "Mark as done",
             "later": "Later (go to the next)",
             "next": "Go to the next",
-            "undo": "Undo this one",
-            "back": "Back to the floor"
+            "undo": "Undo this one"
           },
           "dueToday": "Due today",
           "overdue": "{days, plural, one {# day} other {# days}} overdue",
@@ -353,7 +354,9 @@
           },
           "allSeen": "You have seen them all.",
           "openLead": "Open the lead in the normal view",
-          "openToday": "Open Today in the normal view"
+          "openToday": "Open Today in the normal view",
+          "undoFailed": "It could not be undone and is still marked as done. Please try again.",
+          "reportNext": "Here is number {index} of {total}."
         }
       },
       "tones": {
@@ -526,7 +529,8 @@
           "brief": "Brief",
           "standard": "Standard",
           "detailed": "Detailed"
-        }
+        },
+        "discardBack": "Discard and go back"
       }
     },
     "enterOffice": "Enter the office (full screen)",

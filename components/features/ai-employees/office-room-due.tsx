@@ -12,17 +12,24 @@ import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import type { RoomKeys } from './office-lead-file';
-import { ROOM_BOARD, ROOM_FRAME, RoomGuideHeader, choiceClass } from './office-room-parts';
 import {
-  type DueChoice,
+  ROOM_BOARD,
+  ROOM_FRAME,
+  RoomChoiceButton,
+  RoomGuideHeader,
+  RoomGuideLine,
+} from './office-room-parts';
+import {
+  DUE_KEYS,
+  type DueAction,
   daysOverdue,
-  dueChoiceOfKey,
-  dueChoices,
+  dueActionOfKey,
+  dueActionOpen,
   dueState,
   roomGuide,
 } from './office-rooms';
 
-type Outcome = 'done' | 'undone' | 'failed';
+type Outcome = 'done' | 'undone' | 'failed' | 'undoFailed';
 
 /**
  * The reception of the full-screen office (#1133): what is due comes to the president one at a
@@ -31,8 +38,9 @@ type Outcome = 'done' | 'undone' | 'failed';
  * answer marks one as done (`leadFollowUp.updateTask`) or leaves it for later.
  *
  * The queue is the list as it was when the room opened: marking one as done does not shift the
- * others under the president's finger. An answer is carried out at once, so it can be undone, and
- * right after it the first choice goes on to the next one and never marks again.
+ * others under the president's finger. An answer is carried out at once, so it can be undone.
+ * Every key keeps its meaning (`DUE_KEYS`): right after one was marked, marking is closed until
+ * the president goes on, so the same key never completes the next one unseen.
  */
 export function OfficeRoomDue({
   organizationId,
@@ -41,7 +49,6 @@ export function OfficeRoomDue({
   employeeName,
   look,
   keysRef,
-  onBack,
   onOpenNormal,
 }: {
   organizationId: string;
@@ -53,8 +60,6 @@ export function OfficeRoomDue({
   look?: RobotLook;
   /** Filled with the room's key handler while the room is shown */
   keysRef: MutableRefObject<RoomKeys | null>;
-  /** Back to the floor */
-  onBack: () => void;
   /** A page of the normal view is opened: the office closes */
   onOpenNormal: () => void;
 }) {
@@ -101,7 +106,8 @@ export function OfficeRoomDue({
       setOutcome(marked ? 'done' : 'undone');
       refresh();
     },
-    onError: () => setOutcome('failed'),
+    // A mark that could not be taken back is still there, and can be taken back again
+    onError: (_error, input) => setOutcome(input.done === false ? 'undoFailed' : 'failed'),
   });
 
   const forbidden = due.error?.data?.code === 'FORBIDDEN';
@@ -110,7 +116,7 @@ export function OfficeRoomDue({
   const count = queue?.length ?? 0;
   const finished = queue !== null && index >= count;
   const task = queue?.[index] ?? null;
-  const choices = queue ? dueChoices({ canEdit, justDone: justDone !== null, finished }) : [];
+  const state = { canEdit, justDone: justDone !== null, finished, busy: update.isPending };
   const guide = roomGuide(status);
   const roleTitle = tOffice(`roles.${role}.title`);
   const title = (entry: DueTaskView) => entry.title ?? tTasks('nextMeetingTitle');
@@ -121,29 +127,28 @@ export function OfficeRoomDue({
     return days > 0 ? tDue('overdue', { days }) : tDue('dueToday');
   };
 
-  const answer = (choice: DueChoice) => {
-    if (update.isPending) return;
-    if (choice === 'back') {
-      onBack();
-      return;
-    }
-    if (choice === 'later' || choice === 'next') {
+  const answer = (action: DueAction) => {
+    if (!queue || !dueActionOpen(action, state)) return;
+    if (action === 'next') {
       setIndex((current) => current + 1);
       setJustDone(null);
       setOutcome(null);
-      return;
+    } else if (action === 'done') {
+      if (task) update.mutate({ organizationId, id: task.id, done: true });
+    } else if (justDone) {
+      update.mutate({ organizationId, id: justDone, done: false });
     }
-    if (!task) return;
-    if (choice === 'done') update.mutate({ organizationId, id: task.id, done: true });
-    else if (justDone) update.mutate({ organizationId, id: justDone, done: false });
+    // The answer is in the report: the focus goes there, off a button that is closed now
+    reportRef.current?.focus();
   };
 
-  // The room's keys: the numbers answer
+  // The room's keys: each one keeps its meaning, and one that is closed right now does nothing.
+  // Esc goes back to the floor, and is the office's.
   const onRoomKey: RoomKeys = (event) => {
-    const choice = dueChoiceOfKey(event.key, choices);
-    if (!choice) return false;
+    const action = dueActionOfKey(event.key);
+    if (!action) return false;
     event.preventDefault();
-    answer(choice);
+    answer(action);
     return true;
   };
   const latestKeys = useRef(onRoomKey);
@@ -163,16 +168,26 @@ export function OfficeRoomDue({
         ? tDue('reading')
         : outcome === 'failed'
           ? tDue('failed')
-          : outcome === 'done'
-            ? tDue('done')
-            : outcome === 'undone'
-              ? tDue('undone')
-              : count === 0
-                ? tDue('empty')
-                : finished
-                  ? tDue('finished', { done: doneIds.size, left: count - doneIds.size })
-                  : tDue('report', { total: count, index: index + 1 });
+          : outcome === 'undoFailed'
+            ? tDue('undoFailed')
+            : outcome === 'done'
+              ? tDue('done')
+              : outcome === 'undone'
+                ? tDue('undone')
+                : count === 0
+                  ? tDue('empty')
+                  : finished
+                    ? tDue('finished', { done: doneIds.size, left: count - doneIds.size })
+                    : index === 0
+                      ? tDue('report', { total: count, index: 1 })
+                      : tDue('reportNext', { total: count, index: index + 1 });
   const more = loaded ? loaded.total - loaded.items.length : 0;
+  // The answer the room expects next: filled
+  const mainAction: DueAction | null = dueActionOpen('done', { ...state, busy: false })
+    ? 'done'
+    : finished
+      ? null
+      : 'next';
 
   return (
     <div className={ROOM_FRAME}>
@@ -181,9 +196,9 @@ export function OfficeRoomDue({
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
-          <p className="text-sm leading-relaxed text-[#d8d2c4]">
+          <RoomGuideLine>
             {t(`guide.${guide}`, { name: employeeName ?? roleTitle, role: roleTitle })}
-          </p>
+          </RoomGuideLine>
           <p className="text-base leading-relaxed font-medium" aria-live="polite">
             {report}
           </p>
@@ -191,29 +206,49 @@ export function OfficeRoomDue({
             <p className="text-sm text-[#d8d2c4]">{tDue('readOnly')}</p>
           )}
         </div>
-        {choices.length > 0 && (
+        {/* Once all were seen there is nothing left to answer: the way back is the room's (Esc) */}
+        {queue && count > 0 && !finished && (
           <>
             <h3 className={CAP}>{tImmersive('talk.you')}</h3>
             <ul className="space-y-2">
-              {choices.map((choice, position) => (
-                <li key={choice}>
-                  <button
-                    type="button"
-                    aria-disabled={update.isPending}
-                    onClick={() => answer(choice)}
-                    className={cn(
-                      'flex min-h-11 w-full items-center gap-3 border px-3 text-left text-sm font-bold aria-disabled:cursor-wait aria-disabled:opacity-60',
-                      choiceClass(position === 0),
-                      FOCUS
-                    )}
+              {/* The answers keep their places and keys. Marking is hidden from who may not mark,
+                  and closed right after a mark and once all were seen */}
+              {canEdit && (
+                <li>
+                  <RoomChoiceButton
+                    keyCap={DUE_KEYS.done}
+                    main={mainAction === 'done'}
+                    closed={!dueActionOpen('done', state)}
+                    waiting={update.isPending}
+                    onClick={() => answer('done')}
                   >
-                    <span className={cn(KEY, position === 0 && 'border-[#1b2130]/60')}>
-                      {position + 1}
-                    </span>
-                    {tDue(`choices.${choice}`)}
-                  </button>
+                    {tDue('choices.done')}
+                  </RoomChoiceButton>
                 </li>
-              ))}
+              )}
+              <li>
+                <RoomChoiceButton
+                  keyCap={DUE_KEYS.next}
+                  main={mainAction === 'next'}
+                  closed={!dueActionOpen('next', state)}
+                  waiting={update.isPending}
+                  onClick={() => answer('next')}
+                >
+                  {tDue(justDone !== null ? 'choices.next' : 'choices.later')}
+                </RoomChoiceButton>
+              </li>
+              {justDone !== null && (
+                <li>
+                  <RoomChoiceButton
+                    keyCap={DUE_KEYS.undo}
+                    closed={!dueActionOpen('undo', state)}
+                    waiting={update.isPending}
+                    onClick={() => answer('undo')}
+                  >
+                    {tDue('choices.undo')}
+                  </RoomChoiceButton>
+                </li>
+              )}
             </ul>
           </>
         )}

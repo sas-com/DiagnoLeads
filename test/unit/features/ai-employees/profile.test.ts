@@ -44,17 +44,30 @@ describe('resolveAiEmployeeProfile', () => {
     });
   });
 
-  it('falls back part by part when a stored part is no longer valid', () => {
+  it('falls back item by item: an item that is no longer valid does not take the others with it', () => {
     const resolved = resolveAiEmployeeProfile({
       look: { ...look, head: 'cube' },
       tone: 'rude',
-      stats: { speed: 6, care: 6, insight: 6, grit: 6 },
-      workStyle: { autonomy: 'report', reporting: 'brief' },
+      stats: { speed: 5, care: 9, insight: 2, grit: 1 },
+      workStyle: { autonomy: 'report', reporting: 'loud' },
     });
-    expect(resolved.look).toEqual(DEFAULT_ROBOT_LOOK);
+    expect(resolved.look).toEqual({ ...look, head: DEFAULT_ROBOT_LOOK.head });
     expect(resolved.tone).toBe('polite');
+    expect(resolved.stats).toEqual({ speed: 5, care: DEFAULT_AI_STATS.care, insight: 2, grit: 1 });
+    expect(resolved.workStyle).toEqual({ autonomy: 'report', reporting: 'standard' });
+  });
+
+  it('falls back to the default abilities when the stored ones spend more points than there are', () => {
+    const resolved = resolveAiEmployeeProfile({
+      stats: { speed: 6, care: 6, insight: 6, grit: 6 },
+    });
     expect(resolved.stats).toEqual(DEFAULT_AI_STATS);
-    expect(resolved.workStyle).toEqual({ autonomy: 'report', reporting: 'brief' });
+  });
+
+  it('reads a part that is not an object as its defaults', () => {
+    expect(resolveAiEmployeeProfile({ look: ['dome'], stats: 3, workStyle: 'ask' })).toEqual(
+      DEFAULT_AI_EMPLOYEE_PROFILE
+    );
   });
 });
 
