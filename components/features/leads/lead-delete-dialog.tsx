@@ -48,7 +48,7 @@ export function LeadDeleteDialog({
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isDeleting}
-            className="bg-red-600 hover:bg-red-700"
+            className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700"
           >
             {isDeleting ? t('deleting') : tCommon('delete')}
           </AlertDialogAction>

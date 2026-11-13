@@ -47,7 +47,7 @@ export function WeekMeetingsSection({ organizationId }: { organizationId: string
   const rest = data ? data.total - data.items.length : 0;
 
   return (
-    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800" data-testid="week-meetings">
+    <Card className="p-4 shadow-none sm:p-6" data-testid="week-meetings">
       <div className="mb-2 flex items-start justify-between gap-3 sm:mb-3">
         <div>
           <h2 className={headingClass}>
@@ -62,7 +62,7 @@ export function WeekMeetingsSection({ organizationId }: { organizationId: string
         </div>
         <Link
           href={listHref}
-          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-brand-600 underline underline-offset-4 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-400/[0.14]"
         >
           {t('viewAll')}
           <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -127,7 +127,7 @@ export function WeekMeetingsSection({ organizationId }: { organizationId: string
           {rest > 0 && (
             <Link
               href={listHref}
-              className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+              className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-600 underline underline-offset-4 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
             >
               {t('more', { count: rest })}
             </Link>
@@ -154,7 +154,7 @@ export function NextMeetingRateSection({
   const data = query.data;
 
   return (
-    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800" data-testid="next-meeting-rate">
+    <Card className="p-4 shadow-none sm:p-6" data-testid="next-meeting-rate">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div>
           <h2 className={headingClass}>{t('rateTitle')}</h2>
@@ -188,7 +188,7 @@ export function NextMeetingRateSection({
           </div>
           <Link
             href={presetHref('nextMeetingOverdue', new Date(), `/${locale}/leads`)}
-            className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 underline underline-offset-4 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {t('rateOverdueLink')}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />

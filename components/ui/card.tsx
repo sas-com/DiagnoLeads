@@ -2,16 +2,30 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
+// A decoration says a meaning with its color, by day and by night. On top it replaces the brass
+// line of the card; on the left the brass line stays
 const decorationColors = {
-  blue: 'border-t-blue-500',
-  violet: 'border-t-violet-500',
-  emerald: 'border-t-emerald-500',
-  amber: 'border-t-amber-500',
-  yellow: 'border-t-yellow-500',
-  red: 'border-t-red-500',
-  green: 'border-t-green-500',
-  gray: 'border-t-gray-400',
-  cyan: 'border-t-cyan-500',
+  blue: 'border-t-blue-500 dark:border-t-blue-400',
+  violet: 'border-t-violet-500 dark:border-t-violet-400',
+  emerald: 'border-t-emerald-500 dark:border-t-emerald-400',
+  amber: 'border-t-amber-500 dark:border-t-amber-400',
+  yellow: 'border-t-yellow-500 dark:border-t-yellow-400',
+  red: 'border-t-red-500 dark:border-t-red-400',
+  green: 'border-t-green-500 dark:border-t-green-400',
+  cyan: 'border-t-cyan-500 dark:border-t-cyan-400',
+  gray: 'border-t-gray-400 dark:border-t-gray-400',
+};
+
+const leftDecorationColors: Record<keyof typeof decorationColors, string> = {
+  blue: 'border-l-blue-500 dark:border-l-blue-400',
+  violet: 'border-l-violet-500 dark:border-l-violet-400',
+  emerald: 'border-l-emerald-500 dark:border-l-emerald-400',
+  amber: 'border-l-amber-500 dark:border-l-amber-400',
+  yellow: 'border-l-yellow-500 dark:border-l-yellow-400',
+  red: 'border-l-red-500 dark:border-l-red-400',
+  green: 'border-l-green-500 dark:border-l-green-400',
+  cyan: 'border-l-cyan-500 dark:border-l-cyan-400',
+  gray: 'border-l-gray-400 dark:border-l-gray-400',
 };
 
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -28,7 +42,8 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
         'rounded-lg border border-t-2 border-t-brand-400 bg-white text-gray-900 shadow-sm dark:border-gray-700 dark:border-t-brand-400 dark:bg-gray-900 dark:text-gray-50',
         decoration === 'top' && 'border-t-4',
         decoration === 'left' && 'border-l-4',
-        decoration && decorationColors[decorationColor],
+        decoration === 'top' && decorationColors[decorationColor],
+        decoration === 'left' && leftDecorationColors[decorationColor],
         className
       )}
       {...props}

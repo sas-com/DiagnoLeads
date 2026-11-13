@@ -98,9 +98,7 @@ export function Logo({
       <LogoIcon />
       {showText && !collapsed && (
         <div className="flex flex-col">
-          <span
-            className={`${textSizes[size]} font-bold bg-gradient-to-r from-brand-500 to-emerald-500 bg-clip-text text-transparent`}
-          >
+          <span className={`${textSizes[size]} font-bold text-gray-900 dark:text-gray-50`}>
             DiagnoLeads
           </span>
           {size !== 'sm' && (

@@ -326,7 +326,10 @@ export function HearingMonthInput({
                   aria-pressed={isSelected}
                   aria-label={yearMonthText(shownYear, m)}
                   data-initial-focus={initial ? '' : undefined}
-                  className={cn('h-11 px-0', isCurrent && !isSelected && 'border border-brand-500')}
+                  className={cn(
+                    'h-11 px-0',
+                    isCurrent && !isSelected && 'border border-brand-500 dark:border-brand-400'
+                  )}
                   onClick={() => pick(`${shownYear}-${pad2(m)}`)}
                 >
                   {monthName.format(new Date(2000, m - 1, 1))}

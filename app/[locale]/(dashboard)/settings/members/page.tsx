@@ -518,12 +518,12 @@ export default function MembersPage() {
                               <UserIcon className="h-5 w-5 text-brand-500 dark:text-brand-400" />
                             </div>
                             <div>
-                              <p className="font-semibold text-gray-900">
+                              <p className="font-semibold text-gray-900 dark:text-gray-50">
                                 {(Array.isArray(member.user)
                                   ? member.user[0]?.name
                                   : member.user?.name) || 'Unknown User'}
                               </p>
-                              <p className="text-sm text-gray-500">
+                              <p className="text-sm text-gray-500 dark:text-gray-300">
                                 {(Array.isArray(member.user)
                                   ? member.user[0]?.email
                                   : member.user?.email) || 'No email'}
@@ -652,7 +652,7 @@ export default function MembersPage() {
               <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleRemoveMember}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700"
               >
                 {t('removeButton')}
               </AlertDialogAction>

@@ -90,8 +90,8 @@ export function InteractiveAreaChart({
   const textColor = isDark ? '#d8d2c4' : '#6b7180';
   const gridColor = isDark ? '#232c44' : '#e9e4da';
   const legendColor = isDark ? '#ebe6da' : '#3e4556';
-  const tooltipBg = isDark ? '#101522' : '#ffffff';
-  const tooltipBorder = isDark ? '#232c44' : '#e9e4da';
+  const tooltipBg = isDark ? '#232c44' : '#ffffff';
+  const tooltipBorder = isDark ? '#6f7890' : '#e9e4da';
 
   const options: ApexOptions = {
     colors: colors.map((c) => COLORS[c] || COLORS.blue),

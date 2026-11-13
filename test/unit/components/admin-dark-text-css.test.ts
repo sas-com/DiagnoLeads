@@ -78,6 +78,17 @@ describe('admin site colors', () => {
     expect(contrast(night['gray-600'], night['gray-800'])).toBeGreaterThanOrEqual(3);
   });
 
+  it('keeps the night surfaces apart, so that a raised or selected one shows', () => {
+    // The panels sit on the ground; inputs, hovered rows and selected tabs sit on the panels
+    expect(contrast(night['gray-900'], night['gray-950'])).toBeGreaterThanOrEqual(1.05);
+    expect(contrast(night['gray-800'], night['gray-900'])).toBeGreaterThanOrEqual(1.3);
+    expect(contrast(night['gray-700'], night['gray-800'])).toBeGreaterThanOrEqual(1.3);
+  });
+
+  it('keeps the muted text of the day at 4.5:1 on the marble ground too', () => {
+    expect(contrast(day['gray-500'], day['gray-50'])).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('keeps the fills and the brass readable', () => {
     // By day the primary fill is navy under white text, and brass lines reach 3:1 on white
     expect(contrast(WHITE, day['brand-500'])).toBeGreaterThanOrEqual(4.5);

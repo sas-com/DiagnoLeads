@@ -243,7 +243,7 @@ export function BulkActions({
             <AlertDialogAction
               onClick={handleDelete}
               disabled={bulkDelete.isPending}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700"
             >
               {bulkDelete.isPending ? t('deleting') : tCommon('delete')}
             </AlertDialogAction>

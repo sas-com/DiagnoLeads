@@ -76,7 +76,7 @@ export function AssigneeFilterControl({
           className={cn(
             'gap-1.5',
             layout === 'inline' ? 'h-9' : 'h-11 w-full justify-between',
-            active && 'border-brand-400 bg-brand-50 dark:border-brand-600 dark:bg-brand-900/30'
+            active && 'border-brand-400 bg-brand-50 dark:border-brand-400 dark:bg-brand-400/[0.14]'
           )}
           aria-label={value !== undefined ? `${t('label')} (${valueLabel(value)})` : t('label')}
         >

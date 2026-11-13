@@ -158,7 +158,7 @@ export function PendingSection({
   const rest = data ? total - data.pendingConsultations.length : 0;
 
   return (
-    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800">
+    <Card className="p-4 shadow-none sm:p-6">
       <div className="mb-2 sm:mb-3">
         <h2 className={headingClass}>
           {tw('pending.title')}
@@ -250,7 +250,7 @@ export function PendingSection({
           {/* Waiting = asked for a consultation and still new, as counted above */}
           <Link
             href={leadListHref(locale, { consultation: true, status: ['new'] })}
-            className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 underline underline-offset-4 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {tw('pending.more', { count: rest })}
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -324,7 +324,7 @@ export function RecentSection({
         <h2 className={headingClass}>{tw('recent.title')}</h2>
         <Link
           href={leadListHref(locale)}
-          className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+          className="text-sm font-medium text-brand-600 underline underline-offset-4 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {t('viewAll')}
         </Link>

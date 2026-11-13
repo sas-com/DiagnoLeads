@@ -292,7 +292,7 @@ export default function AnalyticsPage() {
           {/* Visitors of the public pages (#755) */}
           <Link
             href={`/${locale}/analytics/site`}
-            className="text-sm font-medium text-brand-700 underline-offset-4 hover:underline dark:text-brand-300"
+            className="text-sm font-medium text-brand-700 underline underline-offset-4 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200"
           >
             {t('siteVisits')}
           </Link>

@@ -504,7 +504,7 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
               <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => pendingSwitch && applySwitch(pendingSwitch)}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700"
               >
                 {t('discardConfirm')}
               </AlertDialogAction>
@@ -522,7 +522,7 @@ export function TargetsDialog({ open, onOpenChange, organizationId }: TargetsDia
               <AlertDialogCancel>{tCommon('cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => onOpenChange(false)}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700"
               >
                 {t('closeConfirm')}
               </AlertDialogAction>

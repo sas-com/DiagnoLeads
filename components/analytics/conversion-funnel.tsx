@@ -147,7 +147,9 @@ export function ConversionFunnel({
       {/* Overall Conversion Rate */}
       <div className="bg-brand-50 p-4 rounded-lg border border-brand-200 dark:bg-gray-800 dark:border-gray-700">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">{t('funnel.overallConversion')}</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            {t('funnel.overallConversion')}
+          </span>
           <span className="text-2xl font-bold text-brand-500 dark:text-brand-400">
             {(apiFunnelData?.overallConversionRate ?? 0).toFixed(1)}%
           </span>

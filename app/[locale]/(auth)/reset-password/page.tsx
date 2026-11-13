@@ -6,7 +6,7 @@ import Link from 'next/link';
  */
 export default function ResetPasswordPage() {
   return (
-    <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 dark:bg-gray-800">
+    <div className="border border-gray-300 border-t-2 border-t-brand-400 bg-white py-8 px-4 sm:rounded-lg sm:px-10 dark:border-gray-700 dark:border-t-brand-400 dark:bg-gray-900">
       <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-gray-100 mb-2">
         パスワードリセット
       </h2>

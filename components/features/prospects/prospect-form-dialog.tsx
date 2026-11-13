@@ -41,7 +41,7 @@ import type { ProspectRow } from './types';
 const NONE = '__none__';
 /** Chips: a border while not picked, filled with the brand colour once picked */
 const CHIP =
-  'min-h-9 border border-gray-300 px-3 data-[state=on]:border-transparent data-[state=on]:hover:bg-brand-600 data-[state=on]:hover:text-white dark:border-gray-600';
+  'min-h-9 border border-gray-300 px-3 data-[state=on]:border-transparent data-[state=on]:hover:bg-brand-600 data-[state=on]:hover:text-white dark:border-gray-600 dark:data-[state=on]:hover:bg-brand-300 dark:data-[state=on]:hover:text-gray-900';
 
 interface FormState {
   contactedOn: string;
