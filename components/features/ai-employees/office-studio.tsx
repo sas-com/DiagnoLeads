@@ -235,6 +235,17 @@ export function OfficeStudio({
               >
                 <span className={cn(KEY, entry === tab && 'border-[#1b2130]/60')}>{index + 1}</span>
                 {t(`tabs.${entry}`)}
+                {/* The abilities and the work style are kept, but nothing reads them yet (#1134) */}
+                {(entry === 'stats' || entry === 'work') && (
+                  <span
+                    className={cn(
+                      'rounded-full border px-2 py-0.5 text-xs font-medium',
+                      entry === tab ? 'border-[#1b2130]/60' : 'border-[#f5f1e8]/45 text-[#d8d2c4]'
+                    )}
+                  >
+                    {t('soon')}
+                  </span>
+                )}
               </button>
             ))}
           </div>

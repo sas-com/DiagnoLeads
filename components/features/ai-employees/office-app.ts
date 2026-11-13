@@ -18,6 +18,18 @@ export function launchedAsApp(search: string, appWindow: boolean): boolean {
   return new URLSearchParams(search).get(APP_LAUNCH_PARAM) === APP_LAUNCH_VALUE;
 }
 
+/**
+ * The width from which the full-screen office can be used (#1139). It is built for wide screens
+ * (a computer, a tablet held sideways): below this, its panels cover each other, so the office
+ * points to the normal view instead of opening by itself. A screen of its own for narrow widths
+ * comes later.
+ */
+export const OFFICE_MIN_WIDTH = 768;
+
+export function officeFits(width: number): boolean {
+  return width >= OFFICE_MIN_WIDTH;
+}
+
 /** Whether this window belongs to the installed app (iOS reports it on the navigator) */
 export function isAppWindow(win: Window): boolean {
   const standalone = (win.navigator as Navigator & { standalone?: boolean }).standalone === true;

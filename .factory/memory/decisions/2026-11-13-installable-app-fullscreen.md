@@ -25,3 +25,4 @@ paths: ["public/manifest.json", "lib/routes/app-install.ts", "components/feature
   - `orientation: landscape` を付ける：アプリの中の通常の表示（管理画面）まで横向きに固定される
 - **まだやっていないこと**: 1280px 未満の画面（スマホ）の出社の画面のレイアウト。スマホにインストールすると、今は窮屈に見える
 - **確かめた公式の手引き**: Next.js 16 の `node_modules/next/dist/docs/01-app/02-guides/progressive-web-apps.md`、`03-api-reference/03-file-conventions/01-metadata/manifest.md`、`04-functions/generate-metadata.md`（`manifest`・`appleWebApp`）
+- **狭い幅の扱い**（オーナーの判断 2026-11-13。`ui-ux-specialist` のレビューのあとの確認に「推奨どおり」。#1139）: 出社の画面は幅の広い画面向けなので、768px 未満（`OFFICE_MIN_WIDTH`）では、アプリとして開いても自動では出社の画面を開かず、タイトルで「通常の表示に戻る」を先に出す（「出社する」は残す）。狭い幅のための専用の画面は、計画の段 6 で作る

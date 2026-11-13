@@ -181,7 +181,8 @@
         "tagline": "You are the president. With your AI employees, you create new value.",
         "clockIn": "Enter the office",
         "back": "Back to the normal view",
-        "staff": "President {name} · {hired} AI employees ({vacant} vacant)"
+        "staff": "President {name} · {hired} AI employees ({vacant} vacant)",
+        "narrow": "This screen is made for wide screens (a computer, or a tablet held sideways). At this width, please use the normal view."
       },
       "tasks": {
         "heading": "The president's tasks",
@@ -530,7 +531,8 @@
           "standard": "Standard",
           "detailed": "Detailed"
         },
-        "discardBack": "Discard and go back"
+        "discardBack": "Discard and go back",
+        "soon": "Not yet in use"
       }
     },
     "enterOffice": "Enter the office (full screen)",
