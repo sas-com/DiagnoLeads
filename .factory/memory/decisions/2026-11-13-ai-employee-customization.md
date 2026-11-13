@@ -16,7 +16,7 @@ paths: ["lib/features/ai-employees/types/profile.ts", "components/features/ai-em
   - 変えられるのは、AI社員を管理できる人（`update Settings`。採用・休止と同じ）
 - **決定**（実装）:
   - 保存先は `ai_employees.profile`（jsonb、既定 `{}`）1つ。項目の一覧は `lib/features/ai-employees/types/profile.ts`。項目を足す・減らすたびにマイグレーションを作らない
-  - 読むときは寛容（`resolveAiEmployeeProfile`：欠けた部分・今は無い値は、部分ごとに既定へ戻す）。書くときは厳格（`aiEmployeeProfilePatchSchema`：知らないキー・値・合計を超えた能力値を拒む）
+  - 読むときは寛容（`resolveAiEmployeeProfile`：欠けた項目・今は無い値は、項目ごとに既定へ戻す。頭の形が1つ無くなっても、ほかの見た目は残る。能力値は合計が上限を超えたときだけ全部を既定へ戻す。2026-11-13、`architecture-specialist` のレビューで「部分ごと」から変更）。書くときは厳格（`aiEmployeeProfilePatchSchema`：知らないキー・値・合計を超えた能力値を拒む）
   - 保存は部分ごとの置き換えで、DB の `profile || 差分` で1文にまとめる（別の部分を続けて保存しても、前の部分が消えない）
   - 色は名前（`mint`・`pink` など）で持ち、色の値は描画の側（`office-robot.ts`）に置く。利用者が書いた色の値や文字列を、SVG や style に流さない
   - 何も設定していない AI社員は、今までどおりの姿と話し方になる（既定の見た目は、役割ごとの造形と同じ絵。テストで固定）

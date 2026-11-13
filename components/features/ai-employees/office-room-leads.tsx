@@ -6,7 +6,7 @@ import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { DEFAULT_LEAD_SORT, leadListHref } from '@/lib/features/leads/list-query';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
@@ -17,7 +17,13 @@ import {
   OfficeLeadFile,
   type RoomKeys,
 } from './office-lead-file';
-import { RoomGuideHeader } from './office-room-parts';
+import {
+  ROOM_BOARD,
+  ROOM_FRAME,
+  RoomChoiceButton,
+  RoomGuideHeader,
+  RoomGuideLine,
+} from './office-room-parts';
 import {
   LEAD_BOARD_FIRST_VIEW,
   LEAD_BOARD_PAGE_SIZE,
@@ -90,9 +96,13 @@ export function OfficeRoomLeads({
   // "This week" is fixed when the room opens, so the queries keep their keys
   const [now] = useState(() => new Date());
 
+  // Turning a page keeps the rows of the page before until the next ones arrive; another view
+  // never shows the rows or the count of the one before under its own name
+  const [pagedView, setPagedView] = useState<LeadBoardView | null>(null);
   const list = trpc.leads.list.useQuery(leadBoardInput(view, page, organizationId, now), {
-    placeholderData: (previous) => previous,
+    placeholderData: (previous) => (pagedView === view ? previous : undefined),
   });
+  const turning = list.isPlaceholderData === true;
   const newThisWeek = trpc.leads.list.useQuery(leadCountInput('newThisWeek', organizationId, now));
   const consultation = trpc.leads.list.useQuery(
     leadCountInput('consultation', organizationId, now)
@@ -109,9 +119,12 @@ export function OfficeRoomLeads({
   const choose = (next: LeadBoardView) => {
     setView(next);
     setPage(1);
+    setPagedView(null);
   };
-  const turn = (delta: 1 | -1) =>
+  const turn = (delta: 1 | -1) => {
+    setPagedView(view);
     setPage((current) => Math.max(1, Math.min(pages, current + delta)));
+  };
 
   const openFile = (lead: BoardLead) => {
     lastOpened.current = lead.id;
@@ -184,6 +197,11 @@ export function OfficeRoomLeads({
   const header = (
     <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
   );
+  const guideLine = (
+    <RoomGuideLine>
+      {t(`guide.${guide}`, { name: employeeName ?? roleTitle, role: roleTitle })}
+    </RoomGuideLine>
+  );
 
   if (open) {
     return (
@@ -191,6 +209,7 @@ export function OfficeRoomLeads({
         organizationId={organizationId}
         lead={open}
         header={header}
+        guide={guideLine}
         keysRef={fileKeys}
         onClose={() => setOpen(null)}
         onOpenDetail={onOpenLead}
@@ -199,15 +218,13 @@ export function OfficeRoomLeads({
   }
 
   return (
-    <div className="absolute inset-x-4 top-20 bottom-4 flex flex-col gap-4 overflow-y-auto lg:inset-x-6 lg:bottom-6 lg:flex-row lg:items-end lg:overflow-visible">
+    <div className={ROOM_FRAME}>
       {/* Whose room this is, the room's figures, and what the president asks for */}
       <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
         {header}
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
         <div tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
-          <p className="text-sm leading-relaxed text-[#d8d2c4]">
-            {t(`guide.${guide}`, { name: employeeName ?? roleTitle, role: roleTitle })}
-          </p>
+          {guideLine}
           <p className="text-base leading-relaxed font-medium" aria-live="polite">
             {forbidden || countsFailed
               ? tLeads('reportUnavailable')
@@ -222,28 +239,18 @@ export function OfficeRoomLeads({
         </div>
         <h3 className={CAP}>{tImmersive('talk.you')}</h3>
         <ul className="space-y-2">
-          {LEAD_BOARD_VIEWS.map((option, index) => {
-            const on = option === view;
-            return (
-              <li key={option}>
-                <button
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => choose(option)}
-                  className={cn(
-                    'flex min-h-11 w-full items-center gap-3 border px-3 text-left text-sm font-bold',
-                    on
-                      ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130]'
-                      : 'border-[#f5f1e8]/35 bg-[#f5f1e8]/5 hover:border-[#e9cf9a] hover:bg-[#f5f1e8]/15',
-                    FOCUS
-                  )}
-                >
-                  <span className={cn(KEY, on && 'border-[#1b2130]/60')}>{index + 1}</span>
-                  {tLeads(`ask.${option}`)}
-                </button>
-              </li>
-            );
-          })}
+          {LEAD_BOARD_VIEWS.map((option, index) => (
+            <li key={option}>
+              <RoomChoiceButton
+                keyCap={String(index + 1)}
+                main={option === view}
+                pressed={option === view}
+                onClick={() => choose(option)}
+              >
+                {tLeads(`ask.${option}`)}
+              </RoomChoiceButton>
+            </li>
+          ))}
         </ul>
       </div>
 
@@ -252,15 +259,16 @@ export function OfficeRoomLeads({
         ref={boardRef}
         aria-label={tLeads('board')}
         aria-busy={list.isFetching}
-        className="flex min-h-[30rem] min-w-0 flex-1 flex-col border border-[#e9cf9a]/45 border-t-[3px] border-t-[#e9cf9a] bg-[linear-gradient(180deg,rgba(12,17,30,0.96)_0%,rgba(9,13,24,0.94)_100%)] shadow-[0_30px_60px_rgba(2,5,12,0.6)] lg:self-stretch"
+        className={ROOM_BOARD}
       >
         <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
           <div className="flex items-baseline gap-4">
             <h2 className="text-xl font-bold">{tLeads('board')}</h2>
-            <p className="text-sm text-[#d8d2c4]">
+            {/* Read out when the view changes: the board answers the choice on the left */}
+            <output className="block text-sm text-[#d8d2c4]">
               {tLeads(`views.${view}`)}
-              {list.data && `・${tLeads('count', { count: total })}`}
-            </p>
+              {list.data && !turning && `・${tLeads('count', { count: total })}`}
+            </output>
           </div>
           <p className="flex items-center gap-2 text-xs text-[#d8d2c4]">
             <span className={KEY}>↑</span>
@@ -289,7 +297,7 @@ export function OfficeRoomLeads({
             {tLeads('empty')}
           </p>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className={cn('min-h-0 flex-1 overflow-y-auto', turning && 'opacity-60')}>
             <div
               aria-hidden="true"
               className={cn(
@@ -376,7 +384,7 @@ export function OfficeRoomLeads({
 
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#f5f1e8]/15 px-5 py-3 text-sm text-[#d8d2c4]">
           <p>
-            {list.data && total > 0 && tLeads('range', { total, from, to })}
+            {list.data && !turning && total > 0 && tLeads('range', { total, from, to })}
             <span className="ml-3 text-xs">{tLeads('openHint')}</span>
           </p>
           <div className="flex items-center gap-2">
@@ -393,7 +401,9 @@ export function OfficeRoomLeads({
               aria-disabled={page <= 1}
               className={cn(PAGE_BUTTON, FOCUS)}
             >
-              <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              <span aria-hidden="true" className={KEY}>
+                ←
+              </span>
               {tLeads('prev')}
             </button>
             <span className="tabular-nums" aria-live="polite">
@@ -406,7 +416,9 @@ export function OfficeRoomLeads({
               className={cn(PAGE_BUTTON, FOCUS)}
             >
               {tLeads('next')}
-              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              <span aria-hidden="true" className={KEY}>
+                →
+              </span>
             </button>
           </div>
         </footer>

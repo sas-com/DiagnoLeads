@@ -200,17 +200,56 @@ export const aiEmployeeProfilePatchSchema = z
   });
 export type AiEmployeeProfilePatch = z.infer<typeof aiEmployeeProfilePatchSchema>;
 
-/** The stored value as a full profile: each part that is missing or not valid is the default */
+/**
+ * The stored value as a full profile. It is read item by item: an item that is missing or no
+ * longer valid (a part that left the catalog, say) becomes its default, and the items next to it
+ * stay as they were saved. Abilities that add up to more points than there are fall back together,
+ * since no single one of them is the wrong one.
+ */
 export function resolveAiEmployeeProfile(stored: unknown): AiEmployeeProfile {
-  const raw = (stored && typeof stored === 'object' ? stored : {}) as Record<string, unknown>;
-  const look = robotLookSchema.safeParse(raw.look);
-  const tone = z.enum(AI_TONES).safeParse(raw.tone);
-  const stats = aiStatsSchema.safeParse(raw.stats);
-  const workStyle = aiWorkStyleSchema.safeParse(raw.workStyle);
-  return {
-    look: look.success ? look.data : DEFAULT_ROBOT_LOOK,
-    tone: tone.success ? tone.data : DEFAULT_AI_TONE,
-    stats: stats.success ? stats.data : DEFAULT_AI_STATS,
-    workStyle: workStyle.success ? workStyle.data : DEFAULT_AI_WORK_STYLE,
+  const raw = record(stored);
+  const look = record(raw.look);
+  const stats = record(raw.stats);
+  const workStyle = record(raw.workStyle);
+  const readStats: AiStats = {
+    speed: storedStat(stats.speed, DEFAULT_AI_STATS.speed),
+    care: storedStat(stats.care, DEFAULT_AI_STATS.care),
+    insight: storedStat(stats.insight, DEFAULT_AI_STATS.insight),
+    grit: storedStat(stats.grit, DEFAULT_AI_STATS.grit),
   };
+  return {
+    look: {
+      head: oneOf(ROBOT_HEADS, look.head, DEFAULT_ROBOT_LOOK.head),
+      eyes: oneOf(ROBOT_EYES, look.eyes, DEFAULT_ROBOT_LOOK.eyes),
+      antenna: oneOf(ROBOT_ANTENNAS, look.antenna, DEFAULT_ROBOT_LOOK.antenna),
+      gear: oneOf(ROBOT_GEARS, look.gear, DEFAULT_ROBOT_LOOK.gear),
+      shell: oneOf(ROBOT_SHELLS, look.shell, DEFAULT_ROBOT_LOOK.shell),
+      accent: oneOf(ROBOT_ACCENTS, look.accent, DEFAULT_ROBOT_LOOK.accent),
+    },
+    tone: oneOf(AI_TONES, raw.tone, DEFAULT_AI_TONE),
+    stats: aiStatPointsUsed(readStats) <= AI_STAT_POINTS ? readStats : DEFAULT_AI_STATS,
+    workStyle: {
+      autonomy: oneOf(AI_AUTONOMIES, workStyle.autonomy, DEFAULT_AI_WORK_STYLE.autonomy),
+      reporting: oneOf(AI_REPORTINGS, workStyle.reporting, DEFAULT_AI_WORK_STYLE.reporting),
+    },
+  };
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function oneOf<Option extends string>(
+  options: readonly Option[],
+  value: unknown,
+  fallback: Option
+): Option {
+  return options.includes(value as Option) ? (value as Option) : fallback;
+}
+
+function storedStat(value: unknown, fallback: number): number {
+  const parsed = statSchema.safeParse(value);
+  return parsed.success ? parsed.data : fallback;
 }

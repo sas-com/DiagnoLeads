@@ -105,15 +105,16 @@ export function OfficeStudio({
     update.mutate({ organizationId, employeeId: employee.id, profile });
   };
 
-  // The studio's keys: the numbers open the tabs. Esc with unsaved changes warns once.
+  // Leaving with unsaved changes warns once, whether by Esc or by the button; true when it warned
+  const warnBeforeLeaving = (): boolean => {
+    if (!dirty || outcome === 'discard') return false;
+    setOutcome('discard');
+    return true;
+  };
+
+  // The studio's keys: the numbers open the tabs. Esc goes back, after the warning.
   const onStudioKey: RoomKeys = (event) => {
-    if (event.key === 'Escape') {
-      if (dirty && outcome !== 'discard') {
-        setOutcome('discard');
-        return true;
-      }
-      return false;
-    }
+    if (event.key === 'Escape') return warnBeforeLeaving();
     const opened = studioTabOfKey(event.key);
     if (!opened) return false;
     event.preventDefault();
@@ -173,7 +174,8 @@ export function OfficeStudio({
         </div>
         <div>
           <p className="text-xs text-[#bdb7a9]">{t('sample')}</p>
-          <p className="text-base leading-relaxed font-medium">{sample}</p>
+          {/* Read out when the personality changes: the sample is the answer to that choice */}
+          <output className="block text-base leading-relaxed font-medium">{sample}</output>
         </div>
         {/* The message takes the focus when the studio opens */}
         <p
@@ -450,14 +452,16 @@ export function OfficeStudio({
         <footer className="flex items-center justify-end border-t border-[#f5f1e8]/15 px-5 py-3">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => {
+              if (!warnBeforeLeaving()) onClose();
+            }}
             className={cn(
               'flex min-h-11 items-center gap-2.5 px-2 text-sm font-bold hover:text-white',
               FOCUS
             )}
           >
             <span className={KEY}>Esc</span>
-            {t('back')}
+            {t(dirty && outcome === 'discard' ? 'discardBack' : 'back')}
           </button>
         </footer>
       </section>

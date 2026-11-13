@@ -92,13 +92,13 @@ vi.mock('@/lib/trpc/client', () => ({
         useMutation: (
           options: {
             onSuccess?: (saved: unknown, input: { id: string; done?: boolean }) => void;
-            onError?: () => void;
+            onError?: (error: unknown, input: { id: string; done?: boolean }) => void;
           } = {}
         ) => ({
           isPending: false,
           mutate: (input: { organizationId: string; id: string; done: boolean }) => {
             if (mocks.fail) {
-              options.onError?.();
+              options.onError?.(new Error('failed'), input);
               return;
             }
             mocks.updates.push(input);
@@ -209,8 +209,14 @@ describe('the reception', () => {
     expect(document.activeElement?.textContent).toContain('1 件目をお渡しします');
   });
 
-  it('marks one as done with its key, and the same key then goes on without marking the next', async () => {
+  it('marks one as done with its key, and the same key marks nothing more until the president goes on', async () => {
     const { user, office, board } = await enterReception();
+    expect(within(office).getByRole('button', { name: /済みにする/ })).toHaveTextContent(
+      '1済みにする'
+    );
+    expect(within(office).getByRole('button', { name: /あとで/ })).toHaveTextContent(
+      '2あとで（次の件へ）'
+    );
     await user.keyboard('1');
     expect(mocks.updates).toEqual([
       { organizationId: ORG_ID, id: '00000000-0000-4000-8000-000000000001', done: true },
@@ -221,18 +227,36 @@ describe('the reception', () => {
     expect(mocks.refreshed).toHaveBeenCalled();
     // The card stays in hand until the president goes on, though the server's list dropped it
     expect(within(board).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
-    expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
+    // Marking keeps its place and key, closed; going on and the undo are offered
+    expect(within(office).getByRole('button', { name: /済みにする/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    expect(within(office).getByRole('button', { name: /次の件へ/ })).toHaveTextContent('2次の件へ');
+    expect(within(office).getByRole('button', { name: /いまのを取り消す/ })).toHaveTextContent(
+      'Zいまのを取り消す'
+    );
+    expect(document.activeElement?.textContent).toContain('済みにしました');
 
-    await user.keyboard('1');
+    await user.keyboard('111');
     expect(mocks.updates).toHaveLength(1);
+    expect(within(board).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
+
+    await user.keyboard('2');
     expect(within(board).getByRole('article', { name: '見本の次の行動2' })).toBeInTheDocument();
     expect(within(board).getByText('3 件中 2 件目')).toBeInTheDocument();
+    expect(within(office).getByText('3 件中 2 件目をお渡しします。')).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /済みにする/ })).not.toHaveAttribute(
+      'aria-disabled'
+    );
   });
 
-  it('takes the mark back, and offers the answers for the same one again', async () => {
+  it('takes the mark back with its own key, and opens the answers for the same one again', async () => {
     const { user, office, board } = await enterReception();
+    await user.keyboard('z');
+    expect(mocks.updates).toHaveLength(0);
     await user.keyboard('1');
-    await user.click(within(office).getByRole('button', { name: /いまのを取り消す/ }));
+    await user.keyboard('z');
     expect(mocks.updates.at(-1)).toEqual({
       organizationId: ORG_ID,
       id: '00000000-0000-4000-8000-000000000001',
@@ -240,14 +264,36 @@ describe('the reception', () => {
     });
     expect(within(office).getByText('済みを取り消しました。')).toBeInTheDocument();
     expect(within(board).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /済みにする/ })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /済みにする/ })).not.toHaveAttribute(
+      'aria-disabled'
+    );
+    expect(
+      within(office).queryByRole('button', { name: /いまのを取り消す/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the mark in hand when the undo fails, so it can be asked for again', async () => {
+    const { user, office } = await enterReception();
+    await user.keyboard('1');
+    mocks.fail = true;
+    await user.click(within(office).getByRole('button', { name: /いまのを取り消す/ }));
+    expect(
+      within(office).getByText('取り消せませんでした。済みのままです。もう一度お願いします。')
+    ).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /済みにする/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    mocks.fail = false;
+    await user.keyboard('Z');
+    expect(mocks.updates.at(-1)).toMatchObject({ done: false });
   });
 
   it('leaves one for later without changing it, and sums up at the end', async () => {
     const { user, office, board } = await enterReception();
     await user.keyboard('2'); // later
     await user.keyboard('1'); // done (2nd)
-    await user.keyboard('1'); // next
+    await user.keyboard('2'); // next
     await user.keyboard('2'); // later (3rd)
     expect(mocks.updates.map((update) => update.id)).toEqual([
       '00000000-0000-4000-8000-000000000002',
@@ -259,8 +305,12 @@ describe('the reception', () => {
     expect(within(order).getAllByText('あとで')).toHaveLength(2);
     expect(within(order).getAllByText('済み')).toHaveLength(1);
 
-    // Only the way back is left
-    await user.keyboard('1');
+    // The numbers do nothing any more, and never go back: Esc and its button do
+    await user.keyboard('12');
+    expect(mocks.updates).toHaveLength(1);
+    expect(within(office).getByRole('region', { name: '今日の期限' })).toBeInTheDocument();
+    expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
     expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
   });
 
@@ -306,6 +356,8 @@ describe('the reception', () => {
     expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
     await user.keyboard('1');
     expect(mocks.updates).toHaveLength(0);
+    expect(within(board).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
+    await user.keyboard('2');
     expect(within(board).getByRole('article', { name: '見本の次の行動2' })).toBeInTheDocument();
   });
 

@@ -44,7 +44,7 @@ export function roomOfKey(key: string): OfficeRoom | null {
 }
 
 /** How the room's AI employee stands to what the room reports */
-export type RoomGuide = 'employee' | 'training' | 'paused' | 'vacant';
+export type RoomGuide = 'employee' | 'attention' | 'training' | 'paused' | 'vacant';
 
 /**
  * Who reads the room's figures to the president. Only an AI employee that works (or waits for
@@ -55,6 +55,8 @@ export function roomGuide(status: DeskStatus): RoomGuide {
   if (status === 'vacant') return 'vacant';
   if (status === 'paused') return 'paused';
   if (status === 'training') return 'training';
+  // Its last run failed or hangs: it does not hold the room right now, and the room says so
+  if (status === 'attention') return 'attention';
   return 'employee';
 }
 
@@ -131,56 +133,83 @@ export function nextRow(current: number, delta: 1 | -1, count: number): number {
   return Math.max(0, Math.min(count - 1, current + delta));
 }
 
-/** What the president can answer over an open customer file (#1128) */
-export type FileChoice = 'call' | 'email' | 'no_answer' | 'back' | 'undo';
-
-/** The contacts the file records with one answer: the quick kinds of the lead page */
-export const FILE_CONTACT_CHOICES = [
-  'call',
-  'email',
-  'no_answer',
-] as const satisfies readonly FileChoice[];
+/** The contacts the president can record over an open customer file (#1128) */
+export const FILE_CONTACT_CHOICES = ['call', 'email', 'no_answer'] as const;
 export type FileContactChoice = (typeof FILE_CONTACT_CHOICES)[number];
 
-/**
- * The choices over an open file. Once a contact was recorded, the first choice is the way back
- * and never another record or the undo: the same key pressed once too often must not record
- * twice or take the record back. Without the right to change leads, only the way back is left.
- */
-export function fileChoices(canEdit: boolean, recorded: boolean): FileChoice[] {
-  if (recorded) return ['back', 'undo'];
-  return canEdit ? [...FILE_CONTACT_CHOICES, 'back'] : ['back'];
-}
-
-/** The choice a number key answers with (1 is the first), if any */
-export function fileChoiceOfKey(key: string, choices: readonly FileChoice[]): FileChoice | null {
-  if (!/^[1-9]$/.test(key)) return null;
-  return choices[Number(key) - 1] ?? null;
-}
-
-/** What the president can answer over a next action that is due (#1133) */
-export type DueChoice = 'done' | 'later' | 'next' | 'undo' | 'back';
+/** What a key of an open customer file does */
+export type FileAction = FileContactChoice | 'undo';
 
 /**
- * The choices over a due next action. Right after one was marked done, the first choice goes on
- * to the next and never marks again: the same key pressed once too often must not complete the
- * next one unseen. Without the right to change leads, the president can only look and go on.
- * Once all were seen, only the way back is left.
+ * The key of each answer over a file. A key keeps its meaning whatever the file shows: a number
+ * always records the same contact and never turns into the way back or the undo, so a key pressed
+ * once too often or a moment too early cannot do something else than what its label said. The
+ * way back is Esc only.
  */
-export function dueChoices(input: {
-  canEdit: boolean;
-  justDone: boolean;
-  finished: boolean;
-}): DueChoice[] {
-  if (input.finished) return ['back'];
-  if (input.justDone) return ['next', 'undo'];
-  return input.canEdit ? ['done', 'later'] : ['later'];
+export const FILE_KEYS: Readonly<Record<FileAction, string>> = {
+  call: '1',
+  email: '2',
+  no_answer: '3',
+  undo: 'Z',
+};
+
+/** The answer a key stands for, whether it is open right now or not */
+export function fileActionOfKey(key: string): FileAction | null {
+  return actionOfKey(FILE_KEYS, key);
 }
 
-/** The choice a number key answers with (1 is the first), if any */
-export function dueChoiceOfKey(key: string, choices: readonly DueChoice[]): DueChoice | null {
-  if (!/^[1-9]$/.test(key)) return null;
-  return choices[Number(key) - 1] ?? null;
+/**
+ * Whether an answer over a file is carried out right now. After a record, no second one is taken
+ * until it is undone or the file is opened again; the undo is only open right after a record.
+ */
+export function fileActionOpen(
+  action: FileAction,
+  state: { canEdit: boolean; recorded: boolean; busy: boolean }
+): boolean {
+  if (state.busy || !state.canEdit) return false;
+  return action === 'undo' ? state.recorded : !state.recorded;
+}
+
+/** What a key of the reception does over a next action that is due (#1133) */
+export type DueAction = 'done' | 'next' | 'undo';
+
+/** The key of each answer in the reception: fixed, like the keys of a file */
+export const DUE_KEYS: Readonly<Record<DueAction, string>> = {
+  done: '1',
+  next: '2',
+  undo: 'Z',
+};
+
+/** The answer a key stands for, whether it is open right now or not */
+export function dueActionOfKey(key: string): DueAction | null {
+  return actionOfKey(DUE_KEYS, key);
+}
+
+/**
+ * Whether an answer in the reception is carried out right now. Right after one was marked done,
+ * marking is closed until the president goes on: the same key pressed once too often never
+ * completes the next one unseen. Going on changes nothing, so it is open to everyone until all
+ * were seen.
+ */
+export function dueActionOpen(
+  action: DueAction,
+  state: { canEdit: boolean; justDone: boolean; finished: boolean; busy: boolean }
+): boolean {
+  if (state.busy) return false;
+  if (action === 'next') return !state.finished;
+  if (!state.canEdit) return false;
+  return action === 'undo' ? state.justDone : !state.justDone && !state.finished;
+}
+
+function actionOfKey<Action extends string>(
+  keys: Readonly<Record<Action, string>>,
+  key: string
+): Action | null {
+  const pressed = key.toUpperCase();
+  for (const action of Object.keys(keys) as Action[]) {
+    if (keys[action] === pressed) return action;
+  }
+  return null;
 }
 
 /** Days a due day ('YYYY-MM-DD') lies before today ('YYYY-MM-DD'); 0 when due today or later */

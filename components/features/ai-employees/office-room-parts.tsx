@@ -3,7 +3,10 @@
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
+import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
+import type { ReactNode } from 'react';
+import { FOCUS, KEY } from './office-hud';
 import { ROLE_ACCENTS } from './office-robot';
 import { RobotPortrait } from './office-scene-svg';
 
@@ -55,4 +58,59 @@ export function choiceClass(main: boolean): string {
   return main
     ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130]'
     : 'border-[#f5f1e8]/35 bg-[#f5f1e8]/5 hover:border-[#e9cf9a] hover:bg-[#f5f1e8]/15';
+}
+
+/**
+ * An answer of the president in a room, with its key. One that is not carried out right now stays
+ * in its place, dimmed: it is `aria-disabled` and not `disabled`, so it keeps the focus and the
+ * room's keys keep working.
+ */
+export function RoomChoiceButton({
+  keyCap,
+  main = false,
+  closed = false,
+  waiting = false,
+  pressed,
+  onClick,
+  children,
+}: {
+  keyCap: string;
+  /** The answer the room expects next, or the one that is on: filled */
+  main?: boolean;
+  /** Not carried out right now */
+  closed?: boolean;
+  /** Closed only for a moment (reading, saving) */
+  waiting?: boolean;
+  /** For an answer that switches something on: whether it is on */
+  pressed?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  const filled = main && !closed;
+  return (
+    <button
+      type="button"
+      aria-disabled={closed || undefined}
+      aria-pressed={pressed}
+      onClick={onClick}
+      className={cn(
+        'flex min-h-11 w-full items-center gap-3 border px-3 text-left text-sm font-bold',
+        closed
+          ? cn(
+              'border-[#f5f1e8]/35 bg-[#f5f1e8]/5 opacity-45',
+              waiting ? 'cursor-wait' : 'cursor-not-allowed'
+            )
+          : choiceClass(filled),
+        FOCUS
+      )}
+    >
+      <span className={cn(KEY, filled && 'border-[#1b2130]/60')}>{keyCap}</span>
+      {children}
+    </button>
+  );
+}
+
+/** The line that says who holds the room, over the room's report */
+export function RoomGuideLine({ children }: { children: ReactNode }) {
+  return <p className="text-sm leading-relaxed text-[#d8d2c4]">{children}</p>;
 }
