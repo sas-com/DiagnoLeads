@@ -231,13 +231,14 @@
       "room": {
         "back": "Back to the floor",
         "work": {
-          "marketing": "Leads"
+          "marketing": "Leads",
+          "backoffice": "Due today"
         },
         "guide": {
           "employee": "{name} looks after this room.",
-          "training": "{name} is in training and does not look after this room yet. The figures are read from the board.",
-          "paused": "{name} is paused. The figures are read from the board.",
-          "vacant": "The {role} seat is vacant. The figures are read from the board."
+          "training": "{name} is in training and does not look after this room yet. The figures are read from the records.",
+          "paused": "{name} is paused. The figures are read from the records.",
+          "vacant": "The {role} seat is vacant. The figures are read from the records."
         },
         "leads": {
           "board": "Lead board",
@@ -314,6 +315,45 @@
           "by": "recorded by {name}",
           "openDetail": "Open the details in the normal view",
           "detailHint": "Hearings, next actions and edits are done on the details page in the normal view."
+        },
+        "due": {
+          "board": "Due today",
+          "position": "{index} of {total}",
+          "reading": "Checking what is due.",
+          "error": "What is due could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see next actions. Please ask an administrator.",
+          "empty": "You have no next actions due today or earlier.",
+          "report": "Your next actions due today or earlier: {total}. Here is number {index}.",
+          "more": "There are {count} more. Please check them on Today in the normal view.",
+          "done": "Marked as done. You can undo it if it was a mistake.",
+          "undone": "It is no longer marked as done.",
+          "failed": "Sorry, that did not work. Please try again in a while.",
+          "finished": "That is all. Marked as done: {done}. Left: {left}.",
+          "readOnly": "You do not have permission to mark next actions as done.",
+          "choices": {
+            "done": "Mark as done",
+            "later": "Later (go to the next)",
+            "next": "Go to the next",
+            "undo": "Undo this one",
+            "back": "Back to the floor"
+          },
+          "dueToday": "Due today",
+          "overdue": "{days, plural, one {# day} other {# days}} overdue",
+          "takeaway": "Takeaway",
+          "checkWith": "Check with: {name}",
+          "lead": "For",
+          "noLead": "No name",
+          "note": "Note",
+          "queue": "In this order",
+          "states": {
+            "done": "Done",
+            "current": "Now",
+            "later": "Later",
+            "waiting": "Coming"
+          },
+          "allSeen": "You have seen them all.",
+          "openLead": "Open the lead in the normal view",
+          "openToday": "Open Today in the normal view"
         }
       }
     },

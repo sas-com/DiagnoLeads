@@ -1,0 +1,54 @@
+'use client';
+
+import type { DeskStatus } from '@/lib/features/ai-employees/office';
+import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
+import { useTranslations } from 'next-intl';
+import { ROLE_ACCENTS } from './office-robot';
+import { RobotPortrait } from './office-scene-svg';
+
+/** Whose room this is: the AI employee of the room (or its vacant seat) with its status */
+export function RoomGuideHeader({
+  role,
+  status,
+  employeeName,
+}: {
+  role: AiEmployeeRole;
+  status: DeskStatus;
+  /** Null while the seat is vacant: the role is named instead */
+  employeeName: string | null;
+}) {
+  const tOffice = useTranslations('aiOffice');
+  const roleTitle = tOffice(`roles.${role}.title`);
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        aria-hidden="true"
+        style={{ borderColor: ROLE_ACCENTS[role] }}
+        className="flex h-14 w-14 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
+      >
+        <RobotPortrait role={role} status={status} className="h-[4.75rem] w-14" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-lg font-bold">{employeeName ?? roleTitle}</p>
+        <p className="text-sm text-[#d8d2c4]">
+          {roleTitle}・{tOffice(`status.${status}`)}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/** The frame of a room: the guide panel on the left, the room's board on the right */
+export const ROOM_FRAME =
+  'absolute inset-x-4 top-20 bottom-4 flex flex-col gap-4 overflow-y-auto lg:inset-x-6 lg:bottom-6 lg:flex-row lg:items-end lg:overflow-visible';
+
+/** The board, the file or the card on the room's wall */
+export const ROOM_BOARD =
+  'flex min-h-[30rem] min-w-0 flex-1 flex-col border border-[#e9cf9a]/45 border-t-[3px] border-t-[#e9cf9a] bg-[linear-gradient(180deg,rgba(12,17,30,0.96)_0%,rgba(9,13,24,0.94)_100%)] shadow-[0_30px_60px_rgba(2,5,12,0.6)] lg:self-stretch';
+
+/** A choice of the president: the main one is filled */
+export function choiceClass(main: boolean): string {
+  return main
+    ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130]'
+    : 'border-[#f5f1e8]/35 bg-[#f5f1e8]/5 hover:border-[#e9cf9a] hover:bg-[#f5f1e8]/15';
+}

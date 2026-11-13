@@ -54,6 +54,7 @@ import {
 } from './office-president';
 import { STATUS_LIGHT, shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
+import { OfficeRoomDue } from './office-room-due';
 import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
 import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from './office-rooms';
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
@@ -765,15 +766,27 @@ export function OfficeImmersive({
                 {!roomFileOpen && <span className={cn(KEY, 'bg-[#0a0e18]/60')}>Esc</span>}
                 {t('room.back')}
               </button>
-              <OfficeRoomLeads
-                organizationId={organizationId}
-                role={ROOM_ROLES[room]}
-                status={statuses[ROOM_ROLES[room]]}
-                employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
-                keysRef={roomKeys}
-                onOpenLead={leave}
-                onFileOpenChange={setRoomFileOpen}
-              />
+              {room === 'marketing' ? (
+                <OfficeRoomLeads
+                  organizationId={organizationId}
+                  role={ROOM_ROLES[room]}
+                  status={statuses[ROOM_ROLES[room]]}
+                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
+                  keysRef={roomKeys}
+                  onOpenLead={leave}
+                  onFileOpenChange={setRoomFileOpen}
+                />
+              ) : (
+                <OfficeRoomDue
+                  organizationId={organizationId}
+                  role={ROOM_ROLES[room]}
+                  status={statuses[ROOM_ROLES[room]]}
+                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
+                  keysRef={roomKeys}
+                  onBack={() => setStage('world')}
+                  onOpenNormal={leave}
+                />
+              )}
             </>
           )}
 

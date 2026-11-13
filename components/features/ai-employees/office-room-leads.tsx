@@ -16,7 +16,7 @@ import {
   OfficeLeadFile,
   type RoomKeys,
 } from './office-lead-file';
-import { ROLE_ACCENTS } from './office-robot';
+import { RoomGuideHeader } from './office-room-parts';
 import {
   LEAD_BOARD_FIRST_VIEW,
   LEAD_BOARD_PAGE_SIZE,
@@ -30,7 +30,6 @@ import {
   nextRow,
   roomGuide,
 } from './office-rooms';
-import { RobotPortrait } from './office-scene-svg';
 
 /** How many of the two marks an MQL level fills (対象外 and no diagnosis fill none) */
 const MQL_MARKS: Record<string, number> = { interest: 2, fit: 1 };
@@ -178,23 +177,7 @@ export function OfficeRoomLeads({
   const from = total === 0 ? 0 : (page - 1) * LEAD_BOARD_PAGE_SIZE + 1;
   const to = Math.min(total, page * LEAD_BOARD_PAGE_SIZE);
 
-  const header = (
-    <div className="flex items-center gap-3">
-      <span
-        aria-hidden="true"
-        style={{ borderColor: ROLE_ACCENTS[role] }}
-        className="flex h-14 w-14 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
-      >
-        <RobotPortrait role={role} status={status} className="h-[4.75rem] w-14" />
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-lg font-bold">{employeeName ?? roleTitle}</p>
-        <p className="text-sm text-[#d8d2c4]">
-          {roleTitle}・{tOffice(`status.${status}`)}
-        </p>
-      </div>
-    </div>
-  );
+  const header = <RoomGuideHeader role={role} status={status} employeeName={employeeName} />;
 
   if (open) {
     return (

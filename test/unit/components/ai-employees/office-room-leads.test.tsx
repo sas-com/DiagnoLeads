@@ -260,7 +260,7 @@ describe('the marketing room', () => {
       )
     ).toBeInTheDocument();
     expect(
-      within(office).getByText('マーケターは空席です。数字はボードから読み上げています。')
+      within(office).getByText('マーケターは空席です。数字は記録から読み上げています。')
     ).toBeInTheDocument();
   });
 
@@ -268,7 +268,7 @@ describe('the marketing room', () => {
     const training = await enterRoom([marketer('training')]);
     expect(
       within(training.office).getByText(
-        'AIマーケターは研修中で、まだこの部屋の仕事を受け持っていません。数字はボードから読み上げています。'
+        'AIマーケターは研修中で、まだこの部屋の仕事を受け持っていません。数字は記録から読み上げています。'
       )
     ).toBeInTheDocument();
     expect(within(training.office).queryByText(/受け持っています。$/)).not.toBeInTheDocument();

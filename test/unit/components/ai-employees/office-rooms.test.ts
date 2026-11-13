@@ -5,6 +5,10 @@ import {
   LEAD_BOARD_VIEWS,
   LEAD_REPORT_VIEWS,
   OFFICE_ROOMS,
+  daysOverdue,
+  dueChoiceOfKey,
+  dueChoices,
+  dueState,
   fileChoiceOfKey,
   fileChoices,
   ROOM_KEYS,
@@ -35,6 +39,7 @@ describe('the rooms', () => {
     }
     expect(new Set(OFFICE_ROOMS.map((room) => ROOM_KEYS[room])).size).toBe(OFFICE_ROOMS.length);
     expect(ROOM_ROLES.marketing).toBe('marketer');
+    expect(ROOM_ROLES.backoffice).toBe('back_office');
   });
 
   it('are not entered by the keys of the camera or by other keys', () => {
@@ -158,5 +163,53 @@ describe('the choices over an open file', () => {
     expect(fileChoiceOfKey('4', choices)).toBe('back');
     expect(fileChoiceOfKey('5', choices)).toBeNull();
     expect(fileChoiceOfKey('Enter', choices)).toBeNull();
+  });
+});
+
+describe('the choices over a due next action', () => {
+  it('mark it as done or leave it for later', () => {
+    expect(dueChoices({ canEdit: true, justDone: false, finished: false })).toEqual([
+      'done',
+      'later',
+    ]);
+  });
+
+  it('go on first right after a mark: the same key never marks the next one unseen', () => {
+    const after = dueChoices({ canEdit: true, justDone: true, finished: false });
+    expect(after).toEqual(['next', 'undo']);
+    expect(dueChoiceOfKey('1', after)).toBe('next');
+    for (const key of ['1', '2', '3']) expect(dueChoiceOfKey(key, after)).not.toBe('done');
+  });
+
+  it('let a member without the right to change leads only go on', () => {
+    expect(dueChoices({ canEdit: false, justDone: false, finished: false })).toEqual(['later']);
+  });
+
+  it('leave only the way back once all were seen', () => {
+    expect(dueChoices({ canEdit: true, justDone: true, finished: true })).toEqual(['back']);
+  });
+});
+
+describe('daysOverdue', () => {
+  it('counts the days a due day lies before today', () => {
+    expect(daysOverdue('2026-11-10', '2026-11-13')).toBe(3);
+    expect(daysOverdue('2026-10-31', '2026-11-01')).toBe(1);
+  });
+
+  it('is 0 for today, a later day and a broken day', () => {
+    expect(daysOverdue('2026-11-13', '2026-11-13')).toBe(0);
+    expect(daysOverdue('2026-11-20', '2026-11-13')).toBe(0);
+    expect(daysOverdue('', '2026-11-13')).toBe(0);
+  });
+});
+
+describe('dueState', () => {
+  it('tells done, in hand, left for later and still to come apart', () => {
+    expect(dueState(0, 1, true)).toBe('done');
+    expect(dueState(1, 1, false)).toBe('current');
+    expect(dueState(0, 1, false)).toBe('later');
+    expect(dueState(2, 1, false)).toBe('waiting');
+    // One that was done stays done while it is in hand
+    expect(dueState(1, 1, true)).toBe('done');
   });
 });

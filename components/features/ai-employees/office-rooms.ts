@@ -2,7 +2,8 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
 /**
  * The rooms of the full-screen office that hold work (#1127, decision
  * 2026-11-13-office-is-the-base): the business screens live inside the office. The marketing room
- * is the first: its wall board is the lead list.
+ * is the first: its wall board is the lead list. The reception (back office) hands over what is
+ * due, one at a time (#1133).
  *
  * Pure functions only.
  */
@@ -18,12 +19,13 @@ import {
 import type { ListLeadsInput } from '@/lib/features/leads/types/schemas';
 
 /** The rooms the president can walk into */
-export const OFFICE_ROOMS = ['marketing'] as const;
+export const OFFICE_ROOMS = ['marketing', 'backoffice'] as const;
 export type OfficeRoom = (typeof OFFICE_ROOMS)[number];
 
 /** The AI employee each room belongs to */
 export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
   marketing: 'marketer',
+  backoffice: 'back_office',
 };
 
 /**
@@ -33,6 +35,7 @@ export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
  */
 export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
   marketing: '2',
+  backoffice: '5',
 };
 
 /** The room a key of the floor enters, if any */
@@ -153,4 +156,44 @@ export function fileChoices(canEdit: boolean, recorded: boolean): FileChoice[] {
 export function fileChoiceOfKey(key: string, choices: readonly FileChoice[]): FileChoice | null {
   if (!/^[1-9]$/.test(key)) return null;
   return choices[Number(key) - 1] ?? null;
+}
+
+/** What the president can answer over a next action that is due (#1133) */
+export type DueChoice = 'done' | 'later' | 'next' | 'undo' | 'back';
+
+/**
+ * The choices over a due next action. Right after one was marked done, the first choice goes on
+ * to the next and never marks again: the same key pressed once too often must not complete the
+ * next one unseen. Without the right to change leads, the president can only look and go on.
+ * Once all were seen, only the way back is left.
+ */
+export function dueChoices(input: {
+  canEdit: boolean;
+  justDone: boolean;
+  finished: boolean;
+}): DueChoice[] {
+  if (input.finished) return ['back'];
+  if (input.justDone) return ['next', 'undo'];
+  return input.canEdit ? ['done', 'later'] : ['later'];
+}
+
+/** The choice a number key answers with (1 is the first), if any */
+export function dueChoiceOfKey(key: string, choices: readonly DueChoice[]): DueChoice | null {
+  if (!/^[1-9]$/.test(key)) return null;
+  return choices[Number(key) - 1] ?? null;
+}
+
+/** Days a due day ('YYYY-MM-DD') lies before today ('YYYY-MM-DD'); 0 when due today or later */
+export function daysOverdue(dueOn: string, today: string): number {
+  const days = (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${dueOn}T00:00:00Z`)) / 86_400_000;
+  return Number.isFinite(days) ? Math.max(0, Math.round(days)) : 0;
+}
+
+/** Where a next action of the queue stands while the president goes through it */
+export type DueState = 'done' | 'current' | 'later' | 'waiting';
+
+export function dueState(index: number, current: number, done: boolean): DueState {
+  if (done) return 'done';
+  if (index === current) return 'current';
+  return index < current ? 'later' : 'waiting';
 }
