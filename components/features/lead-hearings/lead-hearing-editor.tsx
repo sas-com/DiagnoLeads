@@ -539,13 +539,16 @@ export function LeadHearingEditor({
       {/* Header */}
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <Link href={backHref} className="inline-flex items-center gap-1 text-blue-600">
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-1 text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
+          >
             <ArrowLeft className="h-4 w-4" />
             {t('editor.back')}
           </Link>
           <Link
             href={`/${locale}/settings/ax-playbook`}
-            className="inline-flex items-center gap-1 text-blue-600"
+            className="inline-flex items-center gap-1 text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
           >
             <BookOpen className="h-4 w-4" />
             {t('editor.playbook')}
@@ -589,13 +592,13 @@ export function LeadHearingEditor({
                 aria-hidden="true"
                 className={cn(
                   'inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
-                  meetingMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                  meetingMode ? 'bg-brand-500 dark:bg-brand-400' : 'bg-gray-200 dark:bg-gray-700'
                 )}
               >
                 <span
                   className={cn(
                     'block h-5 w-5 rounded-full bg-white shadow transition-transform',
-                    meetingMode ? 'translate-x-5' : 'translate-x-0.5'
+                    meetingMode ? 'translate-x-5 dark:bg-gray-900' : 'translate-x-0.5'
                   )}
                 />
               </span>

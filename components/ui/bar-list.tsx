@@ -47,7 +47,7 @@ export function BarList({
             <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
               <div
                 className={cn(
-                  'h-full rounded-full bg-blue-500',
+                  'h-full rounded-full bg-brand-500 dark:bg-brand-400',
                   showAnimation && 'transition-all duration-500'
                 )}
                 style={{

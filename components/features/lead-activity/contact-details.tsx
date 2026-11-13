@@ -29,7 +29,7 @@ export function ContactDetails({ event }: { event: ContactRecordedEvent }) {
       node: (
         <Link
           href={`/${locale}/deals/${event.deal.id}`}
-          className="min-w-0 truncate text-blue-600 underline underline-offset-2 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          className="min-w-0 truncate text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {t('dealLink', { name: event.deal.name })}
         </Link>

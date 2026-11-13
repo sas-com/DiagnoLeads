@@ -18,18 +18,18 @@ export default async function LoginPage({ params }: { params: Promise<{ locale: 
 
       {/* 開発環境用テストユーザー情報 */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-950/40 dark:border-blue-800">
-          <h3 className="text-sm font-semibold text-blue-800 mb-2 dark:text-blue-300">
+        <div className="mb-6 p-4 bg-brand-50 border border-brand-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2 dark:text-gray-50">
             {locale === 'ja' ? 'テストユーザー' : 'Test User'}
           </h3>
-          <div className="text-sm text-blue-700 space-y-1 dark:text-blue-300">
+          <div className="text-sm text-gray-800 space-y-1 dark:text-gray-200">
             <p>
               <span className="font-medium">{locale === 'ja' ? 'メール:' : 'Email:'}</span>{' '}
-              <code className="bg-blue-100 px-1 rounded dark:bg-blue-900/60">test@example.com</code>
+              <code className="bg-brand-100 px-1 rounded dark:bg-gray-700">test@example.com</code>
             </p>
             <p>
               <span className="font-medium">{locale === 'ja' ? 'パスワード:' : 'Password:'}</span>{' '}
-              <code className="bg-blue-100 px-1 rounded dark:bg-blue-900/60">password123</code>
+              <code className="bg-brand-100 px-1 rounded dark:bg-gray-700">password123</code>
             </p>
           </div>
         </div>

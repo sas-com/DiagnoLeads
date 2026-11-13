@@ -285,7 +285,7 @@ function CardView({
                 <button
                   type="button"
                   onClick={() => session.open(card, empty[0])}
-                  className="inline-flex min-h-9 items-center rounded-md text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-400"
+                  className="inline-flex min-h-9 items-center rounded-md text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-blue-400"
                 >
                   {t('empty.fill')}
                 </button>
@@ -322,14 +322,17 @@ function FieldValue({ field, lead }: { field: LeadCardField; lead: Lead }) {
       return (
         <a
           href={`mailto:${lead.email}`}
-          className="text-blue-600 hover:underline dark:text-blue-400"
+          className="text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {lead.email}
         </a>
       );
     case 'phone':
       return (
-        <a href={`tel:${lead.phone}`} className="text-blue-600 hover:underline dark:text-blue-400">
+        <a
+          href={`tel:${lead.phone}`}
+          className="text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
+        >
           {lead.phone}
         </a>
       );

@@ -229,7 +229,7 @@ export function HearingSummaryPanel({
                     <button
                       type="button"
                       onClick={() => onJump(todo)}
-                      className="inline-flex min-h-9 items-center gap-2 rounded-md text-left text-sm text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 print:text-black"
+                      className="inline-flex min-h-9 items-center gap-2 rounded-md text-left text-sm text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 print:text-black"
                     >
                       <ArrowRight className="h-4 w-4 shrink-0 print:hidden" aria-hidden="true" />
                       <span className="font-medium">{todo.label}</span>
