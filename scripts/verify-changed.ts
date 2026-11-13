@@ -61,6 +61,12 @@ export const DISK_READERS: { pattern: RegExp; tests: string[] }[] = [
     pattern: /^lib\/features\/ax-site\/web-checklist-pdf\.json$/,
     tests: ['test/unit/features/ax-web-checklist.test.ts'],
   },
+  // Reads every key handler of the screens for the guard of a conversion (#1129). Last, so the rules
+  // above still name their own tests for their files
+  {
+    pattern: /^(app|components|context|hooks)\/.+\.tsx?$/,
+    tests: ['test/unit/components/ime-key-guard.test.ts'],
+  },
 ];
 
 // Non-code files no unit test reads

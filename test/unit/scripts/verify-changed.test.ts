@@ -73,6 +73,14 @@ describe('planTests', () => {
     });
   });
 
+  it('runs the check of the key handlers for a changed screen, besides the related tests (#1129)', () => {
+    expect(planTests([modified('components/header/HeaderLeadSearch.tsx')])).toEqual({
+      kind: 'selected',
+      related: ['components/header/HeaderLeadSearch.tsx'],
+      extra: ['test/unit/components/ime-key-guard.test.ts'],
+    });
+  });
+
   it('runs the test that reads a changed JSON file', () => {
     expect(planTests([modified('lib/features/ax-site/web-checklist-pdf.json')])).toEqual({
       kind: 'selected',

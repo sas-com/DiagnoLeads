@@ -1,5 +1,6 @@
 'use client';
 
+import { isImeKey } from '@/components/ui/ime';
 import { Menu, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { AxCrossLink } from './ax-cross-link';
@@ -32,7 +33,8 @@ export function AxMobileMenu({ buttonLabel, navLabel, items }: AxMobileMenuProps
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      // Not the Esc that cancels a conversion (IME) in a field of the page (#1129)
+      if (event.key !== 'Escape' || isImeKey(event)) return;
       setOpen(false);
       buttonRef.current?.focus();
     };
