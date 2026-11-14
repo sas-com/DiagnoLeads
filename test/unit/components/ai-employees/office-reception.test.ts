@@ -6,6 +6,7 @@ import {
   RECEPTION_SHELVES,
   SETTINGS_DOORS,
   SHELF_KEYS,
+  invitationNamed,
   dueFigures,
   dueLine,
   invitationFigures,
@@ -74,5 +75,19 @@ describe('the figures of the counter', () => {
     expect(membersLine(3, known)).toBe('withInvitations');
     expect(membersLine(3, { state: 'hidden' })).toBe('members');
     expect(membersLine(null, known)).toBeNull();
+  });
+});
+
+describe('the invitation an address names (#1197)', () => {
+  const pending = [{ id: 'a', email: 'first@example.com' }, { id: 'b', email: 'second@example.com' }];
+
+  it('names one only by its whole address, whatever the case and the width of the letters', () => {
+    expect(invitationNamed('second@example.com', pending)?.id).toBe('b');
+    expect(invitationNamed('  First@Example.COM ', pending)?.id).toBe('a');
+    expect(invitationNamed('ｆｉｒｓｔ＠ｅｘａｍｐｌｅ．ｃｏｍ', pending)?.id).toBe('a');
+    expect(invitationNamed('first@example', pending)).toBeNull();
+    expect(invitationNamed('', pending)).toBeNull();
+    expect(invitationNamed('1', pending)).toBeNull();
+    expect(invitationNamed('first@example.com', [])).toBeNull();
   });
 });
