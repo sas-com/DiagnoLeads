@@ -139,7 +139,7 @@ describe('OrganizationSwitcher', () => {
     await user.click(screen.getByTestId('org-item-org-b'));
 
     expect(mocks.setOrganization).toHaveBeenCalledWith('org-b', ORG_B);
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/ja/office'));
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/ja/office?source=home'));
     expect(mocks.invalidate).toHaveBeenCalled();
   });
 

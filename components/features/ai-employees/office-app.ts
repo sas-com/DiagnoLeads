@@ -3,7 +3,7 @@
  * app, and the browser's offer to install it.
  */
 import { APP_LAUNCH_PARAM, APP_LAUNCH_VALUE } from '@/lib/routes/app-install';
-import { ARRIVAL_PARAM, ARRIVAL_VALUE } from '@/lib/routes/home';
+import { ARRIVAL_PARAM, ARRIVAL_VALUE, HOME_VALUE } from '@/lib/routes/home';
 import { useCallback, useEffect, useState } from 'react';
 
 /** The display modes of a window without the browser around it */
@@ -40,12 +40,20 @@ export function justArrived(search: string): boolean {
 }
 
 /**
+ * Whether the visitor came home: by the logo, by "back to home", or after choosing an
+ * organization (#1169). The full-screen office opens by itself then too, on the floor at once.
+ */
+export function cameHome(search: string): boolean {
+  return new URLSearchParams(search).get(ARRIVAL_PARAM) === HOME_VALUE;
+}
+
+/**
  * The address without the mark of having just come in, or null when it carries none. The mark is
  * dropped once the office read it: a reload, or going back to the page later, is not coming in
  * again, and the office must not jump to full screen each time.
  */
 export function withoutArrival(pathname: string, search: string, hash = ''): string | null {
-  if (!justArrived(search)) return null;
+  if (!justArrived(search) && !cameHome(search)) return null;
   const rest = new URLSearchParams(search);
   rest.delete(ARRIVAL_PARAM);
   const query = rest.toString();

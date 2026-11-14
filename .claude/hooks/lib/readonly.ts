@@ -614,6 +614,9 @@ const READ_SCRIPTS = new Map<string, (args: string[]) => string | null>([
   ['test:lib', vitestViolation],
   ['typecheck', (args) => tscViolation(['--noEmit', ...args])],
   ['lint', (args) => biomeViolation(['check', '.', ...args])],
+  // Runs lint, arch:check, vitest and tsc, writing no more than lint, typecheck and test:run do
+  // (caches); its own flags aside, the arguments go to vitest (scripts/verify-changed.ts)
+  ['verify', (args) => vitestViolation(args.filter((w) => w !== '--full' && w !== '--plan'))],
   // These ignore their arguments
   ['memory:index', () => null],
   ['i18n:check', () => null],

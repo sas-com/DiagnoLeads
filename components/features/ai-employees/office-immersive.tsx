@@ -125,6 +125,7 @@ export function OfficeImmersive({
   presidentName,
   employees,
   canManage,
+  startOn = 'title',
   onExit,
 }: {
   organizationId: string;
@@ -132,6 +133,12 @@ export function OfficeImmersive({
   presidentName: string | null;
   employees: readonly OfficeEmployee[];
   canManage: boolean;
+  /**
+   * The scene the office opens on: the title for who comes in, the floor for who comes home by
+   * the logo (#1169). On the floor at once there was no press to ask the browser for its own
+   * full screen with, so the office only covers the page
+   */
+  startOn?: 'title' | 'world';
   onExit: () => void;
 }) {
   const t = useTranslations('aiOffice.immersive');
@@ -141,7 +148,7 @@ export function OfficeImmersive({
   const utils = trpc.useUtils();
   const rootRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
-  const [stage, setStage] = useState<Stage>('title');
+  const [stage, setStage] = useState<Stage>(startOn);
   const [now, setNow] = useState(() => new Date());
   const [size, setSize] = useState({ w: 1280, h: 800 });
   const [zoom, setZoom] = useState(1);
