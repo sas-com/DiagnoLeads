@@ -258,7 +258,7 @@
         "back": "Back to the floor",
         "work": {
           "marketing": "Leads",
-          "backoffice": "Due today"
+          "backoffice": "General affairs"
         },
         "guide": {
           "employee": "{name} looks after this room.",
@@ -383,6 +383,63 @@
           "openToday": "Open Today in the normal view",
           "undoFailed": "It could not be undone and is still marked as done. Please try again.",
           "reportNext": "Here is number {index} of {total}."
+        },
+        "reception": {
+          "board": "General affairs counter",
+          "back": "Back to the counter",
+          "reading": "Checking the figures.",
+          "ask": " Which shelf shall I open?",
+          "note": "Only what is recorded is shown. What is due is your own share.",
+          "due": {
+            "forbidden": "You do not have permission to see next actions, so I cannot report what is due.",
+            "error": "What is due could not be read.",
+            "none": "You have no next actions due today or earlier.",
+            "some": "Your next actions due today or earlier: {total}.",
+            "overdue": "Your next actions due today or earlier: {total}, of which {overdue} overdue."
+          },
+          "members": {
+            "members": " Members: {count}.",
+            "withInvitations": " Members: {count}. Pending invitations: {waiting}."
+          },
+          "choices": {
+            "due": "Take what is due",
+            "members": "See members and invitations",
+            "settings": "Open the settings shelf"
+          },
+          "figures": {
+            "due": "Due by today",
+            "dueValue": "{count}",
+            "overdueValue": "{count} overdue",
+            "members": "Members",
+            "membersValue": "{count}",
+            "invitations": "Pending invitations",
+            "invitationsValue": "{count}",
+            "expiredValue": "{count} more expired",
+            "invitationsHidden": "Only admins and owners can see invitations.",
+            "unread": "Could not be read"
+          },
+          "membersShelf": {
+            "board": "Members and invitations",
+            "reading": "Checking the members.",
+            "error": "The members could not be read. Please open the shelf again in a while.",
+            "report": "Members: {count}.",
+            "reportWithInvitations": "Members: {count}. Pending invitations: {waiting}.",
+            "readOnly": "This shelf is read only. Inviting, revoking and roles are on the members page of the normal view.",
+            "members": "Members ({count})",
+            "more": "There are {count} more. Please check them in the normal view.",
+            "invitations": "Pending invitations",
+            "invitationsHidden": "Only admins and owners can see invitations.",
+            "invitationsError": "The invitations could not be read.",
+            "noInvitations": "No pending invitations.",
+            "expires": "Expires: {date}",
+            "expired": "Expired",
+            "open": "Open members in the normal view"
+          },
+          "settingsShelf": {
+            "board": "Settings shelf",
+            "report": "This is the settings shelf. Choose a page; it opens in the normal view.",
+            "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view."
+          }
         }
       },
       "tones": {
