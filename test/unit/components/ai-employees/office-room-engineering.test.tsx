@@ -48,6 +48,12 @@ const mocks = vi.hoisted(() => ({
   handedOffOn: null as string | null,
   hearing: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
   card: null as unknown,
+  canEdit: true,
+  draftSource: null as unknown,
+  saves: [] as { organizationId: string; leadId: string; card: Record<string, unknown> }[],
+  saving: false,
+  failSave: false,
+  refreshed: vi.fn(),
 }));
 
 const answer = (mode: Mode, data: unknown) =>
@@ -64,7 +70,10 @@ const answer = (mode: Mode, data: unknown) =>
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
-    useUtils: () => ({ aiEmployees: { office: { invalidate: vi.fn() } } }),
+    useUtils: () => ({
+      aiEmployees: { office: { invalidate: vi.fn() } },
+      leadPrep: { get: { invalidate: mocks.refreshed } },
+    }),
     aiEmployees: {
       hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
       update: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -155,7 +164,31 @@ vi.mock('@/lib/trpc/client', () => ({
     },
     leadPrep: {
       get: {
-        useQuery: () => answer('ok', { card: mocks.card, canEdit: true, draftSource: null }),
+        useQuery: () =>
+          answer('ok', {
+            card: mocks.card,
+            canEdit: mocks.canEdit,
+            draftSource: mocks.canEdit ? mocks.draftSource : null,
+          }),
+      },
+      save: {
+        useMutation: (hook: { onSuccess?: () => void } = {}) => ({
+          isPending: mocks.saving,
+          mutate: (
+            input: { organizationId: string; leadId: string; card: Record<string, unknown> },
+            options: { onSuccess?: () => void; onError?: () => void } = {}
+          ) => {
+            mocks.saves.push(input);
+            if (mocks.failSave) {
+              options.onError?.();
+              return;
+            }
+            // The server now holds what was saved
+            mocks.card = { ...input.card, updatedAt: new Date(), updatedByName: null };
+            hook.onSuccess?.();
+            options.onSuccess?.();
+          },
+        }),
       },
     },
   },
@@ -222,6 +255,12 @@ describe('the engineering room', () => {
     mocks.latestHearing = { id: HEARING_ID, heldOn: '2026-11-10' };
     mocks.handedOffOn = '2026-11-12';
     mocks.hearing = 'ok';
+    mocks.canEdit = true;
+    mocks.draftSource = null;
+    mocks.saves.length = 0;
+    mocks.saving = false;
+    mocks.failSave = false;
+    mocks.refreshed.mockClear();
     mocks.card = {
       estimatedSystem: '見本のシステム',
       estimatedSystemBasis: '見本の根拠',
@@ -410,5 +449,221 @@ describe('the engineering room', () => {
       within(file).getByText('ヒアリングを見る権限がありません。管理者に確かめてください。')
     ).toBeInTheDocument();
     expect(within(office).getByText('ヒアリングの記録を読めませんでした。')).toBeInTheDocument();
+  });
+  describe('the draft of the prep card (#1212)', () => {
+    const SOURCE = {
+      targetSystem: 'as400',
+      targetSystemFrom: 'diagnosis',
+      primaryChallenge: 'cost',
+      challenges: ['cost', 'people'],
+      urgencyReasons: [],
+      difficultyReasons: [],
+      playbookQuestions: { cost: ['見本の手引きの質問1', '見本の手引きの質問2'] },
+    };
+    const openFile = async () => {
+      const room = await enterRoom();
+      await room.user.click(room.board.querySelectorAll<HTMLElement>('[data-deal-row]')[0]);
+      const file = within(room.office).getByRole('region', { name: '見本商事1の準備ファイル' });
+      return { ...room, file };
+    };
+
+    beforeEach(() => {
+      mocks.draftSource = SOURCE;
+      // Somebody wrote the hypothesis on cost; the rest is empty
+      mocks.card = {
+        estimatedSystem: null,
+        estimatedSystemBasis: null,
+        recentNews: null,
+        hypotheses: { cost: '人が書いた仮説' },
+        firstQuestions: [],
+        updatedAt: new Date(),
+        updatedByName: null,
+      };
+    });
+
+    it('fills the empty fields with the key 3, saves the card of the lead and keeps what was written', async () => {
+      const { user, office, file } = await openFile();
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(1);
+      const saved = mocks.saves[0];
+      expect(saved.organizationId).toBe(ORG_ID);
+      expect(saved.leadId).toBe('00000000-0000-4000-8000-000000000101');
+      expect(saved.card.hypotheses).toMatchObject({ cost: '人が書いた仮説' });
+      expect((saved.card.hypotheses as Record<string, string>).people).toBeTruthy();
+      expect(saved.card.estimatedSystem).toBeTruthy();
+      expect(saved.card.firstQuestions).toEqual(['見本の手引きの質問1', '見本の手引きの質問2']);
+      expect(mocks.refreshed).toHaveBeenCalledWith({
+        organizationId: ORG_ID,
+        leadId: '00000000-0000-4000-8000-000000000101',
+      });
+      // The file turns to the card, and the report (which has the focus) says what was done
+      expect(within(file).getByText('見本の手引きの質問2')).toBeInTheDocument();
+      const report = within(office).getByText(/下書きを入れて保存しました/);
+      expect(report.parentElement).toHaveFocus();
+      // It is the president's answer, not the work of the AI engineer
+      expect(within(office).queryByText(/エンジニアが.*(用意|下書き)/)).not.toBeInTheDocument();
+    });
+
+    it('takes the draft once: the same key pressed again saves nothing', async () => {
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(1);
+      expect(
+        within(office).getByRole('button', { name: /事前調査カードの下書きを用意して/ })
+      ).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('undoes the draft with Z: the card is saved back as it was read', async () => {
+      const { user, office, file } = await openFile();
+      expect(within(office).queryByRole('button', { name: /いまの下書きを取り消す/ })).toBeNull();
+      await user.keyboard('3');
+      await user.keyboard('z');
+      expect(mocks.saves).toHaveLength(2);
+      expect(mocks.saves[1].card).toEqual({
+        estimatedSystem: null,
+        estimatedSystemBasis: null,
+        recentNews: null,
+        hypotheses: { cost: '人が書いた仮説' },
+        firstQuestions: [],
+      });
+      expect(
+        within(office).getByText('下書きを取り消し、事前調査カードを元に戻しました。')
+      ).toBeInTheDocument();
+      expect(within(file).queryByText('見本の手引きの質問2')).not.toBeInTheDocument();
+      // Undone, the draft can be asked for again
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(3);
+    });
+
+    it('drafts and undoes for a lead without a card: the card is empty again, which the file shows as none', async () => {
+      mocks.card = null;
+      const { user, office, file } = await openFile();
+      expect(
+        within(office).getByText('初回商談の事前調査カードは、まだ用意されていません。')
+      ).toBeInTheDocument();
+      await user.keyboard('3');
+      expect(within(file).getByText('見本の手引きの質問1')).toBeInTheDocument();
+      await user.keyboard('z');
+      expect(mocks.saves[1].card).toEqual({
+        estimatedSystem: null,
+        estimatedSystemBasis: null,
+        recentNews: null,
+        hypotheses: {},
+        firstQuestions: [],
+      });
+      expect(
+        within(office).getByText('初回商談の事前調査カードは、まだ用意されていません。')
+      ).toBeInTheDocument();
+    });
+
+    it('does not undo over a card somebody changed after the draft', async () => {
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      // Somebody edits the card on the lead's page; the file reads it again (turning to the
+      // other part draws the file anew)
+      mocks.card = { ...(mocks.card as object), recentNews: 'あとから人が書いた動き' };
+      await user.keyboard('1');
+      expect(within(office).getByText(/下書きのあとに、事前調査カードが書き換えられました/)).toBeInTheDocument();
+      expect(
+        within(office).getByRole('button', { name: /いまの下書きを取り消す/ })
+      ).toHaveAttribute('aria-disabled', 'true');
+      await user.keyboard('z');
+      expect(mocks.saves).toHaveLength(1);
+    });
+
+    it('keeps the undo open when it did not go through', async () => {
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      mocks.failSave = true;
+      await user.keyboard('z');
+      expect(
+        within(office).getByText(
+          '取り消せませんでした。下書きは保存されたままです。もう一度、取り消せます。'
+        )
+      ).toBeInTheDocument();
+      mocks.failSave = false;
+      await user.keyboard('z');
+      expect(
+        within(office).getByText('下書きを取り消し、事前調査カードを元に戻しました。')
+      ).toBeInTheDocument();
+    });
+
+    it('says so when the draft could not be saved, and saves nothing more by itself', async () => {
+      mocks.failSave = true;
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      expect(
+        within(office).getByText(
+          'すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。'
+        )
+      ).toBeInTheDocument();
+      expect(within(office).queryByRole('button', { name: /いまの下書きを取り消す/ })).toBeNull();
+    });
+
+    it('does not offer the draft to someone who may not change the card', async () => {
+      mocks.canEdit = false;
+      const { user, office } = await openFile();
+      expect(
+        within(office).queryByRole('button', { name: /事前調査カードの下書きを用意して/ })
+      ).toBeNull();
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(0);
+    });
+
+    it('closes the draft and says why when there is nothing to draft from or nothing to fill', async () => {
+      mocks.draftSource = {
+        ...SOURCE,
+        targetSystem: null,
+        targetSystemFrom: null,
+        primaryChallenge: null,
+        challenges: [],
+        playbookQuestions: {},
+      };
+      const none = await openFile();
+      expect(
+        within(none.office).getByText(
+          '下書きにできる材料（Web診断の回答・営業の手引き）が、このお客様にはありません。'
+        )
+      ).toBeInTheDocument();
+      await none.user.keyboard('3');
+      expect(mocks.saves).toHaveLength(0);
+    });
+
+    it('says that no empty field is left when the card is already filled', async () => {
+      mocks.card = {
+        estimatedSystem: '見本のシステム',
+        estimatedSystemBasis: '見本の根拠',
+        recentNews: null,
+        hypotheses: { cost: '人が書いた仮説', people: '人が書いた仮説2' },
+        firstQuestions: ['見本の質問'],
+        updatedAt: new Date(),
+        updatedByName: null,
+      };
+      const { user, office } = await openFile();
+      expect(
+        within(office).getByText('下書きで埋められる空欄は、事前調査カードにありません。')
+      ).toBeInTheDocument();
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(0);
+    });
+
+    it('keeps the file open while the card is being saved: Esc and the way back are closed', async () => {
+      mocks.saving = true;
+      const { user, office } = await openFile();
+      await user.keyboard('{Escape}');
+      expect(
+        within(office).getByRole('region', { name: '見本商事1の準備ファイル' })
+      ).toBeInTheDocument();
+      const back = within(office).getByRole('button', { name: /ボードに戻る/ });
+      expect(back).toHaveAttribute('aria-disabled', 'true');
+      await user.click(back);
+      expect(
+        within(office).getByRole('region', { name: '見本商事1の準備ファイル' })
+      ).toBeInTheDocument();
+      // Nothing is taken while it saves
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(0);
+    });
   });
 });

@@ -737,6 +737,8 @@
             "choices": {
               "hearing": "Show me the hearing summary",
               "prep": "Show me the prep card",
+              "draft": "Draft the prep card",
+              "undo": "Undo this draft",
               "back": "Back to the board"
             },
             "parts": {
@@ -754,10 +756,17 @@
             "hearingEmpty": "No hearing has been recorded. You can record one under Hearings on the lead's page.",
             "hearingForbidden": "You do not have permission to see the hearing. Please check with an administrator.",
             "prepEmpty": "The prep card has not been written yet. You can prepare it on the lead's page.",
-            "readOnlyHint": "This file is read only. To change something, open it in the normal view.",
+            "readOnlyHint": "Hearings are recorded and the card is edited field by field in the normal view.",
             "openHandoff": "Open the handoff sheet",
             "openLead": "Open the lead's page",
-            "openDeal": "Open the deal's page"
+            "openDeal": "Open the deal's page",
+            "drafted": "The empty fields of the prep card were filled from the Web diagnosis and the sales playbook, and saved. What was already written was kept. You can undo this.",
+            "undone": "The draft was undone and the prep card is as it was.",
+            "failed": "Sorry, that did not work. Please try again later.",
+            "undoFailed": "The draft could not be undone and is still saved. You can ask to undo it again.",
+            "changedSince": "The prep card was changed after the draft. Undoing would wipe what was written since, so it cannot be undone here. To change it, open the lead's page.",
+            "noMaterial": "There is nothing to draft from for this customer (no Web diagnosis answers, no sales playbook).",
+            "nothingToFill": "The prep card has no empty field a draft could fill."
           }
         }
       },

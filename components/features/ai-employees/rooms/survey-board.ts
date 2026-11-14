@@ -1,7 +1,8 @@
 /**
  * The engineering room of the full-screen office (#1194): its wall board is the deals that survey
  * a customer's current system, the engineer's share of the pipeline, and a row opens the
- * preparation file of its lead (the latest hearing and the prep card of the first meeting).
+ * preparation file of its lead (the latest hearing and the prep card of the first meeting), where
+ * the president can have the card drafted (#1212).
  *
  * The board reads `deals.board` as it is (decision 2026-11-13-office-is-the-base: no API is added
  * for a room). Pure functions only.
@@ -13,6 +14,7 @@ import {
   type OpenDealStage,
 } from '@/lib/features/deals/types/pipeline';
 import type { BoardInput } from '@/lib/features/deals/types/schemas';
+import { PREP_CHALLENGES, type PrepCardFields } from '@/lib/features/lead-prep/types/schemas';
 
 /** The deals of the room: surveys of the current system */
 export const SURVEY_BOARD_KINDS = ['survey'] as const satisfies readonly DealKind[];
@@ -131,4 +133,66 @@ export function prepCardFilled(card: {
       Object.values(card.hypotheses).some(Boolean) ||
       card.firstQuestions.length > 0
   );
+}
+
+/** What the president can have done from a preparation file (#1212) */
+export type PrepFileAction = 'draft' | 'undo';
+
+/**
+ * The key of each answer over a preparation file. The numbers 1 and 2 turn to a part of the file
+ * and change nothing; the draft has its own number, the undo is Z and the way back is Esc, so no
+ * key means two things (decision 2026-11-13-office-is-the-base).
+ */
+export const PREP_FILE_KEYS: Readonly<Record<PrepFileAction, string>> = {
+  draft: '3',
+  undo: 'Z',
+};
+
+/** The answer a key stands for, whether it is open right now or not */
+export function prepActionOfKey(key: string): PrepFileAction | null {
+  const pressed = key.toUpperCase();
+  return (
+    (Object.keys(PREP_FILE_KEYS) as PrepFileAction[]).find(
+      (action) => PREP_FILE_KEYS[action] === pressed
+    ) ?? null
+  );
+}
+
+/** The fields of a prep card that are saved; a lead without a card has them all empty */
+export function prepCardFields(card: PrepCardFields | null | undefined): PrepCardFields {
+  return {
+    estimatedSystem: card?.estimatedSystem ?? null,
+    estimatedSystemBasis: card?.estimatedSystemBasis ?? null,
+    recentNews: card?.recentNews ?? null,
+    hypotheses: { ...card?.hypotheses },
+    firstQuestions: [...(card?.firstQuestions ?? [])],
+  };
+}
+
+/** Whether two cards say the same: a draft that fills nothing is not worth saving */
+export function samePrepCard(a: PrepCardFields, b: PrepCardFields): boolean {
+  const text = (card: PrepCardFields) =>
+    JSON.stringify([
+      card.estimatedSystem,
+      card.estimatedSystemBasis,
+      card.recentNews,
+      PREP_CHALLENGES.map((challenge) => card.hypotheses[challenge] ?? null),
+      card.firstQuestions,
+    ]);
+  return text(a) === text(b);
+}
+
+/**
+ * Whether an answer over a preparation file is carried out right now. The draft is taken once:
+ * after it, it stays closed until it is undone or the file is opened again, so the same key
+ * pressed once too often does nothing. It is also closed while there is nothing to fill. The undo
+ * is only open right after a draft, and only while the card still says what the draft saved: once
+ * somebody changed it, saving the old card back would wipe what they wrote.
+ */
+export function prepActionOpen(
+  action: PrepFileAction,
+  state: { canEdit: boolean; drafted: boolean; busy: boolean; fillable: boolean; stale: boolean }
+): boolean {
+  if (state.busy || !state.canEdit) return false;
+  return action === 'undo' ? state.drafted && !state.stale : !state.drafted && state.fillable;
 }
