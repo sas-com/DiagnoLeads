@@ -63,7 +63,7 @@ function FigureBoard({
   state: FigureState;
   /** Said instead of the rows when there is nothing to show; left out when there are rows */
   emptyText?: string;
-  /** The keys of the board, when its rows can be opened */
+  /** The keys of the board, when its rows can be opened: the arrows then move over the rows */
   keys?: ReactNode;
   /** What the figures mean, under the table */
   notes?: ReactNode;
@@ -110,7 +110,8 @@ function FigureBoard({
           tabIndex={0}
           // biome-ignore lint/a11y/useSemanticElements: a named group around a table, not a form's fieldset
           role="group"
-          aria-label={t('scroll', { board: title })}
+          // Where rows open, the arrows move over them first and scroll at the ends (#1214)
+          aria-label={t(keys ? 'scrollRows' : 'scroll', { board: title })}
           className={cn('min-h-0 flex-1 overflow-auto px-5 py-2', FOCUS)}
         >
           {children}

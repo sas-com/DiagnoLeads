@@ -456,9 +456,9 @@ describe('the marketing room', () => {
     const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
-    await user.click(within(guide).getByRole('button', { name: /マーケティング室.*リード管理/ }));
+    await user.click(within(guide).getByRole('button', { name: /マーケティング室.*集客と見込み客/ }));
 
-    expect(within(office).getByRole('heading', { name: 'リード管理' })).toBeInTheDocument();
+    expect(within(office).getByRole('heading', { name: '集客と見込み客' })).toBeInTheDocument();
     expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
@@ -624,9 +624,10 @@ describe('the marketing room', () => {
 
   it('names the scrolling table of a board of figures, and the group of lead views', async () => {
     const { office } = await enterMarketing();
+    // Where rows open, the arrows move over them: the region says so, and no more than is true
     expect(
       within(office).getByRole('group', {
-        name: '流入元ボードの表。矢印キーでスクロールできます',
+        name: '流入元ボードの表。上下の矢印キーで行を選び、端の行ではスクロールできます',
       })
     ).toHaveAttribute('tabindex', '0');
     const views = within(office).getByRole('group', { name: '見込み客を見せて' });
@@ -747,6 +748,12 @@ describe('the marketing room', () => {
     expect(rows[1]).toHaveFocus();
     await user.keyboard('{ArrowUp}{ArrowUp}');
     expect(rows[0]).toHaveFocus();
+    // At the ends the focus stays and the key goes back to the browser (#1214)
+    expect(fireEvent.keyDown(rows[0], { key: 'ArrowUp' })).toBe(true);
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(rows[2]).toHaveFocus();
+    expect(fireEvent.keyDown(rows[2], { key: 'ArrowDown' })).toBe(true);
+    expect(rows[2]).toHaveFocus();
   });
 
   it('shows the MQL level and the status of a row as words, not only colours', async () => {
@@ -867,6 +874,31 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
         '流入元の行を開くと、その流入元の過去30日の見込み客が見込み客ボードに出ます。「流入元の記録なし」の行は開けません。'
       )
     ).toBeInTheDocument();
+  });
+
+  it('gives the arrow keys back to the browser at the first and the last row, so the board scrolls (#1214)', async () => {
+    const { user, office } = await enterMarketing();
+    const board = within(office).getByRole('region', { name: '流入元ボード' });
+    const rows = within(board).getAllByRole('button', { name: /の見込み客を開く$/ });
+    await user.keyboard('{ArrowDown}');
+    expect(rows[0]).toHaveFocus();
+    // fireEvent answers false when the key was taken (preventDefault)
+    expect(fireEvent.keyDown(rows[0], { key: 'ArrowUp' })).toBe(true);
+    expect(rows[0]).toHaveFocus();
+    expect(fireEvent.keyDown(rows[0], { key: 'ArrowDown' })).toBe(false);
+    expect(rows[1]).toHaveFocus();
+    // The last row that opens: the key is left alone, and what lies under the table is reached
+    expect(fireEvent.keyDown(rows[1], { key: 'ArrowDown' })).toBe(true);
+    expect(rows[1]).toHaveFocus();
+  });
+
+  it('says that the arrows scroll on a board whose rows do not open', async () => {
+    const { user, office } = await enterMarketing();
+    await user.keyboard('2');
+    const table = within(office).getByRole('group', {
+      name: '進み具合ボードの表。矢印キーでスクロールできます',
+    });
+    expect(fireEvent.keyDown(table, { key: 'ArrowDown' })).toBe(true);
   });
 
   it('shows the prospects of that source in the same period, asked from leads.list', async () => {

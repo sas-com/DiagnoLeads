@@ -182,7 +182,7 @@ describe('OfficeImmersive', () => {
       Array.from(guide.querySelectorAll('a, button')).map((entry) => entry.textContent)
     ).toEqual([
       '1社長のデスク今日の予定ページを開く',
-      '2マーケティング室リード管理',
+      '2マーケティング室集客と見込み客',
       '3営業フロア商談',
       '4開発室現行調査',
       '5総務・受付総務の窓口',
