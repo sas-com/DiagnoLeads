@@ -262,7 +262,7 @@
           "marketing": "リード管理",
           "sales": "商談",
           "engineering": "現行調査",
-          "backoffice": "今日の期限"
+          "backoffice": "総務の窓口"
         },
         "guide": {
           "employee": "{name}が、この部屋を受け持っています。",
@@ -449,6 +449,63 @@
           "openToday": "通常の表示の「今日」を開く",
           "undoFailed": "取り消せませんでした。済みのままです。もう一度お願いします。",
           "reportNext": "{total} 件中 {index} 件目をお渡しします。"
+        },
+        "reception": {
+          "board": "総務の窓口",
+          "back": "窓口へ戻る",
+          "reading": "数字を確かめています。",
+          "ask": "どの棚を開きますか。",
+          "note": "数字は、記録されているものだけです。期限は、あなたが受け持つ分です。",
+          "due": {
+            "forbidden": "次の行動を見る権限がないので、期限の数字はお伝えできません。",
+            "error": "期限の数字を読めませんでした。",
+            "none": "あなたの、期限が今日までの次の行動は、ありません。",
+            "some": "あなたの、期限が今日までの次の行動は {total} 件です。",
+            "overdue": "あなたの、期限が今日までの次の行動は {total} 件で、うち {overdue} 件は期限を過ぎています。"
+          },
+          "members": {
+            "members": "メンバーは {count} 人です。",
+            "withInvitations": "メンバーは {count} 人、招待中は {waiting} 件です。"
+          },
+          "choices": {
+            "due": "期限を受け取る",
+            "members": "メンバーと招待を見る",
+            "settings": "設定の棚を開く"
+          },
+          "figures": {
+            "due": "今日までの期限",
+            "dueValue": "{count} 件",
+            "overdueValue": "うち {count} 件は期限を過ぎています",
+            "members": "メンバー",
+            "membersValue": "{count} 人",
+            "invitations": "招待中",
+            "invitationsValue": "{count} 件",
+            "expiredValue": "ほかに、期限切れの招待が {count} 件あります",
+            "invitationsHidden": "招待は、管理者とオーナーだけが見られます。",
+            "unread": "読めませんでした"
+          },
+          "membersShelf": {
+            "board": "メンバーと招待",
+            "reading": "メンバーを確かめています。",
+            "error": "メンバーを読めませんでした。時間をおいて、もう一度開いてください。",
+            "report": "メンバーは {count} 人です。",
+            "reportWithInvitations": "メンバーは {count} 人、招待中は {waiting} 件です。",
+            "readOnly": "ここでは見るだけです。招待・取り消し・役割の変更は、通常の表示のメンバーの画面で行います。",
+            "members": "メンバー（{count} 人）",
+            "more": "このほかに {count} 人います。通常の表示で確かめてください。",
+            "invitations": "招待中",
+            "invitationsHidden": "招待は、管理者とオーナーだけが見られます。",
+            "invitationsError": "招待を読めませんでした。",
+            "noInvitations": "招待中のものは、ありません。",
+            "expires": "有効期限：{date}",
+            "expired": "期限切れ",
+            "open": "通常の表示でメンバーを開く"
+          },
+          "settingsShelf": {
+            "board": "設定の棚",
+            "report": "設定の棚です。開くページを選んでください。通常の表示で開きます。",
+            "note": "上下のキーで選び、Enter で開きます。出社の画面を閉じて、通常の表示のページへ移ります。"
+          }
         },
         "door": "ページを開く",
         "engineering": {

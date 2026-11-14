@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import type { RoomKeys } from './office-lead-file';
+import { ShelfBackButton } from './office-reception-parts';
 import {
   ROOM_BOARD,
   ROOM_FRAME,
@@ -51,6 +52,7 @@ export function OfficeRoomDue({
   look,
   keysRef,
   onOpenNormal,
+  onBack,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -63,6 +65,8 @@ export function OfficeRoomDue({
   keysRef: MutableRefObject<RoomKeys | null>;
   /** A page of the normal view is opened: the office closes */
   onOpenNormal: () => void;
+  /** Back to the counter of the reception (#1196) */
+  onBack: () => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tDue = useTranslations('aiOffice.immersive.room.due');
@@ -255,6 +259,7 @@ export function OfficeRoomDue({
             </ul>
           </>
         )}
+        <ShelfBackButton onBack={onBack} />
       </div>
 
       {/* What is handed over now, and the order of the rest */}
