@@ -77,6 +77,7 @@ describe('readOnlyViolation', () => {
     allowed('gh api --method GET search/issues -f q=repo:x && gh auth status');
     allowed('bun run test:run test/unit/claude-hooks && bun run typecheck && bun run lint');
     allowed('bun run test:run -- -t guard && npm run test:run -- test/unit/a.test.ts');
+    allowed('bun run verify && bun run verify --plan && bun run verify --full --maxWorkers=2');
     allowed('bunx vitest run test/unit/a.test.ts && bunx tsc --noEmit');
     allowed("bunx vitest run test/unit/a.test.ts -t 'name' --reporter=verbose --silent");
     allowed('bunx @biomejs/biome check . && bun x vitest --run');
@@ -322,6 +323,11 @@ describe('readOnlyViolation', () => {
     for (const command of [
       'bunx vitest run --outputFile=CLAUDE.md --reporter=json',
       'bun run test:run --outputFile CLAUDE.md',
+      'bun run verify --outputFile CLAUDE.md',
+      'bun run verify --plan --config /tmp/x.ts',
+      'bun run verify --update',
+      'bun run verify -- --config /tmp/x.ts',
+      'npm run verify --coverage',
       'bunx vitest run --config /tmp/x.ts',
       'bunx vitest run --root /tmp',
       'bunx vitest run --coverage',
