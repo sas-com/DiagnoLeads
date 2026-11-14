@@ -1,7 +1,7 @@
 'use client';
 import { Logo, LogoMark } from '@/components/common/Logo';
 import { useSidebar } from '@/context/SidebarContext';
-import { homePath } from '@/lib/routes/home';
+import { homeEntryPath } from '@/lib/routes/home';
 import {
   RiBarChartLine,
   RiBriefcase4Line,
@@ -345,7 +345,7 @@ const AppSidebar: React.FC = () => {
         className={`py-6 hidden lg:flex ${!isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start'}`}
       >
         {isExpanded || isHovered || isMobileOpen ? (
-          <Logo size="md" href={homePath(locale)} />
+          <Logo size="md" href={homeEntryPath(locale)} />
         ) : (
           <LogoMark size="md" />
         )}

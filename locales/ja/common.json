@@ -2820,8 +2820,7 @@
       "moreMenu": "その他のメニュー",
       "themeToDark": "ダークモードに切り替え",
       "themeToLight": "ライトモードに切り替え"
-    },
-    "enterOffice": "出社する"
+    }
   },
   "tags": {
     "manageTags": "タグを管理",

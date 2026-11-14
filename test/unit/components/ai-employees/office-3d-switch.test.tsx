@@ -5,6 +5,7 @@
  * mocked: three.js is never loaded here.
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
+import { DESK_SEATS, spotOf } from '@/components/features/ai-employees/office-map-layout';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { act, render, screen, within } from '@testing-library/react';
@@ -20,12 +21,22 @@ const mocks = vi.hoisted(() => ({
   statuses: [] as string[],
   vacant: [] as string[],
   walks: null as null | ((role: string, walking: boolean) => void),
+  scene: null as null | {
+    stage?: string;
+    subject?: { x: number; y: number } | null;
+    attentive?: string | null;
+    events: Record<string, string | undefined>;
+  },
 }));
 
 vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => ({
   default: function Canvas3DStub({
     employees,
     vacant,
+    stage,
+    subject,
+    attentive,
+    events,
     onFps,
     onReady,
     onView,
@@ -33,6 +44,10 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
   }: {
     employees: readonly { status: string }[];
     vacant?: readonly string[];
+    stage?: string;
+    subject?: { x: number; y: number } | null;
+    attentive?: string | null;
+    events: Record<string, string | undefined>;
     onFps?: (fps: number) => void;
     onReady?: () => void;
     onView?: (view: unknown, places: unknown) => void;
@@ -42,6 +57,7 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
     mocks.statuses = employees.map((employee) => employee.status);
     mocks.vacant = [...(vacant ?? [])];
     mocks.walks = onWalking ?? null;
+    mocks.scene = { stage, subject, attentive, events };
     useEffect(() => {
       if (!mocks.draws) return;
       onReady?.();
@@ -80,6 +96,11 @@ vi.mock(
     };
   }
 );
+
+// What is on the board of a room is tested with the room; here the room only has to open
+vi.mock('@/components/features/ai-employees/office-room-leads', () => ({
+  OfficeRoomLeads: () => <div data-testid="room-leads" />,
+}));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -211,6 +232,49 @@ describe('the switch to the 3D floor', () => {
     act(() => mocks.walks?.('sales', false));
     expect(within(staff).getByText('研修室')).toBeInTheDocument();
     expect(within(staff).queryByText(/移動中/)).not.toBeInTheDocument();
+  });
+
+  it('stays in 3D behind a conversation, a room and the customization (#1148)', async () => {
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await within(office).findByText('3D の検証');
+    expect(mocks.scene).toMatchObject({ stage: 'world', subject: null, attentive: null });
+
+    // A conversation: the camera goes to the employee, who turns to the president
+    await user.keyboard('e');
+    expect(within(office).getByText('社長（あなた）')).toBeInTheDocument();
+    expect(within(office).getByTestId('floor-3d')).toBeInTheDocument();
+    const seat = spotOf('sales', 'training');
+    expect(mocks.scene).toMatchObject({
+      stage: 'talk',
+      subject: { x: seat.x, y: seat.y },
+      attentive: 'sales',
+    });
+    // The president standing there is what happens to it; nobody else feels anything
+    expect(mocks.scene?.events).toEqual({ sales: 'president_near' });
+    // The name tags belong to the floor: none is placed over a conversation
+    const placed = within(office)
+      .queryAllByRole('button', { name: /AIセールス\s*研修中/, hidden: true })
+      .filter((button) => button.style.visibility === 'visible');
+    expect(placed).toEqual([]);
+
+    await user.keyboard('{Escape}');
+    expect(mocks.scene).toMatchObject({ stage: 'world', subject: null, attentive: null });
+    expect(mocks.scene?.events).toEqual({});
+
+    // A room: the camera goes to the desk of the room's employee
+    await user.keyboard('2');
+    expect(within(office).getByTestId('floor-3d')).toBeInTheDocument();
+    expect(mocks.scene).toMatchObject({
+      stage: 'room',
+      subject: { x: DESK_SEATS.marketer.x, y: DESK_SEATS.marketer.y },
+      attentive: null,
+    });
+
+    await user.keyboard('{Escape}');
+    await user.keyboard('c');
+    expect(within(office).getByTestId('floor-3d')).toBeInTheDocument();
+    expect(mocks.scene).toMatchObject({ stage: 'studio', subject: { x: seat.x, y: seat.y } });
   });
 
   it('forgets what the trial panel pretended when the trial ends', async () => {
