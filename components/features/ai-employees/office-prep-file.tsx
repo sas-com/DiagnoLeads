@@ -24,12 +24,13 @@ import {
   prepCardFilled,
   prepPartOfKey,
   samePrepCard,
+  savedPrepCard,
 } from './rooms/survey-board';
 import { useRoomKeys } from './use-room-keys';
 
 type Outcome =
-  // before: the card as it was read, which the undo saves back. after: the draft that was saved;
-  // the undo is only taken while the card still says that. undoFailed: the undo did not go
+  // before: the card as the server held it right before the draft, which the undo puts back.
+  // after: the draft as the server stores it; the undo is only taken while the card still says that. undoFailed: the undo did not go
   // through, so the draft is still saved and can be undone again
   | { kind: 'drafted'; before: PrepCardFields; after: PrepCardFields; undoFailed?: boolean }
   | { kind: 'undone' }
@@ -51,7 +52,8 @@ const LINK = 'inline-flex min-h-11 items-center underline underline-offset-4 hov
  * drafts it (`buildPrepDraft`: the empty fields are filled from the Web diagnosis and the sales
  * playbook, what somebody wrote is kept, Claude is not called) and saved with the page's own API
  * (`leadPrep.save`). It is carried out at once, so it can be undone: the undo saves the card back
- * as it was read. Nothing here is the work of the AI engineer, and the file never says so.
+ * as it was before. Both read the card again first and work from that, never from the card on
+ * the screen: the save replaces the whole card, and somebody may have written to it since (#1221). Nothing here is the work of the AI engineer, and the file never says so.
  * Writing a hearing or editing the card field by field is done on the lead's page, which the
  * links at the foot open.
  */
@@ -97,7 +99,9 @@ export function OfficePrepFile({
     { organizationId, id: latest?.id ?? '', locale: locale === 'en' ? 'en' : 'ja' },
     { enabled: latest !== null }
   );
-  const prep = trpc.leadPrep.get.useQuery(scope);
+  // Always read when the file opens (the app's default keeps an answer for five minutes): the
+  // card the file shows, and starts from, is not one somebody else has changed since (#1221)
+  const prep = trpc.leadPrep.get.useQuery(scope, { staleTime: 0 });
 
   const company = deal.company || tLeads('noCompany');
   const summary = hearing.data?.summary;
@@ -123,39 +127,87 @@ export function OfficePrepFile({
   const save = trpc.leadPrep.save.useMutation({
     onSuccess: () => void utils.leadPrep.get.invalidate(scope),
   });
-  const saving = save.isPending;
+  // An answer first reads the card again, then saves: both count as working on it
+  const [checking, setChecking] = useState(false);
+  const working = checking || save.isPending;
   // While the card is read again, nothing is taken: an answer would start from an old card
   const rereading = prep.isFetching === true;
-  // Somebody changed the card after the draft (on the lead's page): saving the old card back
+  // Somebody changed the card after the draft (on the lead's page): putting the old card back
   // would wipe what they wrote, so the undo is closed and the file says why
   const stale = outcome?.kind === 'drafted' && !rereading && !samePrepCard(current, outcome.after);
-  const state = { canEdit, drafted, busy: saving || rereading, fillable, stale };
-  const answer = (action: PrepFileAction) => {
-    if (!prepActionOpen(action, state)) return;
-    if (action === 'draft') {
-      if (!draft) return;
-      save.mutate(
-        { ...scope, card: draft },
-        {
-          onSuccess: () => {
-            setOutcome({ kind: 'drafted', before: current, after: draft });
-            setPart('prep');
-          },
-          onError: () => setOutcome({ kind: 'failed' }),
-        }
+  const state = { canEdit, drafted, busy: working || rereading, fillable, stale };
+
+  /**
+   * The card as the server holds it right now (#1221). `leadPrep.save` replaces the whole card
+   * and takes no condition, so an answer never starts from the card on the screen, which
+   * somebody may have changed on the lead's page since it was read: it reads the card again and
+   * works from that. What is left is the moment between this read and the save.
+   */
+  // Not tried again: while it runs, Esc and the way back are closed
+  const readNow = () => utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false });
+  // The file can be left while the card is read (a link at the foot): then nothing is saved
+  const shown = useRef(true);
+  useEffect(() => {
+    shown.current = true;
+    return () => {
+      shown.current = false;
+    };
+  }, []);
+
+  const inFlight = useRef(false);
+  const answer = async (action: PrepFileAction) => {
+    // The ref closes the door at once: a key that arrives twice before the file is drawn again
+    // must not start a second read and save
+    if (inFlight.current || !prepActionOpen(action, state)) return;
+    inFlight.current = true;
+    setChecking(true);
+    try {
+      const fresh = await readNow();
+      if (!shown.current) return;
+      const now = prepCardFields(fresh.card);
+      if (action === 'draft') {
+        // Only the fields that are empty right now are filled
+        const filled =
+          fresh.canEdit && fresh.draftSource && hasDraftMaterial(fresh.draftSource)
+            ? savedPrepCard(
+                buildPrepDraft(now, fresh.draftSource, (key, values) => tAll(key, values))
+              )
+            : null;
+        // Nothing left to fill (somebody filled it meanwhile): the file now shows why
+        if (!filled || samePrepCard(now, filled)) return;
+        save.mutate(
+          { ...scope, card: filled },
+          {
+            onSuccess: () => {
+              setOutcome({ kind: 'drafted', before: now, after: filled });
+              setPart('prep');
+            },
+            onError: () => setOutcome({ kind: 'failed' }),
+          }
+        );
+      } else if (outcome?.kind === 'drafted') {
+        // The card no longer says what the draft put there: the file now says so, nothing is sent
+        if (!samePrepCard(now, outcome.after)) return;
+        save.mutate(
+          { ...scope, card: outcome.before },
+          {
+            onSuccess: () => setOutcome({ kind: 'undone' }),
+            // The draft is still there: keep it in hand, so the undo can be asked for again
+            onError: () =>
+              setOutcome((kept) =>
+                kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : { kind: 'failed' }
+              ),
+          }
+        );
+      }
+    } catch {
+      // The card could not be read again: nothing was sent
+      setOutcome((kept) =>
+        kept?.kind === 'drafted' ? { ...kept, undoFailed: action === 'undo' } : { kind: 'failed' }
       );
-    } else if (outcome?.kind === 'drafted') {
-      save.mutate(
-        { ...scope, card: outcome.before },
-        {
-          onSuccess: () => setOutcome({ kind: 'undone' }),
-          // The draft is still saved: keep it in hand, so the undo can be asked for again
-          onError: () =>
-            setOutcome((now) =>
-              now?.kind === 'drafted' ? { ...now, undoFailed: true } : { kind: 'failed' }
-            ),
-        }
-      );
+    } finally {
+      inFlight.current = false;
+      setChecking(false);
     }
   };
   // After an answer the focus is on the report: Enter pressed once more does nothing
@@ -173,12 +225,12 @@ export function OfficePrepFile({
   // out, and a file closed now would carry it out without its report or its undo
   const onFileKey: RoomKeys = (event) => {
     if (isImeKey(event)) return false;
-    if (event.key === 'Escape') return saving;
+    if (event.key === 'Escape') return working;
     const action = prepActionOfKey(event.key);
     if (action) {
       // A key that is closed right now does nothing, and is not anyone else's either
       event.preventDefault();
-      answer(action);
+      void answer(action);
       return true;
     }
     const chosen = prepPartOfKey(event.key);
@@ -234,7 +286,7 @@ export function OfficePrepFile({
             </p>
           )}
           {/* Why the draft is closed, to those who could ask for it */}
-          {canEdit && !drafted && !fillable && (
+          {canEdit && !drafted && !fillable && !state.busy && (
             <p className="text-sm leading-relaxed text-[#d8d2c4]">
               {material ? t('nothingToFill') : t('noMaterial')}
             </p>
@@ -268,7 +320,7 @@ export function OfficePrepFile({
                 keyCap={PREP_FILE_KEYS.draft}
                 closed={!prepActionOpen('draft', state)}
                 waiting={state.busy}
-                onClick={() => answer('draft')}
+                onClick={() => void answer('draft')}
               >
                 {t('choices.draft')}
               </RoomChoiceButton>
@@ -280,7 +332,7 @@ export function OfficePrepFile({
                 keyCap={PREP_FILE_KEYS.undo}
                 closed={!prepActionOpen('undo', state)}
                 waiting={state.busy}
-                onClick={() => answer('undo')}
+                onClick={() => void answer('undo')}
               >
                 {t('choices.undo')}
               </RoomChoiceButton>
@@ -289,10 +341,10 @@ export function OfficePrepFile({
           <li>
             <RoomChoiceButton
               keyCap="Esc"
-              closed={saving}
-              waiting={saving}
+              closed={working}
+              waiting={working}
               onClick={() => {
-                if (!saving) onClose();
+                if (!working) onClose();
               }}
             >
               {t('choices.back')}

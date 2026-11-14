@@ -49,6 +49,13 @@ const mocks = vi.hoisted(() => ({
   hearing: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
   card: null as unknown,
   canEdit: true,
+  // What the server holds when it differs from the screen's copy (`card`): somebody else wrote
+  // to the card and the screen has not read it again. undefined: the same as the screen
+  server: undefined as unknown,
+  fetches: [] as { input: unknown; options: unknown }[],
+  failFetch: false,
+  rereading: false,
+  prepOptions: undefined as unknown,
   draftSource: null as unknown,
   saves: [] as { organizationId: string; leadId: string; card: Record<string, unknown> }[],
   saving: false,
@@ -72,7 +79,22 @@ vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({
       aiEmployees: { office: { invalidate: vi.fn() } },
-      leadPrep: { get: { invalidate: mocks.refreshed } },
+      leadPrep: {
+        get: {
+          invalidate: mocks.refreshed,
+          // Reads the card the server holds right now, and the screen's copy follows
+          fetch: async (input: unknown, options: unknown) => {
+            mocks.fetches.push({ input, options });
+            if (mocks.failFetch) throw new Error('failed');
+            if (mocks.server !== undefined) mocks.card = mocks.server;
+            return {
+              card: mocks.card,
+              canEdit: mocks.canEdit,
+              draftSource: mocks.canEdit ? mocks.draftSource : null,
+            };
+          },
+        },
+      },
     }),
     aiEmployees: {
       hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -164,12 +186,17 @@ vi.mock('@/lib/trpc/client', () => ({
     },
     leadPrep: {
       get: {
-        useQuery: () =>
-          answer('ok', {
-            card: mocks.card,
-            canEdit: mocks.canEdit,
-            draftSource: mocks.canEdit ? mocks.draftSource : null,
-          }),
+        useQuery: (_input: unknown, options: unknown) => {
+          mocks.prepOptions = options;
+          return {
+            ...answer('ok', {
+              card: mocks.card,
+              canEdit: mocks.canEdit,
+              draftSource: mocks.canEdit ? mocks.draftSource : null,
+            }),
+            isFetching: mocks.rereading,
+          };
+        },
       },
       save: {
         useMutation: (hook: { onSuccess?: () => void } = {}) => ({
@@ -185,6 +212,7 @@ vi.mock('@/lib/trpc/client', () => ({
             }
             // The server now holds what was saved
             mocks.card = { ...input.card, updatedAt: new Date(), updatedByName: null };
+            if (mocks.server !== undefined) mocks.server = mocks.card;
             hook.onSuccess?.();
             options.onSuccess?.();
           },
@@ -256,6 +284,10 @@ describe('the engineering room', () => {
     mocks.handedOffOn = '2026-11-12';
     mocks.hearing = 'ok';
     mocks.canEdit = true;
+    mocks.server = undefined;
+    mocks.fetches.length = 0;
+    mocks.failFetch = false;
+    mocks.rereading = false;
     mocks.draftSource = null;
     mocks.saves.length = 0;
     mocks.saving = false;
@@ -557,19 +589,113 @@ describe('the engineering room', () => {
       ).toBeInTheDocument();
     });
 
-    it('does not undo over a card somebody changed after the draft', async () => {
+    it('reads the card anew when the file opens, whatever the app keeps (#1221)', async () => {
+      await openFile();
+      expect(mocks.prepOptions).toEqual({ staleTime: 0 });
+    });
+
+    it('does not undo over a card somebody changed after the draft, though the screen never read it again (#1221)', async () => {
       const { user, office } = await openFile();
       await user.keyboard('3');
-      // Somebody edits the card on the lead's page; the file reads it again (turning to the
-      // other part draws the file anew)
-      mocks.card = { ...(mocks.card as object), recentNews: 'あとから人が書いた動き' };
-      await user.keyboard('1');
-      expect(within(office).getByText(/下書きのあとに、事前調査カードが書き換えられました/)).toBeInTheDocument();
+      // A colleague writes to the card on the lead's page. The screen's copy stays as it was:
+      // nothing reads the card again by itself
+      mocks.server = { ...(mocks.card as object), recentNews: 'あとから同僚が書いた動き' };
+      await user.keyboard('z');
+      // The undo read the card first, saw the change and put nothing back
+      expect(mocks.fetches.at(-1)).toEqual({
+        input: { organizationId: ORG_ID, leadId: '00000000-0000-4000-8000-000000000101' },
+        options: { staleTime: 0, retry: false },
+      });
+      expect(mocks.saves).toHaveLength(1);
+      expect(
+        await within(office).findByText(/下書きのあとに、事前調査カードが書き換えられました/)
+      ).toBeInTheDocument();
       expect(
         within(office).getByRole('button', { name: /いまの下書きを取り消す/ })
       ).toHaveAttribute('aria-disabled', 'true');
       await user.keyboard('z');
       expect(mocks.saves).toHaveLength(1);
+    });
+
+    it('drafts from the card the server holds, not from the copy on the screen (#1221)', async () => {
+      // A colleague wrote the recent news after the screen read the card
+      mocks.server = { ...(mocks.card as object), recentNews: '同僚が書いた最近の動き' };
+      const { user } = await openFile();
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(1);
+      // What the colleague wrote is kept; only the fields that are empty now are filled
+      expect(mocks.saves[0].card.recentNews).toBe('同僚が書いた最近の動き');
+      expect(mocks.saves[0].card.hypotheses).toMatchObject({ cost: '人が書いた仮説' });
+      expect(mocks.saves[0].card.firstQuestions).toEqual([
+        '見本の手引きの質問1',
+        '見本の手引きの質問2',
+      ]);
+    });
+
+    it('saves nothing when somebody filled the card meanwhile', async () => {
+      mocks.server = {
+        estimatedSystem: '同僚が書いたシステム',
+        estimatedSystemBasis: '根拠',
+        recentNews: null,
+        hypotheses: { cost: '人が書いた仮説', people: '同僚が書いた仮説' },
+        firstQuestions: ['同僚が書いた質問'],
+        updatedAt: new Date(),
+        updatedByName: null,
+      };
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(0);
+      expect(
+        await within(office).findByText('下書きで埋められる空欄は、事前調査カードにありません。')
+      ).toBeInTheDocument();
+    });
+
+    it('still undoes a draft whose question ended in a space the server trimmed (#1221)', async () => {
+      mocks.draftSource = { ...SOURCE, playbookQuestions: { cost: ['末尾に空白のある質問 '] } };
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      // Saved the way the server stores it
+      expect(mocks.saves[0].card.firstQuestions).toEqual(['末尾に空白のある質問']);
+      await user.keyboard('z');
+      expect(mocks.saves).toHaveLength(2);
+      expect(
+        await within(office).findByText('下書きを取り消し、事前調査カードを元に戻しました。')
+      ).toBeInTheDocument();
+    });
+
+    it('takes no answer while the card is being read again (#1221)', async () => {
+      mocks.rereading = true;
+      const { user, office } = await openFile();
+      expect(
+        within(office).getByRole('button', { name: /事前調査カードの下書きを用意して/ })
+      ).toHaveAttribute('aria-disabled', 'true');
+      // Why the draft is closed is not said while that is not known yet
+      expect(within(office).queryByText(/下書きで埋められる空欄は/)).not.toBeInTheDocument();
+      await user.keyboard('3');
+      expect(mocks.fetches).toHaveLength(0);
+      expect(mocks.saves).toHaveLength(0);
+    });
+
+    it('starts one read and one save when the key arrives twice at once', async () => {
+      const { office } = await openFile();
+      // Two key presses before the file is drawn again
+      fireEvent.keyDown(office, { key: '3' });
+      fireEvent.keyDown(office, { key: '3' });
+      await within(office).findByText(/下書きを入れて保存しました/);
+      expect(mocks.fetches).toHaveLength(1);
+      expect(mocks.saves).toHaveLength(1);
+    });
+
+    it('saves nothing when the card cannot be read again', async () => {
+      mocks.failFetch = true;
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(0);
+      expect(
+        await within(office).findByText(
+          'すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。'
+        )
+      ).toBeInTheDocument();
     });
 
     it('keeps the undo open when it did not go through', async () => {

@@ -438,3 +438,10 @@
 - **解決策**: `components/common/form-controls.ts` の `isComposing`（`isComposing || keyCode === 229`）を変換中とみなし、`isSendShortcut`・`isCloseShortcut` で使う。テストは `fireEvent.keyDown` に `isComposing: true` と `keyCode: 229` の両方を渡して確かめる
 - **教訓**: キーで送る・閉じる欄を作るときは、`components/common/form-controls.ts` の判定を使う。自分で `event.key === 'Enter'` を見ない。Radix の部品の Esc とブラウザのイベントは `components/ui/ime.ts`（`isImeKey`・`ignoreImeEscape`）を使う。Dialog・Sheet・AlertDialog・Popover は既定で対応済み（PR #1010・#1062）。この学びのあとも、#969・#1012・#1063 で同じ不具合が出た
   - 2026-11-14（#1140、PR #1141）：入力欄の無い画面でも当てはまる。出社の画面は `DialogPrimitive` を直接使い、Esc と数字のキーを自分で受けていたので、「既定で対応済み」の部品を通らなかった。`onKeyDown` の最初で `isImeKey(event.nativeEvent)`、`onEscapeKeyDown` を `ignoreImeEscape` で包む。キーを子の部品へ渡すときは、`key` だけを抜き出した作り物ではなく、ブラウザのイベントを渡す（子でも `isImeKey` を見られる）。#1129 の検査（`test/unit/components/ime-key-guard.test.ts`）は、Enter・Esc を見る行の上10行以内に確認があることを求める
+
+### [UI] 「ほかの人が書き換えていたら止める」は、画面が読み直す経路までたどって確かめる
+- **日付**: 2026-11-14
+- **状況**: 開発室の準備ファイルに、事前調査カードの下書きと取り消しを足した（#1212、PR #1220）。保存はカードを丸ごと置き換える（`leadPrep.save`）ので、「下書きのあとにカードが書き換えられていたら、取り消しを閉じる」を入れ、テストも通した。マージのあとの読み取り専用のレビューで、本番ではほぼ働かないと分かった（#1221）
+- **原因**: 判定は、画面が持っているカード（`useQuery` の `data`）と比べていた。アプリの問い合わせの既定は、5分間読み直さず、ウィンドウに戻っても読み直さない（`app/providers.tsx` の `staleTime`・`refetchOnWindowFocus: false`）。ほかの人がリードの画面で書いても、画面のカードは古いままで、判定はいつも「変わっていない」になる。テストは、`useQuery` のモックが描き直しのたびに最新の値を返していたので通った
+- **解決策**: 実行の直前に、サーバーから読み直してから比べて保存する（`utils.<手続き>.fetch(input, { staleTime: 0, retry: false })`）。テストのモックは、画面が持つ値とサーバーが持つ値を別々に持ち、読み直したときだけ画面の値が追いつく形にする（PR #1223 の `office-room-engineering.test.tsx`）
+- **教訓**: 丸ごと置き換える保存を画面から呼ぶときは、「元にするデータを、いつ読んだものか」を先に確かめる。`useQuery` の `data` は最大5分古い。ほかの人の変更に気づく判定を書いたら、その判定に新しい値が届く経路（読み直し）が本番にあるかをたどる。テストのモックが「いつも最新を返す」形だと、この種の判定は必ず通る。比べる相手がサーバーで形を変える値（前後の空白を落とすなど）なら、同じスキーマを通してから比べる。API に前提条件が無いかぎり、読み直しから保存までの一瞬の穴は残る（#1222）

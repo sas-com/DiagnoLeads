@@ -17,6 +17,7 @@ import {
   prepCardFilled,
   prepPartOfKey,
   samePrepCard,
+  savedPrepCard,
   surveyBoardInput,
   surveyBoardPages,
   surveyPageRows,
@@ -184,5 +185,26 @@ describe('the preparation file', () => {
     expect(samePrepCard(fields, { ...fields, hypotheses: { cost: '見本の仮説', data: 'x' } })).toBe(
       false
     );
+  });
+
+  it('puts a draft in the form the server stores before comparing it (#1221)', () => {
+    const draft = {
+      estimatedSystem: ' 見本のシステム ',
+      estimatedSystemBasis: '',
+      recentNews: null,
+      hypotheses: { cost: '見本の仮説 ', people: '' },
+      firstQuestions: ['見本の質問 ', ''],
+    };
+    const saved = savedPrepCard(draft);
+    expect(saved).toEqual({
+      estimatedSystem: '見本のシステム',
+      estimatedSystemBasis: null,
+      recentNews: null,
+      hypotheses: { cost: '見本の仮説' },
+      firstQuestions: ['見本の質問'],
+    });
+    // The draft as sent would never match the card read back; in the stored form it does
+    expect(samePrepCard(draft, saved)).toBe(false);
+    expect(samePrepCard(savedPrepCard(draft), saved)).toBe(true);
   });
 });
