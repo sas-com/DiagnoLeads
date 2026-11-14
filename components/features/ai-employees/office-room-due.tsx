@@ -13,7 +13,7 @@ import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import type { RoomKeys } from './office-lead-file';
-import { ShelfBackButton } from './office-reception-parts';
+import { GUIDE_PANEL, ShelfBackButton, ShelfName } from './office-reception-parts';
 import {
   ROOM_BOARD,
   ROOM_FRAME,
@@ -30,6 +30,7 @@ import {
   dueState,
   roomGuide,
 } from './office-rooms';
+import { DUE_ARM_MS } from './rooms/reception';
 
 type Outcome = 'done' | 'undone' | 'failed' | 'undoFailed';
 
@@ -81,6 +82,13 @@ export function OfficeRoomDue({
   const [index, setIndex] = useState(0);
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set());
   const [justDone, setJustDone] = useState<string | null>(null);
+  // Marking is closed for a moment after the shelf opened: the key that opened it at the counter
+  // is the key that marks here, and pressed twice it would mark the first one unseen (#1226)
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setArmed(true), DUE_ARM_MS);
+    return () => clearTimeout(timer);
+  }, []);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const due = trpc.leadFollowUp.dueTasks.useQuery({
@@ -134,6 +142,7 @@ export function OfficeRoomDue({
 
   const answer = (action: DueAction) => {
     if (!queue || !dueActionOpen(action, state)) return;
+    if (action === 'done' && !armed) return;
     if (action === 'next') {
       setIndex((current) => current + 1);
       setJustDone(null);
@@ -199,7 +208,8 @@ export function OfficeRoomDue({
   return (
     <div className={ROOM_FRAME}>
       {/* Whose room this is, what is handed over, and what the president answers */}
-      <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
+      <div className={cn(PANEL, GUIDE_PANEL)}>
+        <ShelfName shelf="due" />
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
@@ -225,8 +235,8 @@ export function OfficeRoomDue({
                   <RoomChoiceButton
                     keyCap={DUE_KEYS.done}
                     main={mainAction === 'done'}
-                    closed={!dueActionOpen('done', state)}
-                    waiting={update.isPending}
+                    closed={!armed || !dueActionOpen('done', state)}
+                    waiting={!armed || update.isPending}
                     onClick={() => answer('done')}
                   >
                     {tDue('choices.done')}

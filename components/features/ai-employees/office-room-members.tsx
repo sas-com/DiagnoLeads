@@ -12,7 +12,13 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type FormEvent, type MutableRefObject, useEffect, useId, useRef, useState } from 'react';
 import { CAP, FOCUS, PANEL } from './office-hud';
-import { BOARD_MESSAGE, DOOR_LINK, ShelfBackButton } from './office-reception-parts';
+import {
+  BOARD_MESSAGE,
+  DOOR_LINK,
+  GUIDE_PANEL,
+  ShelfBackButton,
+  ShelfName,
+} from './office-reception-parts';
 import type { RoomKeys } from './office-room-contract';
 import {
   ROOM_BOARD,
@@ -99,6 +105,7 @@ export function OfficeRoomMembers({
   const fieldRef = useRef<HTMLInputElement>(null);
   const fieldId = useId();
   const noteId = useId();
+  const errorId = useId();
   // The field of the revoking, open or not; what was typed in it; and what came of it
   const [revoking, setRevoking] = useState(false);
   const [typed, setTyped] = useState('');
@@ -201,7 +208,8 @@ export function OfficeRoomMembers({
 
   return (
     <div className={ROOM_FRAME}>
-      <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
+      <div className={cn(PANEL, GUIDE_PANEL)}>
+        <ShelfName shelf="members" />
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
           <RoomGuideLine>
@@ -210,7 +218,9 @@ export function OfficeRoomMembers({
           <p className="text-base leading-relaxed font-medium" aria-live="polite">
             {report}
           </p>
-          <p className="text-sm text-[#d8d2c4]">{tShelf('readOnly')}</p>
+          <p className="text-sm text-[#d8d2c4]">
+            {tShelf(mayRevoke ? 'readOnly' : 'readOnlyMember')}
+          </p>
         </div>
         {revoking ? (
           // The room says what is wrong in its own words: the browser's own check would only hold
@@ -235,7 +245,8 @@ export function OfficeRoomMembers({
               value={typed}
               maxLength={320}
               autoComplete="off"
-              aria-describedby={noteId}
+              aria-invalid={(refused && !named) || undefined}
+              aria-describedby={refused && !named ? `${noteId} ${errorId}` : noteId}
               onChange={(event) => {
                 setTyped(event.target.value);
                 setRefused(false);
@@ -243,7 +254,7 @@ export function OfficeRoomMembers({
               className={FIELD}
             />
             {refused && !named && (
-              <p role="alert" className="text-sm font-bold text-[#fca5a5]">
+              <p id={errorId} role="alert" className="text-sm font-bold text-[#fca5a5]">
                 <AlertTriangle className="mr-1.5 inline h-4 w-4 align-[-2px]" aria-hidden="true" />
                 {tShelf('revoke.mismatch')}
               </p>
@@ -263,7 +274,15 @@ export function OfficeRoomMembers({
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               {tShelf('revoke.confirm')}
             </button>
-            <ShelfBackButton onBack={close} closed={busy} label={tShelf('revoke.back')} />
+            <ShelfBackButton
+              onBack={() => {
+                close();
+                // The button goes away with the field: the focus goes to the report, not nowhere
+                reportRef.current?.focus();
+              }}
+              closed={busy}
+              label={tShelf('revoke.back')}
+            />
           </form>
         ) : (
           <>
@@ -311,7 +330,7 @@ export function OfficeRoomMembers({
                         {member.user.name || member.user.email}
                       </span>
                       {member.user.name && (
-                        <span className="block truncate text-xs text-[#d8d2c4]">
+                        <span className="block text-xs break-all text-[#d8d2c4]">
                           {member.user.email}
                         </span>
                       )}
@@ -327,7 +346,8 @@ export function OfficeRoomMembers({
               )}
             </div>
 
-            <div className="min-w-0 space-y-3">
+            {/* First on a narrow screen: the one thing done here is about the invitations */}
+            <div className="order-first min-w-0 space-y-3 md:order-none">
               <h3 className={CAP}>{tShelf('invitations')}</h3>
               {invited.state === 'hidden' ? (
                 <p className="text-sm text-[#d8d2c4]">{tShelf('invitationsHidden')}</p>
