@@ -194,7 +194,7 @@
 - **日付**: 2026-10-25
 - **状況**: マイグレーション 0031（#412）で、`site_visit_salts` を `dl_readonly` から読めなくした（その日のソルトを、ハッシュと並べて読まれないため）。その後、毎時のバックアップ（`~/diagnoleads-prod-db/prod-dump.sh`）が失敗し続け、10/24 の夕方から約1日、取れていなかった。本番は Supabase の Free で、このバックアップがほかにない
 - **原因**: `prod-dump.sh` は `dl_readonly` で public スキーマの全表を書き出すので、読めない表が1つあると全体が止まる。REVOKE を書いたとき、同じユーザーを使うバックアップへの影響を見なかった
-- **解決策**: diagnoleads-v2-ab が、`site_visit_salts` をバックアップの対象から外した（復元のときは空の表を作り直す）
+- **解決策**: diagnoleads-v2-ab が、`site_visit_salts` をバックアップの対象から外した（復元のときは空の表を作り直す）。ただし除外は PC の写しにだけ入っていて、リポジトリの版（`scripts/prod-dump.sh`）には無かった。2026-11 の見直しで見つかり、リポジトリの版に `--exclude-table=public.site_visit_salts` と、戻すときに空の表を作り直す手順を入れた（#1126。データだけを外す `--exclude-table-data` では、pg_dump が表をロックするので止まる）
 - **教訓**: マイグレーションで、表を `dl_readonly` から外す・読めないスキーマを足すときは、SQL を流す前にバックアップの担当（docs/runbooks/database-restore.md）に伝える。流したあとに `prod-dump.sh --now` を1回実行して、通ることを確かめる
 
 ### [DB] 本番の接続先を持たないクラウドのセッションから、Supabase のコネクタでマイグレーションを適用する
