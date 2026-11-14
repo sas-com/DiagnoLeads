@@ -38,5 +38,6 @@ paths: ["components/features/ai-employees/office-3d/**", "package.json"]
   - 検証用の部品は `office-3d/office-3d-trial.tsx` に置く（three を値で読むのは `office-canvas-3d.tsx` と `robot-3d.tsx` だけ）
   - React Three Fiber が実行時に組む相手は、`package.json` の React ではなく Next.js が抱える React（canary）。**Next.js を上げたら、3D を手で開いて確かめる**（peer の検査も単体テストも気づけない）。本実装に進むなら、本番ビルドで 3D を開く E2E を1本足す（canvas が出る・ページのエラーと CSP 違反が無い、まで）
   - マージの順番：PR #1105（スキーマ）→ 本番に 0039 → #1105 をマージ → #1136 に main を取り込み、base を main に替えて push（base の付け替えだけでは CI は始まらない）。今の base（`claude/**`）では CI が動かないので、そのままマージしない。マージの前に、Vercel の Bun の版で `--frozen-lockfile` を確かめる（決定 `2026-10-21-frozen-lockfile-on-vercel`）
+  - 2026-11-14：PR #1105 が main に入った（本番に 0039 を適用済み）ので、この PR に main を取り込み、base を main に替えた。`@types/three` は `three` と同じ版に固定した（`ci-devops-specialist` の指摘）
   - `bun.lock` は PR #1117（Storybook）とぶつかる。後から入るほうが、main の `bun.lock` を取ってから `bun add` をやり直す
 - **まだ決まっていないこと**: 本実装に進むか（実機の速さを見てから）、ロボットをコードで組む立体のままにするか（デザイナーの 3D モデルにするか）、社長のアバター、音。検証用のパネル（状態と出来事をこの画面の中だけで切り替える）は検証のためのもので、本実装では実際の状態の変化につなぐ
