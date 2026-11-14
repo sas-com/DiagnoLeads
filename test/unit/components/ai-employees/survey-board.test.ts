@@ -3,6 +3,7 @@
  * keys of the survey board, and the parts of a preparation file.
  */
 import {
+  PREP_FILE_KEYS,
   PREP_FILE_PARTS,
   SURVEY_BOARD_FIRST_VIEW,
   SURVEY_BOARD_PAGE,
@@ -10,8 +11,12 @@ import {
   SURVEY_BOARD_VIEWS,
   type SurveyBoardColumn,
   daysInStage,
+  prepActionOfKey,
+  prepActionOpen,
+  prepCardFields,
   prepCardFilled,
   prepPartOfKey,
+  samePrepCard,
   surveyBoardInput,
   surveyBoardPages,
   surveyPageRows,
@@ -123,5 +128,59 @@ describe('the preparation file', () => {
     expect(prepCardFilled({ ...empty, estimatedSystem: '見本のシステム' })).toBe(true);
     expect(prepCardFilled({ ...empty, hypotheses: { cost: '見本の仮説' } })).toBe(true);
     expect(prepCardFilled({ ...empty, firstQuestions: ['見本の質問'] })).toBe(true);
+  });
+
+  it('keeps the keys of the draft apart from the keys that turn to a part (#1212)', () => {
+    expect(PREP_FILE_KEYS).toEqual({ draft: '3', undo: 'Z' });
+    expect(prepActionOfKey('3')).toBe('draft');
+    expect(prepActionOfKey('z')).toBe('undo');
+    expect(prepActionOfKey('Z')).toBe('undo');
+    // No key means two things: the keys of the parts are not keys of an answer, and the reverse
+    for (const key of ['1', '2', 'Escape', 'Enter']) expect(prepActionOfKey(key)).toBeNull();
+    for (const key of Object.values(PREP_FILE_KEYS)) expect(prepPartOfKey(key)).toBeNull();
+  });
+
+  it('takes the draft once, only from someone who may change the card, and never while saving', () => {
+    const open = { canEdit: true, drafted: false, busy: false, fillable: true };
+    expect(prepActionOpen('draft', open)).toBe(true);
+    expect(prepActionOpen('undo', open)).toBe(false);
+    // Right after a draft: the draft is closed, the undo is open
+    expect(prepActionOpen('draft', { ...open, drafted: true })).toBe(false);
+    expect(prepActionOpen('undo', { ...open, drafted: true })).toBe(true);
+    // Nothing to fill: closed
+    expect(prepActionOpen('draft', { ...open, fillable: false })).toBe(false);
+    for (const action of ['draft', 'undo'] as const) {
+      expect(prepActionOpen(action, { ...open, drafted: true, busy: true })).toBe(false);
+      expect(prepActionOpen(action, { ...open, drafted: true, canEdit: false })).toBe(false);
+    }
+  });
+
+  it('reads a lead without a card as an empty card, and compares cards by what they say', () => {
+    const empty = prepCardFields(null);
+    expect(empty).toEqual({
+      estimatedSystem: null,
+      estimatedSystemBasis: null,
+      recentNews: null,
+      hypotheses: {},
+      firstQuestions: [],
+    });
+    expect(prepCardFilled(empty)).toBe(false);
+    const card = {
+      ...empty,
+      hypotheses: { cost: '見本の仮説' },
+      firstQuestions: ['見本の質問'],
+      updatedAt: new Date(),
+      updatedByName: '見本 太郎',
+    };
+    // Only the saved fields are kept, as copies
+    const fields = prepCardFields(card);
+    expect(Object.keys(fields)).toHaveLength(5);
+    expect(fields.hypotheses).not.toBe(card.hypotheses);
+    expect(samePrepCard(fields, prepCardFields(card))).toBe(true);
+    expect(samePrepCard(fields, empty)).toBe(false);
+    expect(samePrepCard(fields, { ...fields, firstQuestions: ['見本の質問', '2つ目'] })).toBe(false);
+    expect(samePrepCard(fields, { ...fields, hypotheses: { cost: '見本の仮説', data: 'x' } })).toBe(
+      false
+    );
   });
 });

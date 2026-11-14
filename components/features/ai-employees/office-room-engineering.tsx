@@ -47,7 +47,8 @@ import {
  * counts: an AI employee that is in training, paused or not hired is shown as such and reports
  * nothing of its own. The president switches the view with the choices (number keys), moves over
  * the rows with the arrow keys and opens one with Enter: the preparation file of its lead opens
- * inside the room (office-prep-file.tsx). Nothing is changed from this room.
+ * inside the room (office-prep-file.tsx). The board changes nothing; the file can have the prep
+ * card of the first meeting drafted (#1212).
  */
 export function OfficeRoomEngineering({
   organizationId,
@@ -134,11 +135,13 @@ export function OfficeRoomEngineering({
     // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
     if (isImeKey(event)) return false;
     if (open) {
+      // The file has the first say: while it saves, it keeps Esc for itself (#1212)
+      if (fileKeys.current?.(event)) return true;
       if (event.key === 'Escape') {
         setOpen(null);
         return true;
       }
-      return fileKeys.current?.(event) ?? false;
+      return false;
     }
     const chosen = surveyViewOfKey(event.key);
     if (chosen) {

@@ -2,7 +2,8 @@
 
 import { isImeKey } from '@/components/ui/ime';
 import type { DealCard } from '@/lib/features/deals/service';
-import { PREP_CHALLENGES } from '@/lib/features/lead-prep/types/schemas';
+import { buildPrepDraft, hasDraftMaterial } from '@/lib/features/lead-prep/draft';
+import { PREP_CHALLENGES, type PrepCardFields } from '@/lib/features/lead-prep/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
@@ -10,14 +11,28 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, PANEL } from './office-hud';
-import type { RoomKeys } from './office-lead-file';
+import type { RoomKeys } from './office-room-contract';
 import { ROOM_BOARD, ROOM_FRAME, RoomChoiceButton } from './office-room-parts';
 import {
+  PREP_FILE_KEYS,
   PREP_FILE_PARTS,
+  type PrepFileAction,
   type PrepFilePart,
+  prepActionOfKey,
+  prepActionOpen,
+  prepCardFields,
   prepCardFilled,
   prepPartOfKey,
+  samePrepCard,
 } from './rooms/survey-board';
+import { useRoomKeys } from './use-room-keys';
+
+type Outcome =
+  // before: the card as it was read, which the undo saves back. undoFailed: the undo did not go
+  // through, so the draft is still saved and can be undone again
+  | { kind: 'drafted'; before: PrepCardFields; undoFailed?: boolean }
+  | { kind: 'undone' }
+  | { kind: 'failed' };
 
 /** A calendar day ('YYYY-MM-DD') as it is written on the board */
 const dayText = (day: string) => day.replaceAll('-', '/');
@@ -30,8 +45,14 @@ const LINK = 'inline-flex min-h-11 items-center underline underline-offset-4 hov
  * (`leadHandoff.get` names it, `leadHearings.summary` reads it) and the prep card of the first
  * meeting (`leadPrep.get`), the same records the lead's page and the handoff sheet show.
  *
- * The file only reads: the number keys turn to a part of the file and change nothing. Writing a
- * hearing or the card is done on the lead's page, which the links at the foot open.
+ * The number keys 1 and 2 turn to a part of the file and change nothing. One answer changes
+ * something (#1212): the president can have the prep card drafted, the same way the lead's page
+ * drafts it (`buildPrepDraft`: the empty fields are filled from the Web diagnosis and the sales
+ * playbook, what somebody wrote is kept, Claude is not called) and saved with the page's own API
+ * (`leadPrep.save`). It is carried out at once, so it can be undone: the undo saves the card back
+ * as it was read. Nothing here is the work of the AI engineer, and the file never says so.
+ * Writing a hearing or editing the card field by field is done on the lead's page, which the
+ * links at the foot open.
  */
 export function OfficePrepFile({
   organizationId,
@@ -61,9 +82,12 @@ export function OfficePrepFile({
   const tPrep = useTranslations('leadPrep');
   const tChallenge = useTranslations('leadHearings.options.challenge');
   const tLead = useTranslations('leads');
+  const tAll = useTranslations();
   const locale = useLocale();
+  const utils = trpc.useUtils();
   const reportRef = useRef<HTMLDivElement>(null);
   const [part, setPart] = useState<PrepFilePart>(PREP_FILE_PARTS[0]);
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const scope = { organizationId, leadId: deal.leadId };
   const handoff = trpc.leadHandoff.get.useQuery(scope);
@@ -82,28 +106,84 @@ export function OfficePrepFile({
     handoff.error?.data?.code === 'FORBIDDEN' || hearing.error?.data?.code === 'FORBIDDEN';
   const hearingReady = handoff.data !== undefined && (latest === null || summary !== undefined);
 
+  // The draft: the empty fields of the card as it was read, filled from what the API hands out
+  // for it (only to those who may change the card)
+  const canEdit = prep.data?.canEdit === true;
+  const source = prep.data?.draftSource ?? null;
+  const current = prepCardFields(prep.data?.card);
+  const drafted = outcome?.kind === 'drafted';
+  const material = source !== null && hasDraftMaterial(source);
+  const draft =
+    source && material ? buildPrepDraft(current, source, (key, values) => tAll(key, values)) : null;
+  const fillable = draft !== null && !samePrepCard(current, draft);
+
+  const save = trpc.leadPrep.save.useMutation();
+  const busy = save.isPending;
+  const state = { canEdit, drafted, busy, fillable };
+  // The lead's page shows the same card
+  const refresh = () => void utils.leadPrep.get.invalidate(scope);
+  const answer = (action: PrepFileAction) => {
+    if (!prepActionOpen(action, state)) return;
+    if (action === 'draft') {
+      if (!draft) return;
+      save.mutate(
+        { ...scope, card: draft },
+        {
+          onSuccess: () => {
+            setOutcome({ kind: 'drafted', before: current });
+            setPart('prep');
+            refresh();
+          },
+          onError: () => setOutcome({ kind: 'failed' }),
+        }
+      );
+    } else if (outcome?.kind === 'drafted') {
+      save.mutate(
+        { ...scope, card: outcome.before },
+        {
+          onSuccess: () => {
+            setOutcome({ kind: 'undone' });
+            refresh();
+          },
+          // The draft is still saved: keep it in hand, so the undo can be asked for again
+          onError: () =>
+            setOutcome((now) =>
+              now?.kind === 'drafted' ? { ...now, undoFailed: true } : { kind: 'failed' }
+            ),
+        }
+      );
+    }
+  };
+  // After an answer the focus is on the report: Enter pressed once more does nothing
+  useEffect(() => {
+    if (outcome) reportRef.current?.focus();
+  }, [outcome]);
+
   // The report takes the focus when the file opens: Enter pressed once too often does nothing
   useEffect(() => {
     reportRef.current?.focus();
   }, []);
 
-  // The file's keys: a number turns to a part of the file. Esc is the room's (it closes the file)
+  // The file's keys: 1 and 2 turn to a part of the file, 3 drafts the card and Z undoes it. Esc
+  // is the room's (it closes the file), except while the card is being saved: the request is
+  // out, and a file closed now would carry it out without its report or its undo
   const onFileKey: RoomKeys = (event) => {
     if (isImeKey(event)) return false;
+    if (event.key === 'Escape') return busy;
+    const action = prepActionOfKey(event.key);
+    if (action) {
+      // A key that is closed right now does nothing, and is not anyone else's either
+      event.preventDefault();
+      answer(action);
+      return true;
+    }
     const chosen = prepPartOfKey(event.key);
     if (!chosen) return false;
     event.preventDefault();
     setPart(chosen);
     return true;
   };
-  const latestKeys = useRef(onFileKey);
-  latestKeys.current = onFileKey;
-  useEffect(() => {
-    keysRef.current = (event) => latestKeys.current(event);
-    return () => {
-      keysRef.current = null;
-    };
-  }, [keysRef]);
+  useRoomKeys(keysRef, onFileKey);
 
   const reading = (
     <output className="flex items-center gap-3 text-sm text-[#d8d2c4]">
@@ -136,6 +216,23 @@ export function OfficePrepFile({
           {prep.data && (
             <p className="text-sm leading-relaxed">{card ? t('prepReady') : t('prepNone')}</p>
           )}
+          {outcome && (
+            <p className="text-base leading-relaxed font-medium">
+              {outcome.kind === 'drafted'
+                ? outcome.undoFailed
+                  ? t('undoFailed')
+                  : t('drafted')
+                : outcome.kind === 'undone'
+                  ? t('undone')
+                  : t('failed')}
+            </p>
+          )}
+          {/* Why the draft is closed, to those who could ask for it */}
+          {canEdit && !drafted && !fillable && (
+            <p className="text-sm leading-relaxed text-[#d8d2c4]">
+              {material ? t('nothingToFill') : t('noMaterial')}
+            </p>
+          )}
           {handoff.data && (
             <p className="text-sm leading-relaxed text-[#d8d2c4]">
               {handoff.data.lead.handedOffOn
@@ -158,8 +255,40 @@ export function OfficePrepFile({
               </RoomChoiceButton>
             </li>
           ))}
+          {/* Only those who may change the card are offered the draft */}
+          {canEdit && (
+            <li>
+              <RoomChoiceButton
+                keyCap={PREP_FILE_KEYS.draft}
+                closed={!prepActionOpen('draft', state)}
+                waiting={busy}
+                onClick={() => answer('draft')}
+              >
+                {t('choices.draft')}
+              </RoomChoiceButton>
+            </li>
+          )}
+          {drafted && (
+            <li>
+              <RoomChoiceButton
+                keyCap={PREP_FILE_KEYS.undo}
+                closed={!prepActionOpen('undo', state)}
+                waiting={busy}
+                onClick={() => answer('undo')}
+              >
+                {t('choices.undo')}
+              </RoomChoiceButton>
+            </li>
+          )}
           <li>
-            <RoomChoiceButton keyCap="Esc" onClick={onClose}>
+            <RoomChoiceButton
+              keyCap="Esc"
+              closed={busy}
+              waiting={busy}
+              onClick={() => {
+                if (!busy) onClose();
+              }}
+            >
               {t('choices.back')}
             </RoomChoiceButton>
           </li>
