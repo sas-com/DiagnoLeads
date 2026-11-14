@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import type { Page, Response } from '@playwright/test';
+import { type Page, type Response, expect } from '@playwright/test';
 
 /**
  * E2E test authentication helper
@@ -121,8 +121,13 @@ export async function logout(page: Page): Promise<void> {
   // Click logout button
   await page.click('[data-testid="logout-button"]');
 
-  // Wait for navigation to sign-in page
-  await page.waitForURL(/\/login/);
+  // Sign-out asks for the sign-in page, and the session guard of the admin pages
+  // (components/auth/AdminSessionGuard.tsx) asks for it again, with the page to come back to,
+  // when it hears of the ended session before the first request has answered: the first request
+  // is then given up. waitForURL fails on a request given up while it waits, so the address is
+  // read until it is the sign-in page, whichever request brought it (#1156)
+  await expect(page).toHaveURL(/\/login/);
+  await page.waitForLoadState('load');
 }
 
 /**
