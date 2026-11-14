@@ -11,6 +11,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   AlertTriangle,
   ArrowDown,
+  ArrowUpRight,
   Box,
   DoorOpen,
   List,
@@ -24,8 +25,10 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
-import { useFormatter, useTimeZone, useTranslations } from 'next-intl';
+import { useFormatter, useLocale, useTimeZone, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   type KeyboardEvent,
   type PointerEvent,
@@ -65,8 +68,19 @@ import {
 import { shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
 import { OfficeRoomDue } from './office-room-due';
+import { OfficeRoomEngineering } from './office-room-engineering';
 import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
-import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from './office-rooms';
+import {
+  DOOR_PAGES,
+  FLOOR_PLACES,
+  type FloorDoor,
+  OFFICE_ROOMS,
+  type OfficeRoom,
+  PLACE_KEYS,
+  ROOM_ROLES,
+  isOfficeRoom,
+  placeOfKey,
+} from './office-rooms';
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
@@ -139,6 +153,8 @@ export function OfficeImmersive({
   const tOffice = useTranslations('aiOffice');
   const format = useFormatter();
   const timeZone = useTimeZone() ?? 'Asia/Tokyo';
+  const locale = useLocale();
+  const router = useRouter();
   const utils = trpc.useUtils();
   const rootRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -294,6 +310,12 @@ export function OfficeImmersive({
     setRoom(next);
     setStage('room');
   };
+  // A place whose room is not built yet opens its page of the normal view (#1162)
+  const doorHref = (door: FloorDoor) => `/${locale}${DOOR_PAGES[door]}`;
+  const openDoor = (door: FloorDoor) => {
+    leave();
+    router.push(doorHref(door));
+  };
   const talkTo = (role: AiEmployeeRole) => {
     setSelected(role);
     setOutcome(null);
@@ -380,10 +402,11 @@ export function OfficeImmersive({
         event.preventDefault();
         setStage('studio');
       } else {
-        const entered = roomOfKey(event.key);
-        if (entered) {
+        const place = placeOfKey(event.key);
+        if (place) {
           event.preventDefault();
-          enterRoom(entered);
+          if (isOfficeRoom(place)) enterRoom(place);
+          else openDoor(place);
         }
       }
       return;
@@ -888,27 +911,39 @@ export function OfficeImmersive({
                 </output>
               )}
 
-              {/* The floor guide: the rooms that hold work */}
+              {/* The floor guide: every place of the work. A room is entered; a door opens a page */}
               <nav
                 aria-label={t('floorGuide')}
-                className="absolute inset-x-0 bottom-32 flex justify-center gap-2 lg:top-5 lg:bottom-auto"
+                className="absolute inset-x-0 bottom-32 flex flex-wrap justify-center gap-2 px-6 lg:top-5 lg:bottom-auto"
               >
-                {OFFICE_ROOMS.map((entry) => (
-                  <button
-                    key={entry}
-                    type="button"
-                    onClick={() => enterRoom(entry)}
-                    className={cn(
-                      'flex min-h-11 items-center gap-2.5 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-3.5 text-left text-sm hover:bg-[rgba(36,44,64,0.95)]',
-                      FOCUS
-                    )}
-                  >
-                    <span className={KEY}>{ROOM_KEYS[entry]}</span>
-                    <span className="font-bold">{tOffice(`rooms.${entry}`)}</span>
-                    <span className="text-[#d8d2c4]">{t(`room.work.${entry}`)}</span>
-                    <DoorOpen className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
-                  </button>
-                ))}
+                {FLOOR_PLACES.map((place) => {
+                  const look = cn(
+                    'flex min-h-11 items-center gap-2.5 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-3.5 text-left text-sm hover:bg-[rgba(36,44,64,0.95)]',
+                    FOCUS
+                  );
+                  const label = {
+                    hotkey: PLACE_KEYS[place],
+                    name: tOffice(`rooms.${place}`),
+                    work: t(`room.work.${place}`),
+                  };
+                  return isOfficeRoom(place) ? (
+                    <button
+                      key={place}
+                      type="button"
+                      onClick={() => enterRoom(place)}
+                      className={look}
+                    >
+                      <PlaceLabel {...label} />
+                      <DoorOpen className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <Link key={place} href={doorHref(place)} onClick={leave} className={look}>
+                      <PlaceLabel {...label} />
+                      <span className="sr-only">{t('room.door')}</span>
+                      <ArrowUpRight className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                    </Link>
+                  );
+                })}
               </nav>
 
               {/* The actions */}
@@ -1075,6 +1110,17 @@ export function OfficeImmersive({
                   onOpenLead={leave}
                   onFileOpenChange={setRoomFileOpen}
                 />
+              ) : room === 'engineering' ? (
+                <OfficeRoomEngineering
+                  organizationId={organizationId}
+                  role={ROOM_ROLES[room]}
+                  status={statuses[ROOM_ROLES[room]]}
+                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
+                  look={looks[ROOM_ROLES[room]]}
+                  keysRef={roomKeys}
+                  onOpenNormal={leave}
+                  onFileOpenChange={setRoomFileOpen}
+                />
               ) : (
                 <OfficeRoomDue
                   organizationId={organizationId}
@@ -1221,6 +1267,17 @@ export function OfficeImmersive({
 }
 
 /** A square action of the bar at the bottom, with its key */
+/** What a place of the floor guide says: its key, its name and the work done there */
+function PlaceLabel({ hotkey, name, work }: { hotkey: string; name: string; work: string }) {
+  return (
+    <>
+      <span className={KEY}>{hotkey}</span>
+      <span className="font-bold">{name}</span>
+      <span className="text-[#d8d2c4]">{work}</span>
+    </>
+  );
+}
+
 function HudButton({
   onClick,
   hotkey,

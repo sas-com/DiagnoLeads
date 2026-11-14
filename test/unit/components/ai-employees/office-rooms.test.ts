@@ -5,7 +5,10 @@ import {
   LEAD_BOARD_VIEWS,
   LEAD_REPORT_VIEWS,
   OFFICE_ROOMS,
+  DOOR_PAGES,
   DUE_KEYS,
+  FLOOR_PLACES,
+  PLACE_KEYS,
   FILE_KEYS,
   daysOverdue,
   dueActionOfKey,
@@ -22,6 +25,8 @@ import {
   leadCountInput,
   nextRow,
   roomGuide,
+  isOfficeRoom,
+  placeOfKey,
   roomOfKey,
 } from '@/components/features/ai-employees/office-rooms';
 import { AI_EMPLOYEE_ROLES } from '@/lib/features/ai-employees/types/roles';
@@ -46,6 +51,36 @@ describe('the rooms', () => {
 
   it('are not entered by the keys of the camera or by other keys', () => {
     for (const key of ['0', '+', '-', 'e', 'E', 'Enter', '9']) expect(roomOfKey(key)).toBeNull();
+  });
+});
+
+describe('the places of the floor guide (#1162)', () => {
+  it('are the five places of the work, on the keys 1 to 5 in that order', () => {
+    expect(FLOOR_PLACES).toEqual(['desk', 'marketing', 'sales', 'engineering', 'backoffice']);
+    expect(FLOOR_PLACES.map((place) => PLACE_KEYS[place])).toEqual(['1', '2', '3', '4', '5']);
+    for (const place of FLOOR_PLACES) expect(placeOfKey(PLACE_KEYS[place])).toBe(place);
+  });
+
+  it('keep the keys of the rooms that are built', () => {
+    for (const room of OFFICE_ROOMS) {
+      expect(isOfficeRoom(room)).toBe(true);
+      expect(PLACE_KEYS[room]).toBe(ROOM_KEYS[room]);
+    }
+  });
+
+  it('open a fixed page of the normal view when their room is not built yet', () => {
+    const doors = FLOOR_PLACES.filter((place) => !isOfficeRoom(place));
+    expect(doors).toEqual(['desk', 'sales']);
+    expect(DOOR_PAGES).toEqual({
+      desk: '/today',
+      sales: '/deals',
+    });
+    // A door is not a room: its key does not enter one
+    for (const door of doors) expect(roomOfKey(PLACE_KEYS[door])).toBeNull();
+  });
+
+  it('are not opened by the keys of the camera or by other keys', () => {
+    for (const key of ['0', '+', '-', 'e', 'E', 'Enter', '6', '9']) expect(placeOfKey(key)).toBeNull();
   });
 });
 
