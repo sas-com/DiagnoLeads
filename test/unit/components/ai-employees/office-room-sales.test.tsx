@@ -52,6 +52,8 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   truncated: false,
   fail: false,
+  // An answer is on its way and has not come back
+  pending: false,
   handedOff: false,
   moves: [] as Record<string, unknown>[],
   marks: [] as { id: string; done: boolean }[],
@@ -66,9 +68,10 @@ type Callbacks = {
 /** A mutation whose hook-level and call-level callbacks both hear the answer, as tRPC's do */
 function mutation<Input>(run: (input: Input) => unknown) {
   return (options: Callbacks = {}) => ({
-    isPending: false,
+    isPending: mocks.pending,
     isError: false,
     mutate: (input: Input, own: Callbacks = {}) => {
+      if (mocks.pending) return;
       if (mocks.fail) {
         options.onError?.(new Error('failed'), input as never);
         own.onError?.(new Error('failed'), input as never);
@@ -237,6 +240,7 @@ describe('the sales floor', () => {
     mocks.canEdit = true;
     mocks.truncated = false;
     mocks.fail = false;
+    mocks.pending = false;
     mocks.handedOff = false;
     mocks.moves.length = 0;
     mocks.marks.length = 0;
@@ -372,6 +376,7 @@ describe('a deal file on the sales floor', () => {
     mocks.canEdit = true;
     mocks.truncated = false;
     mocks.fail = false;
+    mocks.pending = false;
     mocks.handedOff = false;
     mocks.moves.length = 0;
     mocks.marks.length = 0;
@@ -670,6 +675,29 @@ describe('a deal file on the sales floor', () => {
     // The file is still shown as it was, with the way back
     expect(screen.getByRole('region', { name: '「見本の商談3」の商談ファイル' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ボードに戻る/ })).toHaveTextContent('Esc');
+  });
+
+  it('keeps the file and the room open while an answer is being saved', async () => {
+    mocks.pending = true;
+    const { user, office, file } = await openFile('見本の商談2');
+    // Every answer waits, and so do the ways back: Esc, the file's own, and the office's
+    expect(choice(office, /「提案」へ進める/)).toHaveAttribute('aria-disabled', 'true');
+    expect(choice(office, /ボードに戻る/)).toHaveAttribute('aria-disabled', 'true');
+    const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+    expect(toFloor).toHaveAttribute('aria-disabled', 'true');
+    await user.keyboard('{Escape}');
+    await user.click(choice(office, /ボードに戻る/));
+    await user.click(toFloor);
+    expect(file).toBeInTheDocument();
+    expect(within(office).queryByRole('navigation', { name: 'フロア案内' })).not.toBeInTheDocument();
+  });
+
+  it('opens the way back to the floor again once the file is closed', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+    expect(toFloor).not.toHaveAttribute('aria-disabled');
+    await user.click(toFloor);
+    expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
   });
 
   it('says so when a move did not go through, and leaves the deal where it was', async () => {

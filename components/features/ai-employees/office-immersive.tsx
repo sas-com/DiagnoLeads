@@ -179,6 +179,8 @@ export function OfficeImmersive({
   const roomKeys = useRef<RoomKeys | null>(null);
   // Something is open inside the room (a customer file): Esc closes that first
   const [roomFileOpen, setRoomFileOpen] = useState(false);
+  // An answer given in the room is being saved: the way back to the floor is closed meanwhile
+  const [roomBusy, setRoomBusy] = useState(false);
   // The 3D spike (#1135): whether the floor is drawn in 3D, and what the trial panel pretends
   // (a status and an event for the chosen employee, on this screen only)
   const [threeD, setThreeD] = useState(false);
@@ -1090,9 +1092,14 @@ export function OfficeImmersive({
               </div>
               <button
                 type="button"
-                onClick={() => setStage('world')}
+                // Not disabled: a disabled button would drop the focus out of the room. While the
+                // room saves an answer it does nothing, like Esc (which the room's keys hold)
+                aria-disabled={roomBusy || undefined}
+                onClick={() => {
+                  if (!roomBusy) setStage('world');
+                }}
                 className={cn(
-                  'absolute top-5 right-6 flex min-h-11 items-center gap-2.5 px-2 text-sm font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)] hover:text-white',
+                  'absolute top-5 right-6 flex min-h-11 items-center gap-2.5 px-2 text-sm font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)] hover:text-white aria-disabled:cursor-wait aria-disabled:opacity-60',
                   FOCUS
                 )}
               >
@@ -1111,6 +1118,7 @@ export function OfficeImmersive({
                 keysRef={roomKeys}
                 onLeaveOffice={leave}
                 onFileOpenChange={setRoomFileOpen}
+                onBusyChange={setRoomBusy}
               />
             </>
           )}

@@ -64,6 +64,7 @@ export function OfficeRoomSales({
   keysRef,
   onLeaveOffice,
   onFileOpenChange,
+  onBusyChange,
 }: OfficeRoomProps) {
   const t = useTranslations('aiOffice.immersive.room');
   const tDealsRoom = useTranslations('aiOffice.immersive.room.deals');
@@ -210,6 +211,7 @@ export function OfficeRoomSales({
         keysRef={fileKeys}
         onClose={() => setOpen(null)}
         onLeaveOffice={onLeaveOffice}
+        onBusyChange={onBusyChange}
       />
     );
   }
