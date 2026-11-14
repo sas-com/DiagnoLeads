@@ -10,7 +10,7 @@ import type { InflowSource } from '@/lib/features/leads/types/pipeline';
 import { cn } from '@/lib/utils';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
-import { type MutableRefObject, type ReactNode, useEffect, useRef } from 'react';
+import { type MutableRefObject, type ReactNode, useEffect, useId, useRef } from 'react';
 import { focusNextRow } from './office-board-leads';
 import { FOCUS, KEY } from './office-hud';
 import {
@@ -54,6 +54,7 @@ function FigureBoard({
   hint,
   links,
   boardRef,
+  busy = false,
   onLeave,
   children,
 }: {
@@ -71,6 +72,8 @@ function FigureBoard({
   hint: string;
   links: BoardLink[];
   boardRef?: MutableRefObject<HTMLElement | null>;
+  /** A part of the board is still reading, although the board itself shows */
+  busy?: boolean;
   /** A page of the normal view is opened: the office closes */
   onLeave: () => void;
   children: ReactNode;
@@ -81,7 +84,7 @@ function FigureBoard({
     <section
       ref={boardRef}
       aria-label={title}
-      aria-busy={state === 'loading'}
+      aria-busy={state === 'loading' || busy}
       className={ROOM_BOARD}
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
@@ -115,9 +118,7 @@ function FigureBoard({
           className={cn('min-h-0 flex-1 overflow-auto px-5 py-2', FOCUS)}
         >
           {children}
-          {notes && (
-            <div className="space-y-1 py-3 text-xs leading-relaxed text-[#d8d2c4]">{notes}</div>
-          )}
+          {notes && <div className={NOTES}>{notes}</div>}
         </div>
       )}
 
@@ -155,12 +156,37 @@ function usePeriodSummary(state: FigureState, count: number) {
   };
 }
 
-const TABLE = 'w-full border-collapse text-sm';
+// Borders are separate (not collapsed) so they stay with a cell that sticks
+const TABLE = 'w-full border-separate border-spacing-0 text-sm';
 const HEAD =
   'border-b border-[#f5f1e8]/15 px-2 py-2 text-xs font-normal whitespace-nowrap text-[#bdb7a9]';
 const CELL = 'border-b border-[#f5f1e8]/10 px-2 py-3';
 const NUM = 'text-right whitespace-nowrap tabular-nums';
 const FOOT = 'border-t border-[#f5f1e8]/35 px-2 py-3 font-bold';
+/**
+ * The first column (what a row is) stays in place while a table that is too wide for the wall is
+ * scrolled sideways: the names never leave the screen. It needs the board's own colour under it,
+ * and over the gutter on its left (the shadow), where the columns that scroll would show through.
+ */
+const FIRST = 'sticky left-0 z-[1] bg-[#0d121f] shadow-[-1.25rem_0_0_#0d121f]';
+/** What the figures mean: stays in place sideways too, so it is read whole */
+const NOTES = 'sticky left-0 space-y-1 py-3 text-xs leading-relaxed text-[#d8d2c4]';
+/** A row with a control that has the focus is marked whole, like a row of the lead board */
+const ROW = 'has-[:focus-visible]:bg-[#e9cf9a]/10';
+
+/**
+ * A cell without a figure: the dash is for the eye, and the reason is said for a screen reader,
+ * which would otherwise read nothing (the dash stands for "cannot be computed", "not read" and
+ * "none" in different places).
+ */
+function NoFigure({ mark = '—', reason }: { mark?: string; reason: string }) {
+  return (
+    <>
+      <span aria-hidden="true">{mark}</span>
+      <span className="sr-only">{reason}</span>
+    </>
+  );
+}
 
 /**
  * A share of the whole as a bar: decoration, the figure is written next to it. `wide` keeps the
@@ -200,9 +226,11 @@ export function OfficeBoardSources({
   onOpenSource: (source: InflowSource) => void;
   onLeave: () => void;
 }) {
+  const t = useTranslations('aiOffice.immersive.room.marketing');
   const tLeads = useTranslations('aiOffice.immersive.room.leads');
   const tSources = useTranslations('aiOffice.immersive.room.marketing.sources');
   const boardRef = useRef<HTMLElement | null>(null);
+  const openHintId = useId();
   const frame = usePeriodSummary(state, cost?.leadCount ?? 0);
   const tInflow = useTranslations('pipeline.inflowSource');
   const format = useFormatter();
@@ -214,11 +242,12 @@ export function OfficeBoardSources({
   const label = (source: string) =>
     source === UNSET_SOURCE ? tSources('unset') : tInflow.has(source) ? tInflow(source) : source;
   const yen = (value: number) => format.number(value, { style: 'currency', currency: 'JPY' });
+  const notComputable = <NoFigure reason={t('notComputable')} />;
   const roi = (deals: DealReturns | null) =>
-    deals?.roi == null ? tSources('none') : tSources('roiValue', { value: deals.roi });
-  const wonAmount = (deals: DealReturns | null) =>
-    deals ? yen(deals.wonAmount) : tSources('none');
+    deals?.roi == null ? notComputable : tSources('roiValue', { value: deals.roi });
+  const wonAmount = (deals: DealReturns | null) => (deals ? yen(deals.wonAmount) : notComputable);
   const opens = rows.some((row) => openableSource(row.source) !== null);
+  const closedRows = rows.some((row) => openableSource(row.source) === null);
 
   // Coming back from the prospects of a source gives the focus back to its row
   useEffect(() => {
@@ -259,7 +288,13 @@ export function OfficeBoardSources({
         <>
           <p>{uncosted > 0 ? tSources('uncosted', { count: uncosted }) : tSources('costed')}</p>
           {returns && <p>{tSources('returns')}</p>}
-          {opens && <p>{tSources('openHint', { days: MARKETING_RANGE_DAYS })}</p>}
+          {opens && (
+            <p id={openHintId}>
+              {tSources('openHint', { days: MARKETING_RANGE_DAYS })}
+              {/* Only when there is such a row: no source recorded, or a value of long ago */}
+              {closedRows && tSources('openHintClosed')}
+            </p>
+          )}
         </>
       }
     >
@@ -267,7 +302,7 @@ export function OfficeBoardSources({
         <caption className="sr-only">{tSources('caption', { days: MARKETING_RANGE_DAYS })}</caption>
         <thead>
           <tr>
-            <th scope="col" className={cn(HEAD, 'text-left')}>
+            <th scope="col" className={cn(HEAD, FIRST, 'text-left')}>
               {tSources('columns.source')}
             </th>
             <th scope="col" className={cn(HEAD, 'text-right')}>
@@ -299,12 +334,12 @@ export function OfficeBoardSources({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={row.source}>
-              <th scope="row" className={cn(CELL, 'min-w-[7.5rem] text-left font-bold')}>
+            <tr key={row.source} className={ROW}>
+              <th scope="row" className={cn(CELL, FIRST, 'min-w-[7.5rem] text-left font-bold')}>
                 <SourceName
                   name={label(row.source)}
                   source={openableSource(row.source)}
-                  openLabel={tSources('open', { source: label(row.source) })}
+                  hintId={openHintId}
                   onOpen={onOpenSource}
                 />
               </th>
@@ -332,7 +367,7 @@ export function OfficeBoardSources({
         {cost && (
           <tfoot>
             <tr>
-              <th scope="row" className={cn(FOOT, 'text-left')}>
+              <th scope="row" className={cn(FOOT, FIRST, 'text-left')}>
                 {tSources('total')}
               </th>
               <td className={cn(FOOT, NUM)}>{format.number(cost.leadCount)}</td>
@@ -406,7 +441,10 @@ export function OfficeBoardProgress({
         <tbody>
           {rows.map((row) => (
             <tr key={row.name}>
-              <th scope="row" className={cn(CELL, 'py-4 text-left font-bold whitespace-nowrap')}>
+              <th
+                scope="row"
+                className={cn(CELL, FIRST, 'py-4 text-left font-bold whitespace-nowrap')}
+              >
                 {tFunnel(`stages.${row.name}`)}
               </th>
               <td className={cn(CELL, NUM, 'py-4 text-base font-bold')}>
@@ -419,7 +457,11 @@ export function OfficeBoardProgress({
                 </span>
               </td>
               <td className={cn(CELL, NUM, 'py-4')}>
-                {row.fromPrevious === null ? tFunnel('none') : percent(row.fromPrevious)}
+                {row.fromPrevious === null ? (
+                  <NoFigure reason={tFunnel('noPrevious')} />
+                ) : (
+                  percent(row.fromPrevious)
+                )}
               </td>
             </tr>
           ))}
@@ -429,17 +471,22 @@ export function OfficeBoardProgress({
   );
 }
 
-/** The name of a source in its row: a button when the lead list can show its prospects */
+/**
+ * The name of a source in its row: a button when the lead list can show its prospects. Its name
+ * is the source alone, as it is written (a table is read cell by cell, and a long name would be
+ * repeated with every figure); what opening does is said once, by the note under the table.
+ */
 function SourceName({
   name,
   source,
-  openLabel,
+  hintId,
   onOpen,
 }: {
   name: string;
   /** Null when the lead list has no filter for the row (no source recorded) */
   source: InflowSource | null;
-  openLabel: string;
+  /** The note that says what opening a row does */
+  hintId: string;
   onOpen: (source: InflowSource) => void;
 }) {
   if (!source) return <>{name}</>;
@@ -447,10 +494,11 @@ function SourceName({
     <button
       type="button"
       data-source={source}
-      aria-label={openLabel}
+      aria-describedby={hintId}
       onClick={() => onOpen(source)}
       className={cn(
-        '-my-2 flex min-h-11 w-full items-center text-left font-bold underline decoration-[#e9cf9a]/60 underline-offset-4 hover:text-white hover:decoration-[#e9cf9a] focus-visible:bg-[#e9cf9a]/15',
+        // As high as its cell, so every row is as high and the whole cell opens
+        '-my-3 flex min-h-12 w-full items-center text-left font-bold underline decoration-[#e9cf9a]/60 underline-offset-4 hover:text-white hover:decoration-[#e9cf9a] focus-visible:bg-[#e9cf9a]/15',
         FOCUS
       )}
     >
@@ -468,6 +516,7 @@ function CampaignSection({
   children,
 }: {
   title: string;
+  /** The period of the table, in brackets: read out after the title as one name */
   period: string;
   state: FigureState;
   emptyText?: string;
@@ -475,22 +524,21 @@ function CampaignSection({
 }) {
   const t = useTranslations('aiOffice.immersive.room.marketing');
   return (
-    <div className="py-3">
-      <h3 className="flex flex-wrap items-baseline gap-x-3 text-base font-bold">
+    // As wide as its table, so the heading can stay in place while the table scrolls sideways
+    <div className="w-fit min-w-full py-3">
+      <h3 className="sticky left-0 w-fit text-base font-bold">
         {title}
         <span className="text-xs font-normal text-[#d8d2c4]">{period}</span>
       </h3>
       {state === 'ready' && !emptyText ? (
         children
+      ) : state === 'loading' ? (
+        <div className="flex py-6">
+          <RoomBoardLoading>{t('loading')}</RoomBoardLoading>
+        </div>
       ) : (
-        <p className="py-4 text-sm text-[#d8d2c4]" aria-busy={state === 'loading'}>
-          {state === 'forbidden'
-            ? t('forbidden')
-            : state === 'error'
-              ? t('error')
-              : state === 'loading'
-                ? t('loading')
-                : emptyText}
+        <p className="py-4 text-sm text-[#d8d2c4]">
+          {state === 'forbidden' ? t('forbidden') : state === 'error' ? t('error') : emptyText}
         </p>
       )}
     </div>
@@ -524,27 +572,50 @@ export function OfficeBoardCampaigns({
   const tSources = useTranslations('aiOffice.immersive.room.marketing.sources');
   const format = useFormatter();
   const days = MARKETING_RANGE_DAYS;
-  const none = tSources('none');
+  const notComputable = <NoFigure reason={t('notComputable')} />;
   const yen = (value: number) => format.number(value, { style: 'currency', currency: 'JPY' });
   const percent = (value: number | null) =>
-    value === null ? none : tSources('shareValue', { share: value });
+    value === null ? notComputable : tSources('shareValue', { share: value });
+  // A breakdown that is not there: still on its way (three dots), or not read (a dash)
+  const breakdownReading = breakdownState === 'loading';
+  const noBreakdown = breakdownReading ? (
+    <NoFigure mark="…" reason={t('loading')} />
+  ) : (
+    <NoFigure reason={tBoard('qr.notRead')} />
+  );
   const agencyRows = agencies ?? [];
   // The amounts of the deals only for those the API answered with them (canReadDeals)
   const returns = agencyRows.some((row) => row.deals !== null);
   // Both tables read the leads (read Lead): without the permission the board says so once
   const forbidden = qrState === 'forbidden' && agencyState === 'forbidden';
+  const qrShown = qrState === 'ready' && qrRows.length > 0;
+  const agenciesShown = agencyState === 'ready' && agencyRows.length > 0;
 
   return (
     <FigureBoard
       title={tBoard('board')}
-      summary={tBoard('summary')}
+      summary={tBoard('summary', { days })}
       state={forbidden ? 'forbidden' : 'ready'}
+      busy={qrState === 'loading' || agencyState === 'loading' || breakdownReading}
       hint={tBoard('hint')}
       links={[
         { href: '/settings/qr-campaigns', label: tBoard('openQr') },
         { href: '/analytics', label: t('openAnalytics') },
       ]}
       onLeave={onLeave}
+      notes={
+        (qrShown || agenciesShown) && (
+          <>
+            {qrShown && <p>{tBoard('qr.note')}</p>}
+            {qrShown && breakdownReading && <p>{tBoard('qr.breakdownReading')}</p>}
+            {qrShown && (breakdownState === 'error' || breakdownState === 'forbidden') && (
+              <p>{tBoard('qr.breakdownUnavailable')}</p>
+            )}
+            {agenciesShown && <p>{tBoard('agencies.note')}</p>}
+            {agenciesShown && returns && <p>{tSources('returns')}</p>}
+          </>
+        )
+      }
     >
       <CampaignSection
         title={tBoard('qr.title')}
@@ -556,33 +627,44 @@ export function OfficeBoardCampaigns({
           <caption className="sr-only">{tBoard('qr.caption')}</caption>
           <thead>
             <tr>
-              <th scope="col" className={cn(HEAD, 'text-left')}>
+              <th scope="col" rowSpan={2} className={cn(HEAD, FIRST, 'text-left align-bottom')}>
                 {tBoard('qr.columns.campaign')}
               </th>
-              <th scope="col" className={cn(HEAD, 'text-right')}>
+              <th scope="col" rowSpan={2} className={cn(HEAD, 'text-right align-bottom')}>
                 {tBoard('qr.columns.scans')}
               </th>
-              <th scope="col" className={cn(HEAD, 'text-right')}>
+              <th scope="col" rowSpan={2} className={cn(HEAD, 'text-right align-bottom')}>
                 {tBoard('qr.columns.newLeads')}
               </th>
-              <th scope="col" className={cn(HEAD, 'text-right')}>
+              <th scope="col" rowSpan={2} className={cn(HEAD, 'text-right align-bottom')}>
                 {tBoard('qr.columns.rate')}
               </th>
+              {/* Interested and consultations are parts of the new prospects; the answers of
+                  existing prospects are not, so they stand outside the group */}
+              <th scope="colgroup" colSpan={2} className={cn(HEAD, 'border-b-0 pb-0 text-center')}>
+                {tBoard('qr.columns.ofNewLeads')}
+              </th>
+              <th
+                scope="col"
+                rowSpan={2}
+                className={cn(HEAD, 'min-w-[6.5rem] text-right align-bottom whitespace-normal')}
+              >
+                {tBoard('qr.columns.existing')}
+              </th>
+            </tr>
+            <tr>
               <th scope="col" className={cn(HEAD, 'text-right')}>
                 {tBoard('qr.columns.interested')}
               </th>
               <th scope="col" className={cn(HEAD, 'text-right')}>
                 {tBoard('qr.columns.consultation')}
               </th>
-              <th scope="col" className={cn(HEAD, 'text-right')}>
-                {tBoard('qr.columns.existing')}
-              </th>
             </tr>
           </thead>
           <tbody>
             {qrRows.map((row) => (
               <tr key={row.id}>
-                <th scope="row" className={cn(CELL, 'min-w-[7.5rem] text-left font-bold')}>
+                <th scope="row" className={cn(CELL, FIRST, 'min-w-[7.5rem] text-left font-bold')}>
                   {row.name}
                   {row.closed && (
                     <span className="ml-2 inline-block text-xs font-normal whitespace-nowrap text-[#d8d2c4]">
@@ -594,29 +676,23 @@ export function OfficeBoardCampaigns({
                 <td className={cn(CELL, NUM)}>{format.number(row.newLeads)}</td>
                 <td className={cn(CELL, NUM)}>{percent(row.newLeadRate)}</td>
                 <td className={cn(CELL, NUM)}>
-                  {row.breakdown ? format.number(row.breakdown.interestedNewLeads) : none}
+                  {row.breakdown ? format.number(row.breakdown.interestedNewLeads) : noBreakdown}
                 </td>
                 <td className={cn(CELL, NUM)}>
-                  {row.breakdown ? format.number(row.breakdown.consultationNewLeads) : none}
+                  {row.breakdown ? format.number(row.breakdown.consultationNewLeads) : noBreakdown}
                 </td>
                 <td className={cn(CELL, NUM)}>
-                  {row.breakdown ? format.number(row.breakdown.existingLeadAnswers) : none}
+                  {row.breakdown ? format.number(row.breakdown.existingLeadAnswers) : noBreakdown}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="space-y-1 pt-3 text-xs leading-relaxed text-[#d8d2c4]">
-          <p>{tBoard('qr.note')}</p>
-          {(breakdownState === 'error' || breakdownState === 'forbidden') && (
-            <p>{tBoard('qr.breakdownUnavailable')}</p>
-          )}
-        </div>
       </CampaignSection>
 
       <CampaignSection
         title={tBoard('agencies.title')}
-        period={t('periodOnly', { days })}
+        period={tBoard('agencies.period', { days })}
         state={agencyState}
         emptyText={
           agencyState === 'ready' && agencyRows.length === 0
@@ -628,7 +704,7 @@ export function OfficeBoardCampaigns({
           <caption className="sr-only">{tBoard('agencies.caption', { days })}</caption>
           <thead>
             <tr>
-              <th scope="col" className={cn(HEAD, 'text-left')}>
+              <th scope="col" className={cn(HEAD, FIRST, 'text-left')}>
                 {tBoard('agencies.columns.agency')}
               </th>
               <th scope="col" className={cn(HEAD, 'text-right')}>
@@ -661,7 +737,7 @@ export function OfficeBoardCampaigns({
           <tbody>
             {agencyRows.map((row) => (
               <tr key={row.agencyName}>
-                <th scope="row" className={cn(CELL, 'min-w-[7.5rem] text-left font-bold')}>
+                <th scope="row" className={cn(CELL, FIRST, 'min-w-[7.5rem] text-left font-bold')}>
                   {row.agencyName}
                 </th>
                 <td className={cn(CELL, NUM)}>{format.number(row.leadCount)}</td>
@@ -671,10 +747,12 @@ export function OfficeBoardCampaigns({
                 <td className={cn(CELL, NUM)}>{yen(row.totalCost)}</td>
                 {returns && (
                   <>
-                    <td className={cn(CELL, NUM)}>{row.deals ? yen(row.deals.wonAmount) : none}</td>
+                    <td className={cn(CELL, NUM)}>
+                      {row.deals ? yen(row.deals.wonAmount) : notComputable}
+                    </td>
                     <td className={cn(CELL, NUM)}>
                       {row.deals?.roi == null
-                        ? none
+                        ? notComputable
                         : tSources('roiValue', { value: row.deals.roi })}
                     </td>
                   </>
@@ -683,10 +761,6 @@ export function OfficeBoardCampaigns({
             ))}
           </tbody>
         </table>
-        <div className="space-y-1 pt-3 text-xs leading-relaxed text-[#d8d2c4]">
-          <p>{tBoard('agencies.note')}</p>
-          {returns && <p>{tSources('returns')}</p>}
-        </div>
       </CampaignSection>
     </FigureBoard>
   );

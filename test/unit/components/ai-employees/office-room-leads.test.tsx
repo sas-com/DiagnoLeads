@@ -65,6 +65,8 @@ const mocks = vi.hoisted(() => ({
   noCampaigns: false,
   /** The breakdown of the QR campaigns cannot be read */
   breakdownFails: false,
+  /** The breakdown of the QR campaigns is still on its way */
+  breakdownLoading: false,
   /** What leads.list and the analytics answer: 'ok', 'forbidden', 'error' or 'loading' */
   mode: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
   /** The period has no prospects at all */
@@ -266,7 +268,9 @@ vi.mock('@/lib/trpc/client', () => ({
       getAcquisitionCost: { useQuery: (input: unknown) => figureQuery(input, costAnswer) },
       getQrCampaignBreakdown: {
         useQuery: (input: unknown, options?: { enabled?: boolean }) =>
-          campaignQuery('breakdown', input, options, breakdownAnswer, mocks.breakdownFails),
+          mocks.breakdownLoading && options?.enabled !== false
+            ? { data: undefined, error: null, isError: false }
+            : campaignQuery('breakdown', input, options, breakdownAnswer, mocks.breakdownFails),
       },
       getAgencyPerformance: {
         useQuery: (input: unknown, options?: { enabled?: boolean }) =>
@@ -425,6 +429,7 @@ function reset() {
   mocks.campaignInputs.length = 0;
   mocks.noCampaigns = false;
   mocks.breakdownFails = false;
+  mocks.breakdownLoading = false;
   mocks.mode = 'ok';
   mocks.noProspects = false;
   mocks.withDeals = false;
@@ -588,7 +593,8 @@ describe('the marketing room', () => {
       within(within(board).getByRole('row', { name: new RegExp(`^${name}`) }))
         .getAllByRole('cell')
         .map((cell) => cell.textContent);
-    expect(cells('見込み客')).toEqual(['20', '100%', '—']);
+    // The dash is for the eye; the reason is said for a screen reader
+    expect(cells('見込み客')).toEqual(['20', '100%', '—前の段はありません']);
     expect(cells('MQL（関心あり）')).toEqual(['8', '40%', '40%']);
     expect(cells('商談')).toEqual(['3', '15%', '38%']);
     expect(cells('SQL（適格）')).toEqual(['2', '10%', '67%']);
@@ -852,7 +858,7 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
     const room = await enterMarketing();
     await room.user.keyboard('{ArrowDown}');
     expect(
-      within(room.office).getByRole('button', { name: '勉強会・セミナーの見込み客を開く' })
+      within(room.office).getByRole('button', { name: '勉強会・セミナー' })
     ).toHaveFocus();
     await room.user.keyboard('{Enter}');
     const board = within(room.office).getByRole('region', { name: '見込み客ボード' });
@@ -862,7 +868,7 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
   it('moves over the rows that open with the arrow keys, and never onto the row without a source', async () => {
     const { user, office } = await enterMarketing();
     const board = within(office).getByRole('region', { name: '流入元ボード' });
-    const rows = within(board).getAllByRole('button', { name: /の見込み客を開く$/ });
+    const rows = within(board).getAllByRole('button');
     expect(rows.map((row) => row.textContent)).toEqual(['勉強会・セミナー', '広告']);
     await user.keyboard('{ArrowDown}{ArrowDown}');
     expect(rows[1]).toHaveFocus();
@@ -874,7 +880,7 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
     ).not.toBeInTheDocument();
     expect(
       within(board).getByText(
-        '流入元の行を開くと、その流入元の過去30日の見込み客が見込み客ボードに出ます。「流入元の記録なし」の行は開けません。'
+        '流入元の行を開くと、その流入元の過去30日の見込み客が見込み客ボードに出ます。下線の無い行（流入元の記録なしなど）は開けません。'
       )
     ).toBeInTheDocument();
   });
@@ -882,7 +888,7 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
   it('gives the arrow keys back to the browser at the first and the last row, so the board scrolls (#1214)', async () => {
     const { user, office } = await enterMarketing();
     const board = within(office).getByRole('region', { name: '流入元ボード' });
-    const rows = within(board).getAllByRole('button', { name: /の見込み客を開く$/ });
+    const rows = within(board).getAllByRole('button');
     await user.keyboard('{ArrowDown}');
     expect(rows[0]).toHaveFocus();
     // fireEvent answers false when the key was taken (preventDefault)
@@ -904,9 +910,18 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
     expect(fireEvent.keyDown(table, { key: 'ArrowDown' })).toBe(true);
   });
 
+  it('names a row that opens by its source alone, and says what opening does once', async () => {
+    const { office } = await enterMarketing();
+    const row = within(office).getByRole('button', { name: '勉強会・セミナー' });
+    // What opening does is the note under the table, said as the description of each row
+    expect(row).toHaveAccessibleDescription(
+      '流入元の行を開くと、その流入元の過去30日の見込み客が見込み客ボードに出ます。下線の無い行（流入元の記録なしなど）は開けません。'
+    );
+  });
+
   it('shows the prospects of that source in the same period, asked from leads.list', async () => {
     const { office, board } = await openSeminars();
-    expect(within(board).getByText(/流入元：勉強会・セミナー（過去30日）・10 件/)).toBeInTheDocument();
+    expect(within(board).getByText(/流入元：勉強会・セミナー・過去30日・10 件/)).toBeInTheDocument();
     expect(within(board).getAllByRole('button', { name: /見本商事/ })).toHaveLength(
       LEAD_BOARD_PAGE_SIZE
     );
@@ -924,7 +939,7 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
         .getAllByRole('status')
         .map((status) => status.textContent)
         .filter((text) => text?.startsWith('壁のボード'))
-    ).toEqual(['壁のボード：見込み客ボード（流入元：勉強会・セミナー（過去30日））']);
+    ).toEqual(['壁のボード：見込み客ボード（流入元：勉強会・セミナー・過去30日）']);
     // The row that was opened is gone: the focus is on the report, not lost
     expect(document.activeElement?.textContent).toContain('過去30日の新しい見込み客');
   });
@@ -944,7 +959,7 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
     expect(
-      within(office).getByRole('button', { name: '勉強会・セミナーの見込み客を開く' })
+      within(office).getByRole('button', { name: '勉強会・セミナー' })
     ).toHaveFocus();
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
@@ -1013,11 +1028,22 @@ describe('the campaign board (#1201)', () => {
     const { office, board } = await enterCampaigns();
     expect(cells(board, '秋の展示会')).toEqual(['40', '10', '25%', '4', '1', '2']);
     // No scan yet: no rate, said with a dash; no answer reached it: zeros
-    expect(cells(board, '春のセミナー')).toEqual(['0', '0', '—', '0', '0', '0']);
+    expect(cells(board, '春のセミナー')).toEqual(['0', '0', '—算出できません', '0', '0', '0']);
     expect(
-      within(within(board).getByRole('row', { name: /^春のセミナー/ })).getByText('受付停止中')
+      within(within(board).getByRole('row', { name: /^春のセミナー/ })).getByText('受け付けていない')
     ).toBeInTheDocument();
-    expect(within(board).getByText('作成からの累計')).toBeInTheDocument();
+    // The period is part of the heading's name, in brackets: not run into the title
+    expect(
+      within(board).getByRole('heading', { name: 'QR キャンペーン（作成からの累計）' })
+    ).toBeInTheDocument();
+    expect(
+      within(board).getByRole('heading', { name: '代行会社（過去30日に登録された見込み客）' })
+    ).toBeInTheDocument();
+    // Interested and consultations are parts of the new prospects: one heading over the two
+    expect(
+      within(board).getByRole('columnheader', { name: '新しい見込み客のうち' })
+    ).toHaveAttribute('colspan', '2');
+    expect(within(board).getByRole('columnheader', { name: '新規率' })).toBeInTheDocument();
     expect(within(office).getByRole('button', { name: '8施策' })).toHaveAttribute(
       'aria-pressed',
       'true'
@@ -1048,12 +1074,35 @@ describe('the campaign board (#1201)', () => {
   it('shows the campaigns without the breakdown when it cannot be read, and says so', async () => {
     mocks.breakdownFails = true;
     const { board } = await enterCampaigns();
-    expect(cells(board, '秋の展示会')).toEqual(['40', '10', '25%', '—', '—', '—']);
+    expect(cells(board, '秋の展示会')).toEqual([
+      '40',
+      '10',
+      '25%',
+      '—読めませんでした',
+      '—読めませんでした',
+      '—読めませんでした',
+    ]);
     expect(
       within(board).getByText(
-        '内訳（関心あり・相談の申込・既存の再回答）を読めませんでした。'
+        '内訳（関心あり・相談の申込・既存の見込み客の再回答）を読めませんでした。'
       )
     ).toBeInTheDocument();
+  });
+
+  it('shows three dots for a breakdown that is still on its way, and says that it is being read', async () => {
+    mocks.breakdownLoading = true;
+    const { board } = await enterCampaigns();
+    expect(cells(board, '秋の展示会')).toEqual([
+      '40',
+      '10',
+      '25%',
+      '…読み込んでいます',
+      '…読み込んでいます',
+      '…読み込んでいます',
+    ]);
+    expect(within(board).getByText('内訳を読んでいます。')).toBeInTheDocument();
+    // A part of the board is still reading: the board says so
+    expect(board).toHaveAttribute('aria-busy', 'true');
   });
 
   it('says that there is no campaign and no agency, each in its place', async () => {
@@ -1219,13 +1268,22 @@ describe('the customer file in the room', () => {
 
   it('stays open while a record is being saved: Esc and the way back are closed (#1205)', async () => {
     mocks.saving = true;
-    const { user, office } = await openFile();
+    const { user, office, onExit } = await openFile();
     const back = within(office).getByRole('button', { name: /ボードに戻る/ });
     expect(back).toHaveAttribute('aria-disabled', 'true');
     await user.keyboard('{Escape}');
     await user.click(back);
     // The request is out: the file waits for its answer instead of looking called off
-    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
+    const file = within(office).getByRole('region', { name: '見本商事1のファイル' });
+    expect(file).toBeInTheDocument();
+    // The report says why the keys do nothing, and the way to the normal view is closed too
+    expect(
+      within(office).getByText('記録しています。終わるまでファイルは閉じません。')
+    ).toBeInTheDocument();
+    const detail = within(file).getByRole('link', { name: '通常の表示で詳細を開く' });
+    expect(detail).toHaveAttribute('aria-disabled', 'true');
+    await user.click(detail);
+    expect(onExit).not.toHaveBeenCalled();
     expect(within(office).queryByRole('region', { name: '見込み客ボード' })).not.toBeInTheDocument();
   });
 
