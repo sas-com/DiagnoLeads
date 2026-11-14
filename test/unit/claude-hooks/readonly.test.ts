@@ -80,6 +80,7 @@ describe('readOnlyViolation', () => {
     allowed('bun run verify && bun run verify --plan && bun run verify --full --maxWorkers=2');
     allowed('bunx vitest run test/unit/a.test.ts && bunx tsc --noEmit');
     allowed("bunx vitest run test/unit/a.test.ts -t 'name' --reporter=verbose --silent");
+    allowed('bunx vitest run --project unit --maxWorkers 2 --bail --run -t=-negative');
     allowed('bunx @biomejs/biome check . && bun x vitest --run');
     allowed('curl -sS https://code.claude.com/docs/en/hooks.md | grep -n onFailure');
     allowed("curl -o /dev/null -w '%{http_code}' https://example.com && curl -sSL https://x/a.md");
@@ -328,6 +329,11 @@ describe('readOnlyViolation', () => {
       'bun run verify --update',
       'bun run verify -- --config /tmp/x.ts',
       'npm run verify --coverage',
+      // An option that takes a value does not swallow the next option (#1185)
+      'bunx vitest run --project --config /tmp/x.ts',
+      'bun run verify --maxWorkers --outputFile x',
+      'bunx vitest run -t --root /tmp',
+      'bun run test:run --exclude --setupFiles /tmp/x.ts',
       'bunx vitest run --config /tmp/x.ts',
       'bunx vitest run --root /tmp',
       'bunx vitest run --coverage',
