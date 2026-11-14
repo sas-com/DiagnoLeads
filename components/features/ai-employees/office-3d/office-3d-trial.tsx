@@ -8,9 +8,9 @@ import { CAP, FOCUS, PANEL } from '../office-hud';
 import type { OfficeEvent } from './office-emotion';
 
 /**
- * The 3D floor is a spike (#1135): its switch and its trial panel exist in development only. A
- * production build offers neither, so nobody meets a panel that pretends statuses, and the 3D
- * chunk is never asked for there.
+ * The trial panel of the 3D floor (#1135) exists in development only: a production build never
+ * shows a panel that pretends statuses. The switch between 2D and 3D is offered everywhere, 2D
+ * first (#1157), and the 3D chunk is asked for only when someone switches.
  */
 export const OFFICE_3D_TRIAL = process.env.NODE_ENV !== 'production';
 
