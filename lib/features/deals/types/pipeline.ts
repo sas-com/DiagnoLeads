@@ -127,3 +127,11 @@ export function forecastCategory(deal: {
 export function weightedAmount(deal: { amount: number | null; probability: number }): number {
   return deal.amount ? Math.floor((deal.amount * deal.probability) / 100) : 0;
 }
+
+/**
+ * Whether a move a change made can be taken back by moving the deal back (#720): not when it
+ * handed the lead off, since the handoff sheet that went out is not taken back. The one place
+ * that says so, for every screen that offers an undo (the board's toast, the deal file of the
+ * office): a side effect a move back does not undo is added here.
+ */
+export const moveIsUndoable = (saved: { handedOff: boolean }): boolean => !saved.handedOff;

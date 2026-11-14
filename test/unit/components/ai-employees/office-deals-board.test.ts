@@ -21,6 +21,7 @@ import {
   dealMoveDay,
   dealReport,
   dealsOfView,
+  dueShortcuts,
   endOfWeek,
   movesThisWeek,
   openDeals,
@@ -252,4 +253,20 @@ describe('the keys of a deal file', () => {
     expect(closesThisWeek(deal('a', { expectedCloseOn: '2026-11-16' }), TODAY)).toBe(false);
     expect(closesThisWeek(idle, TODAY)).toBe(false);
   });
+
+describe('the due days offered beside the date of a next action', () => {
+  it('are tomorrow, in three days and the Monday after this week', () => {
+    // A Friday
+    expect(dueShortcuts(TODAY)).toEqual([
+      { key: 'tomorrow', day: '2026-11-14' },
+      { key: 'in3Days', day: '2026-11-16' },
+      { key: 'nextMonday', day: '2026-11-16' },
+    ]);
+  });
+
+  it('never give today as next Monday', () => {
+    expect(dueShortcuts('2026-11-16').at(-1)).toEqual({ key: 'nextMonday', day: '2026-11-23' });
+    expect(dueShortcuts('2026-11-15').at(-1)).toEqual({ key: 'nextMonday', day: '2026-11-16' });
+  });
+});
 });

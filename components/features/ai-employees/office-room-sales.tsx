@@ -296,10 +296,10 @@ export function OfficeRoomSales({
                 <li
                   key={stage.stage}
                   style={{ borderTopColor: DEAL_STAGE_COLORS[stage.stage] }}
-                  className="border border-t-2 border-[#f5f1e8]/20 px-3 py-1.5 text-sm"
+                  className="flex flex-wrap items-baseline gap-x-2 border border-t-2 border-[#f5f1e8]/20 px-3 py-1 text-sm"
                 >
-                  <span className="block font-bold">{tDeals(`stages.${stage.stage}`)}</span>
-                  <span className="block text-xs text-[#d8d2c4] tabular-nums">
+                  <span className="font-bold">{tDeals(`stages.${stage.stage}`)}</span>
+                  <span className="text-xs text-[#d8d2c4] tabular-nums">
                     {tDealsRoom('count', { count: stage.count })}・
                     {formatYenCompact(stage.amount, locale)}
                   </span>
@@ -371,6 +371,10 @@ export function OfficeRoomSales({
                       >
                         {tDeals(`stages.${deal.stage}`)}
                       </span>
+                      {/* On a narrow board the amount has no column of its own */}
+                      <span className="mt-1 block text-xs text-[#d8d2c4] tabular-nums md:hidden">
+                        {formatYen(deal.amount, locale) ?? tDealsRoom('noAmount')}
+                      </span>
                     </span>
                     <span className="flex min-w-0 flex-col">
                       {deal.nextTask ? (
@@ -421,6 +425,23 @@ export function OfficeRoomSales({
               {board.data && total > 0 && tDealsRoom('range', { total, from, to })}
               <span className="ml-3 text-xs">{tDealsRoom('openHint')}</span>
             </p>
+            {/* What the room does not hold yet: a page of the normal view, a link away */}
+            <nav aria-label={tDealsRoom('normalPages')} className="flex flex-wrap gap-x-4">
+              {(Object.keys(NORMAL_PAGES) as (keyof typeof NORMAL_PAGES)[]).map((entry) => (
+                <Link
+                  key={entry}
+                  href={`/${locale}${NORMAL_PAGES[entry]}`}
+                  onClick={onLeaveOffice}
+                  className={cn(
+                    'inline-flex min-h-11 items-center gap-1 underline underline-offset-4 hover:text-white',
+                    FOCUS
+                  )}
+                >
+                  {tDealsRoom(`open.${entry}`)}
+                  <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              ))}
+            </nav>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -452,23 +473,6 @@ export function OfficeRoomSales({
           {truncated && (
             <p className="text-xs">{tDealsRoom('truncated', { limit: BOARD_DEALS_LIMIT })}</p>
           )}
-          {/* What the room does not hold yet: a page of the normal view, a link away */}
-          <nav aria-label={tDealsRoom('normalPages')} className="flex flex-wrap gap-x-5 gap-y-1">
-            {(Object.keys(NORMAL_PAGES) as (keyof typeof NORMAL_PAGES)[]).map((entry) => (
-              <Link
-                key={entry}
-                href={`/${locale}${NORMAL_PAGES[entry]}`}
-                onClick={onLeaveOffice}
-                className={cn(
-                  'inline-flex min-h-11 items-center gap-1 underline underline-offset-4 hover:text-white',
-                  FOCUS
-                )}
-              >
-                {tDealsRoom(`open.${entry}`)}
-                <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
-              </Link>
-            ))}
-          </nav>
         </footer>
       </section>
     </div>

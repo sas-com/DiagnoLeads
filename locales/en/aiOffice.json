@@ -539,7 +539,7 @@
           "noLead": "No company name",
           "noAmount": "No amount yet",
           "unassigned": "Unassigned",
-          "noNextAction": "Not set",
+          "noNextAction": "No next action",
           "late": "Overdue",
           "loading": "Loading",
           "error": "The deals could not be read. Please open the room again later.",
@@ -582,7 +582,8 @@
             "done": "Mark the next action as done",
             "add": "Set a next action",
             "undo": "Undo that",
-            "close": "Back to the board"
+            "close": "Back to the board",
+            "advanceSql": "Move on to \"{stage}\" (SQL decision first)"
           },
           "sql": {
             "title": "SQL decision",
@@ -595,7 +596,12 @@
             "due": "Due (required)",
             "save": "Set it",
             "back": "Leave it and go back to the choices",
-            "missing": "Please enter what to do next and a due date."
+            "missing": "Please enter what to do next and a due date.",
+            "days": {
+              "tomorrow": "Tomorrow",
+              "in3Days": "In 3 days",
+              "nextMonday": "Next Monday"
+            }
           },
           "stages": "Stages of the deal",
           "here": "Here now",

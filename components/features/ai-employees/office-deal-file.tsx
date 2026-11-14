@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import {
   OPEN_DEAL_STAGES,
   type OpenDealStage,
+  moveIsUndoable,
   skipsSqlDecision,
 } from '@/lib/features/deals/types/pipeline';
 import { addDays } from '@/lib/features/lead-follow-up/due';
@@ -35,6 +36,7 @@ import {
   type DealFileAction,
   dealActionOfKey,
   dealActionOpen,
+  dueShortcuts,
   stageAfter,
   stageBefore,
 } from './rooms/deals-board';
@@ -134,9 +136,10 @@ export function OfficeDealFile({
   const locale = useLocale();
   const utils = trpc.useUtils();
   const reportRef = useRef<HTMLDivElement>(null);
-  const matterRef = useRef<HTMLParagraphElement>(null);
+  const matterRef = useRef<HTMLElement>(null);
   const titleId = useId();
   const dueId = useId();
+  const sqlTitleId = useId();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [matter, setMatter] = useState<Matter | null>(null);
   const [title, setTitle] = useState('');
@@ -169,7 +172,8 @@ export function OfficeDealFile({
       ? outcome.kind
       : null;
   const acted = last !== null;
-  const undoable = outcome?.kind === 'done' || (outcome?.kind === 'moved' && !outcome.handedOff);
+  const undoable =
+    outcome?.kind === 'done' || (outcome?.kind === 'moved' && moveIsUndoable(outcome));
   const state = {
     canEdit,
     busy,
@@ -350,7 +354,13 @@ export function OfficeDealFile({
   const choiceLabel = (choice: (typeof DEAL_FILE_CHOICES)[number]) =>
     choice === 'advance'
       ? next
-        ? t('choices.advance', { stage: stageName(next) })
+        ? // The exit of 見極め asks first: said on the choice, so the question is no surprise
+          t(
+            skipsSqlDecision(deal.stage, next, deal.leadSqlDecision)
+              ? 'choices.advanceSql'
+              : 'choices.advance',
+            { stage: stageName(next) }
+          )
         : t('choices.advanceEnd')
       : choice === 'back'
         ? previous
@@ -374,10 +384,18 @@ export function OfficeDealFile({
         </div>
 
         {matter === 'sql' && next && (
-          <div className="flex flex-col gap-2">
-            <h3 className={CAP}>{t('sql.title')}</h3>
-            {/* The question takes the focus, not an answer: Enter pressed once more decides nothing */}
-            <p ref={matterRef} tabIndex={-1} className="text-sm leading-relaxed outline-none">
+          // The question takes the focus as a whole, not an answer: it is read out from its title,
+          // and Enter pressed once more decides nothing
+          <section
+            ref={matterRef}
+            aria-labelledby={sqlTitleId}
+            tabIndex={-1}
+            className="flex flex-col gap-2 outline-none"
+          >
+            <h3 id={sqlTitleId} className={CAP}>
+              {t('sql.title')}
+            </h3>
+            <p className="text-sm leading-relaxed">
               {leadLabel
                 ? tDeals('sqlDialog.description', { lead: leadLabel, stage: stageName(next) })
                 : tDeals('sqlDialog.descriptionUnnamed', { stage: stageName(next) })}
@@ -397,7 +415,7 @@ export function OfficeDealFile({
               <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
             </Link>
             <MatterBack onBack={closeMatter}>{t('sql.back')}</MatterBack>
-          </div>
+          </section>
         )}
 
         {matter === 'add' && (
@@ -429,6 +447,26 @@ export function OfficeDealFile({
               onChange={(event) => setDueOn(event.target.value)}
               className={FIELD}
             />
+            {/* The days asked for most, a press away: buttons of the field, not number keys */}
+            <div className="flex flex-wrap gap-2">
+              {dueShortcuts(today).map((shortcut) => (
+                <button
+                  key={shortcut.key}
+                  type="button"
+                  aria-pressed={dueOn === shortcut.day}
+                  onClick={() => setDueOn(shortcut.day)}
+                  className={cn(
+                    'min-h-11 border px-3 text-sm font-bold',
+                    dueOn === shortcut.day
+                      ? 'border-[#e9cf9a] bg-[#e9cf9a]/15'
+                      : 'border-[#f5f1e8]/35 hover:border-[#e9cf9a]',
+                    FOCUS
+                  )}
+                >
+                  {t(`add.days.${shortcut.key}`)}
+                </button>
+              ))}
+            </div>
             {missing && (
               <p role="alert" className="text-sm font-bold text-[#fca5a5]">
                 {t('add.missing')}

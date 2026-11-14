@@ -229,3 +229,16 @@ export function dealActionOpen(
   if (action === 'done') return state.hasTask;
   return isOpenStage(state.stage);
 }
+
+/** The due days a next action is given most often, offered beside the date field */
+export const DUE_SHORTCUTS = ['tomorrow', 'in3Days', 'nextMonday'] as const;
+export type DueShortcut = (typeof DUE_SHORTCUTS)[number];
+
+/** Each shortcut's day, from a Japan calendar day ('YYYY-MM-DD'): next Monday is never today */
+export function dueShortcuts(today: string): { key: DueShortcut; day: string }[] {
+  return [
+    { key: 'tomorrow', day: addDays(today, 1) },
+    { key: 'in3Days', day: addDays(today, 3) },
+    { key: 'nextMonday', day: addDays(endOfWeek(today), 1) },
+  ];
+}
