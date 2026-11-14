@@ -86,8 +86,6 @@
     }
   },
   "navigation": {
-    "menu": "Menu",
-    "management": "Management",
     "dashboard": "Dashboard",
     "today": "Today",
     "leads": "Lead Management",
@@ -1752,7 +1750,7 @@
       "description": "Manage your organization's basic information",
       "notFound": "Organization not found",
       "notFoundDescription": "Failed to retrieve organization information",
-      "backToDashboard": "Back to Dashboard",
+      "backToOffice": "Back to the office",
       "viewMode": "View Mode",
       "viewModeDescription": "Only organization owners can modify organization information. Your current role is \"{role}\".",
       "roleAdmin": "Admin",
