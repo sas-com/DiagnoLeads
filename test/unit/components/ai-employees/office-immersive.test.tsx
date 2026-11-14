@@ -190,6 +190,29 @@ describe('OfficeImmersive', () => {
     expect(room.closest('svg')).toBeNull();
     // The drawing itself carries no names any more
     expect(office.querySelector('svg text')).toBeNull();
+    // Who is chosen shows on the floor too: a mark over the head, for the eye only (#1183)
+    const marker = layer.querySelector('[data-chosen-marker]') as HTMLElement;
+    expect(marker).toHaveAttribute('aria-hidden', 'true');
+    expect(marker.style.visibility).toBe('visible');
+  });
+
+  it('groups the actions of the bar: the employee, the view, the way out (#1183)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    const bar = within(office).getByRole('button', { name: /^近づく/ }).parentElement
+      ?.parentElement as HTMLElement;
+    const groups = Array.from(bar.children).map((group) =>
+      within(group as HTMLElement)
+        .getAllByRole('button')
+        .map((button) => button.textContent)
+    );
+    // The chosen seat is vacant here: nobody to customize
+    expect(groups).toEqual([
+      ['話しかけるE'],
+      ['近づく+', '全体を見る-', '視点を戻す0', '3D（試験中）V'],
+      ['通常の表示に戻る', '退社するEsc'],
+    ]);
   });
 
   it('hires from a conversation with a vacant desk', async () => {

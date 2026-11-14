@@ -50,7 +50,7 @@ export interface PlacedLabel {
 /** The air between two name tags */
 export const TAG_GAP = 4;
 /** How far a name tag steps away from its employee to come out from under a panel */
-export const TAG_SHIFT_MAX = 64;
+export const TAG_SHIFT_MAX = 80;
 /** The air around the name of a room */
 export const ROOM_GAP = 8;
 /** How close to the edge of the screen the name of a room may come */
@@ -67,9 +67,9 @@ function overlaps(a: LabelBox, b: LabelBox, gap: number): boolean {
 /**
  * The name tags: each hangs under its employee. Where two would cover each other, the later one
  * moves straight up or down, whichever is nearer, so it stays under (or over) its own employee.
- * A tag also steps out from under a panel when a short step is enough; an employee who stands
- * deep under a panel keeps its tag with it. The chosen tag is placed first and never moves; the
- * others follow from the back of the floor to the front.
+ * A tag also steps out from under a panel, up, down or to the side, when a short step is
+ * enough; an employee who stands deep under a panel keeps its tag with it. The chosen tag is
+ * placed first and never moves; the others follow from the back of the floor to the front.
  */
 export function placeTags(
   tags: readonly TagToPlace[],
@@ -81,30 +81,37 @@ export function placeTags(
   const placed: LabelBox[] = [];
   const result: Record<string, LabelBox> = {};
   for (const tag of order) {
-    const x = tag.at.x - tag.w / 2;
-    const at = (y: number): LabelBox => ({ x, y, w: tag.w, h: tag.h });
-    const clearOfTags = (y: number) => placed.every((other) => !overlaps(at(y), other, TAG_GAP));
-    const clearOfPanels = (y: number) =>
-      obstacles.every((other) => !overlaps(at(y), other, TAG_GAP));
-    const nearest = (ys: number[]) =>
-      ys.sort((a, b) => Math.abs(a - tag.at.y) - Math.abs(b - tag.at.y))[0];
-    const candidates = [
-      tag.at.y,
+    const home: LabelBox = { x: tag.at.x - tag.w / 2, y: tag.at.y, w: tag.w, h: tag.h };
+    const clearOf = (others: readonly LabelBox[]) => (box: LabelBox) =>
+      others.every((other) => !overlaps(box, other, TAG_GAP));
+    const shift = (box: LabelBox) => Math.hypot(box.x - home.x, box.y - home.y);
+    const nearest = (boxes: LabelBox[]) => boxes.sort((a, b) => shift(a) - shift(b))[0];
+    const ys = [
+      home.y,
       ...[...placed, ...obstacles].flatMap((other) => [
         other.y + other.h + TAG_GAP,
         other.y - tag.h - TAG_GAP,
       ]),
-    ].filter(clearOfTags);
-    const y = tag.pinned
-      ? tag.at.y
+    ];
+    const xs = obstacles.flatMap((other) => [
+      other.x + other.w + TAG_GAP,
+      other.x - tag.w - TAG_GAP,
+    ]);
+    const upOrDown = ys.map((y) => ({ ...home, y })).filter(clearOf(placed));
+    // To the side of a panel, at any of the heights
+    const aside = xs.flatMap((x) => ys.map((y) => ({ ...home, x, y }))).filter(clearOf(placed));
+    const box = tag.pinned
+      ? home
       : (nearest(
-          candidates.filter((y) => clearOfPanels(y) && Math.abs(y - tag.at.y) <= TAG_SHIFT_MAX)
+          [...upOrDown, ...aside].filter(
+            (at) => clearOf(obstacles)(at) && shift(at) <= TAG_SHIFT_MAX
+          )
         ) ??
         // Under the lowest placed tag there is always room
-        nearest(candidates) ??
-        tag.at.y);
-    placed.push(at(y));
-    result[tag.id] = at(y);
+        nearest(upOrDown) ??
+        home);
+    placed.push(box);
+    result[tag.id] = box;
   }
   return result;
 }

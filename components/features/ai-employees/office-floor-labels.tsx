@@ -28,6 +28,12 @@ export const TAG_DROP = 12;
 
 /** How tall a robot stands, in floor units: the name of a room keeps off it */
 export const FIGURE_HEIGHT = 3;
+/** The robots of the 3D floor are built smaller than the drawn ones */
+export const FIGURE_HEIGHT_3D = 2.5;
+
+/** The mark over the chosen employee: how far over its head, and its size on the screen */
+const MARKER_LIFT = 0.35;
+const MARKER_SIZE = { w: 22, h: 14 };
 
 /** The rooms that carry their name on the floor (the corridor does not) */
 export const LABELLED_AREAS = OFFICE_AREAS.filter((area) => area !== 'corridor');
@@ -120,12 +126,23 @@ const boxOf = (rect: DOMRect, origin: { left: number; top: number }): LabelBox =
 export const OfficeFloorLabels = forwardRef<
   FloorLabelsHandle,
   FloorLabelsProps & {
+    /** How tall the robots of this floor stand, in floor units */
+    figureHeight?: number;
     /** After every render and every resize, once measured: the owner places the labels again */
     onLayout?: () => void;
     className?: string;
   }
 >(function OfficeFloorLabels(
-  { statuses, names, selected, onChoose, onTalk, onLayout, className },
+  {
+    statuses,
+    names,
+    selected,
+    onChoose,
+    onTalk,
+    figureHeight = FIGURE_HEIGHT,
+    onLayout,
+    className,
+  },
   ref
 ) {
   const tOffice = useTranslations('aiOffice');
@@ -137,9 +154,10 @@ export const OfficeFloorLabels = forwardRef<
   const tagSizes = useRef<Partial<Record<AiEmployeeRole, { w: number; h: number }>>>({});
   const nameSizes = useRef<Partial<Record<OfficeArea, { w: number; h: number }>>>({});
   const hud = useRef<{ box: LabelBox; parts: LabelBox[] }[]>([]);
+  const marker = useRef<HTMLSpanElement>(null);
   // `place` is called from a frame loop: it must read the statuses of this render
-  const latest = useRef({ statuses, selected });
-  latest.current = { statuses, selected };
+  const latest = useRef({ statuses, selected, figureHeight });
+  latest.current = { statuses, selected, figureHeight };
 
   const measure = useCallback(() => {
     for (const role of AI_EMPLOYEE_ROLES) {
@@ -172,12 +190,17 @@ export const OfficeFloorLabels = forwardRef<
       // The name of a room does not stand on somebody's face either
       figures: AI_EMPLOYEE_ROLES.flatMap((role) => {
         const status = latest.current.statuses[role];
-        if (status === 'vacant') return [];
+        const chosen = role === latest.current.selected;
+        if (status === 'vacant' && !chosen) return [];
         const on = tagAnchor(role, status, places);
         const feet = toScreen(on, 0);
-        const head = toScreen(on, FIGURE_HEIGHT);
+        const head = toScreen(on, latest.current.figureHeight);
         const tall = feet.y - head.y;
-        return [{ x: feet.x - tall * 0.3, y: head.y, w: tall * 0.6, h: tall }];
+        // The chosen one carries its mark over the head
+        const top = chosen
+          ? toScreen(on, latest.current.figureHeight + MARKER_LIFT).y - MARKER_SIZE.h
+          : head.y;
+        return [{ x: feet.x - tall * 0.3, y: top, w: tall * 0.6, h: feet.y - top }];
       }),
       tags: AI_EMPLOYEE_ROLES.flatMap((role) => {
         if (!tags.current[role]) return [];
@@ -215,6 +238,19 @@ export const OfficeFloorLabels = forwardRef<
     for (const role of AI_EMPLOYEE_ROLES) {
       const tag = tags.current[role];
       if (tag) put(tag, laid.tags[role]);
+    }
+    // The mark over the head of the chosen one (or over the empty seat that was chosen)
+    if (marker.current) {
+      const chosen = latest.current.selected;
+      const over = toScreen(
+        tagAnchor(chosen, latest.current.statuses[chosen], places),
+        latest.current.figureHeight + MARKER_LIFT
+      );
+      put(marker.current, {
+        x: over.x - MARKER_SIZE.w / 2,
+        y: over.y - MARKER_SIZE.h,
+        hidden: false,
+      });
     }
     for (const area of LABELLED_AREAS) {
       const label = labels.current[area];
@@ -261,6 +297,15 @@ export const OfficeFloorLabels = forwardRef<
           {tOffice(`rooms.${area}`)}
         </span>
       ))}
+      {/* Who is chosen shows on the floor too, not only in the border of a name tag (#1183).
+          For the eye only: the tag says it to a screen reader (aria-current) */}
+      <span
+        ref={marker}
+        aria-hidden="true"
+        data-chosen-marker=""
+        style={{ visibility: 'hidden', width: MARKER_SIZE.w, height: MARKER_SIZE.h }}
+        className="absolute top-0 left-0 bg-[#e9cf9a] drop-shadow-[0_2px_4px_rgba(4,8,18,0.8)] [clip-path:polygon(0_0,100%_0,50%_100%)]"
+      />
       {AI_EMPLOYEE_ROLES.map((role) => (
         <WorldTagButton
           key={role}

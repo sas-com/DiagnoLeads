@@ -595,7 +595,8 @@ export function OfficeImmersive({
                 subject={subject3d}
                 attentive={stage === 'talk' ? selected : null}
                 zoom={zoom}
-                pan={pan}
+                // Centred between the side panels, like the 2D floor
+                pan={{ x: pan.x + home.x, y: pan.y }}
                 focus={selectedEmployee ? selected : null}
                 reducedMotion={reducedMotion}
                 onFps={setFps}
@@ -896,41 +897,48 @@ export function OfficeImmersive({
 
               {/* The actions */}
               <div className="absolute inset-x-0 bottom-6 flex flex-col items-center">
-                <div className="flex gap-2.5">
-                  <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
-                    <MessageCircle className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.talk')}
-                  </HudButton>
-                  {canCustomize && (
-                    <HudButton onClick={() => setStage('studio')} hotkey="C">
-                      <Palette className="h-6 w-6" aria-hidden="true" />
-                      {t('studio.open')}
+                {/* Three groups: the employee, the view, the way out */}
+                <div className="flex gap-5">
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
+                      <MessageCircle className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.talk')}
                     </HudButton>
-                  )}
-                  <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
-                    <ZoomIn className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.zoomIn')}
-                  </HudButton>
-                  <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
-                    <ZoomOut className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.zoomOut')}
-                  </HudButton>
-                  <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
-                    <Box className="h-6 w-6" aria-hidden="true" />
-                    {t(threeD ? 'trial3d.off' : 'trial3d.on')}
-                  </HudButton>
-                  <HudButton onClick={resetView} hotkey="0">
-                    <ScanSearch className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.resetView')}
-                  </HudButton>
-                  <HudButton onClick={leave} hotkey="">
-                    <List className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.list')}
-                  </HudButton>
-                  <HudButton onClick={() => setStage('title')} hotkey="Esc">
-                    <DoorOpen className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.clockOut')}
-                  </HudButton>
+                    {canCustomize && (
+                      <HudButton onClick={() => setStage('studio')} hotkey="C">
+                        <Palette className="h-6 w-6" aria-hidden="true" />
+                        {t('studio.open')}
+                      </HudButton>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
+                      <ZoomIn className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomIn')}
+                    </HudButton>
+                    <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
+                      <ZoomOut className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomOut')}
+                    </HudButton>
+                    <HudButton onClick={resetView} hotkey="0">
+                      <ScanSearch className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.resetView')}
+                    </HudButton>
+                    <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
+                      <Box className="h-6 w-6" aria-hidden="true" />
+                      {t(threeD ? 'trial3d.off' : 'trial3d.on')}
+                    </HudButton>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={leave} hotkey="">
+                      <List className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.list')}
+                    </HudButton>
+                    <HudButton onClick={() => setStage('title')} hotkey="Esc">
+                      <DoorOpen className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.clockOut')}
+                    </HudButton>
+                  </div>
                 </div>
                 {/* How fast this device draws the 3D floor, to measure real devices (#1157) */}
                 {threeD && threeDReady && fps !== null && (

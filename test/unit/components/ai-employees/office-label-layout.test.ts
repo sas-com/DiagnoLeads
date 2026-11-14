@@ -57,6 +57,28 @@ describe('placeTags', () => {
     expect(placed.back.y).toBe(300 - 44 - TAG_GAP);
   });
 
+  it('steps to the side of a panel when the way up and down is taken (#1183)', () => {
+    // The staff list in the lower left; the chosen tag and another one lie just over its edge
+    const panel = { x: 24, y: 505, w: 288, h: 372 };
+    const sales = { id: 'sales', at: { x: 330, y: 440 }, w: 167, h: 44 };
+    const placed = placeTags(
+      [
+        { id: 'chosen', at: { x: 263, y: 385 }, w: 183, h: 44, pinned: true },
+        { id: 'back', at: { x: 202, y: 433 }, w: 211, h: 44 },
+        sales,
+      ],
+      [panel]
+    );
+    // Straight down it would lie under the panel, straight up on the chosen tag
+    expect(placed.sales.x).toBe(panel.x + panel.w + TAG_GAP);
+    for (const other of [panel, placed.back, placed.chosen]) {
+      expect(hit(placed.sales, other)).toBe(false);
+    }
+    expect(Math.abs(placed.sales.x - (sales.at.x - sales.w / 2))).toBeLessThanOrEqual(
+      TAG_SHIFT_MAX
+    );
+  });
+
   it('steps out from under a panel with a short step, and stays with its employee otherwise', () => {
     const panel = { x: 0, y: 320, w: 600, h: 400 };
     const near = placeTags([tag('a', 400, 300)], [panel]);

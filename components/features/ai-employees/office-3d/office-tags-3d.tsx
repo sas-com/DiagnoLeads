@@ -2,6 +2,7 @@
 
 import { type RefObject, forwardRef, useCallback, useImperativeHandle, useRef } from 'react';
 import {
+  FIGURE_HEIGHT_3D,
   type FloorLabelsHandle,
   type FloorLabelsProps,
   OfficeFloorLabels,
@@ -48,6 +49,7 @@ export const Office3DTags = forwardRef<
     <OfficeFloorLabels
       ref={layer}
       {...labels}
+      figureHeight={FIGURE_HEIGHT_3D}
       onLayout={() => {
         const shown = lastShown?.current;
         if (shown) place(shown.view, shown.places);

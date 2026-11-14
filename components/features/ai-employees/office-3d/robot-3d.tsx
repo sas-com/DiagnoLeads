@@ -25,7 +25,8 @@ const ICON_TEXT: Readonly<Record<Exclude<EmoteIcon, 'none'>, string>> = {
   alert: '!',
   sleep: 'Zzz',
   wave: '♪',
-  book: '…',
+  // Drawn, not written: three dots read as "waiting", not as "studying"
+  book: '',
 };
 const ICON_COLORS: Readonly<Record<Exclude<EmoteIcon, 'none'>, string>> = {
   check: '#16a34a',
@@ -51,6 +52,25 @@ function useBadge(text: string, colour: string) {
       context.strokeStyle = colour;
       context.stroke();
       context.fillStyle = colour;
+      if (!text) {
+        // A mortarboard, like the cap the robots wear on the 2D floor while they study
+        context.beginPath();
+        context.moveTo(64, 30);
+        context.lineTo(110, 52);
+        context.lineTo(64, 74);
+        context.lineTo(18, 52);
+        context.closePath();
+        context.fill();
+        context.beginPath();
+        context.moveTo(38, 68);
+        context.lineTo(38, 88);
+        context.quadraticCurveTo(64, 104, 90, 88);
+        context.lineTo(90, 68);
+        context.lineTo(64, 80);
+        context.closePath();
+        context.fill();
+        context.fillRect(104, 54, 5, 30);
+      }
       context.font = `bold ${text.length > 1 ? 44 : 78}px sans-serif`;
       context.textAlign = 'center';
       context.textBaseline = 'middle';
