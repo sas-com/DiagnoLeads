@@ -27,6 +27,7 @@
       }
     },
     "rooms": {
+      "desk": "社長のデスク",
       "sales": "営業フロア",
       "training": "研修室",
       "lounge": "ラウンジ",
@@ -257,7 +258,10 @@
       "room": {
         "back": "フロアへ戻る",
         "work": {
+          "desk": "今日の予定",
           "marketing": "リード管理",
+          "sales": "商談",
+          "engineering": "現行調査",
           "backoffice": "今日の期限"
         },
         "guide": {
@@ -383,7 +387,8 @@
           "openToday": "通常の表示の「今日」を開く",
           "undoFailed": "取り消せませんでした。済みのままです。もう一度お願いします。",
           "reportNext": "{total} 件中 {index} 件目をお渡しします。"
-        }
+        },
+        "door": "ページを開く"
       },
       "tones": {
         "brisk": {
