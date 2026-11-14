@@ -3,7 +3,8 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
  * The rooms of the full-screen office that hold work (#1127, decision
  * 2026-11-13-office-is-the-base): the business screens live inside the office. The marketing room
  * is the first: its wall board is the lead list. The reception (back office) hands over what is
- * due, one at a time (#1133).
+ * due, one at a time (#1133). The engineering room shows the surveys of the current systems
+ * (#1194; its pure functions are in rooms/survey-board.ts).
  *
  * Pure functions only.
  */
@@ -19,12 +20,13 @@ import {
 import type { ListLeadsInput } from '@/lib/features/leads/types/schemas';
 
 /** The rooms the president can walk into */
-export const OFFICE_ROOMS = ['marketing', 'backoffice'] as const;
+export const OFFICE_ROOMS = ['marketing', 'engineering', 'backoffice'] as const;
 export type OfficeRoom = (typeof OFFICE_ROOMS)[number];
 
 /** The AI employee each room belongs to */
 export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
   marketing: 'marketer',
+  engineering: 'engineer',
   backoffice: 'back_office',
 };
 
@@ -53,6 +55,7 @@ export const PLACE_KEYS: Readonly<Record<FloorPlace, string>> = {
 /** The key that enters each room from the floor */
 export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
   marketing: PLACE_KEYS.marketing,
+  engineering: PLACE_KEYS.engineering,
   backoffice: PLACE_KEYS.backoffice,
 };
 
@@ -64,8 +67,6 @@ export const DOOR_PAGES: Readonly<Record<FloorDoor, string>> = {
   // The president's day: what is planned and what is left to do
   desk: '/today',
   sales: '/deals',
-  // Surveys of the current system: the engineers' share of the deals
-  engineering: '/deals?kind=survey',
 };
 
 export function isOfficeRoom(place: FloorPlace): place is OfficeRoom {

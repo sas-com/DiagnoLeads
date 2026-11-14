@@ -388,7 +388,76 @@
           "undoFailed": "取り消せませんでした。済みのままです。もう一度お願いします。",
           "reportNext": "{total} 件中 {index} 件目をお渡しします。"
         },
-        "door": "ページを開く"
+        "door": "ページを開く",
+        "engineering": {
+          "board": "現行調査ボード",
+          "report": "進行中の現行調査は {open} 件です。提案の段にあるものは {proposal} 件、次の行動が決まっていないものは {withoutTask} 件あります。",
+          "reportEmpty": "進行中の現行調査は、いまありません。",
+          "reportLoading": "ボードの数字を読んでいます。",
+          "reportUnavailable": "ボードの数字を読めませんでした。",
+          "ask": {
+            "open": "進行中のものを全部見せて",
+            "qualification": "見極めのものを見せて",
+            "discovery": "課題の確認のものを見せて",
+            "proposal": "提案の段のものを見せて",
+            "negotiation": "条件の調整のものを見せて"
+          },
+          "views": {
+            "open": "進行中すべて"
+          },
+          "columns": {
+            "deal": "会社・商談",
+            "stage": "段",
+            "nextAction": "次の行動",
+            "owner": "担当"
+          },
+          "daysInStage": "この段で {days} 日",
+          "due": "期限 {date}",
+          "noTask": "未定",
+          "empty": "この絞り込みに当たる現行調査の商談はありません。",
+          "error": "商談を読めませんでした。時間をおいて、もう一度開いてください。",
+          "forbidden": "商談を見る権限がありません。管理者に確かめてください。",
+          "truncated": "件数が多いため、ボードには {limit} 件までを出しています。",
+          "openHint": "行を開くと、この部屋の中で準備ファイルが開きます。",
+          "openList": "通常の表示の商談で開く",
+          "file": {
+            "label": "{company}の準備ファイル",
+            "title": "準備ファイル",
+            "reading": "ヒアリングと準備の記録を読んでいます。",
+            "readError": "記録を読めませんでした。時間をおいて、もう一度開いてください。",
+            "hearingUnavailable": "ヒアリングの記録を読めませんでした。",
+            "hearingLatest": "最新のヒアリングは {date} の記録です。必須でまだ埋まっていない項目は {missing} 件、未確認は {unconfirmed} 件、次回に確かめる項目は {next} 件です。",
+            "noHearing": "ヒアリングは、まだ記録されていません。",
+            "prepReady": "初回商談の事前調査カードは、用意されています。",
+            "prepNone": "初回商談の事前調査カードは、まだ用意されていません。",
+            "handedOff": "{date} に初回ヒアリングから次の段階へ進み、引き継ぎ書ができています。",
+            "notHandedOff": "まだ初回ヒアリングから先へ進んでいません。",
+            "choices": {
+              "hearing": "ヒアリングの要約を見せて",
+              "prep": "事前調査カードを見せて",
+              "back": "ボードに戻る"
+            },
+            "parts": {
+              "hearing": "ヒアリングの要約",
+              "prep": "事前調査カード"
+            },
+            "hearingOn": "{date} のヒアリング",
+            "notRecorded": "未入力",
+            "flags": {
+              "missing": "必須・未入力",
+              "unconfirmed": "未確認",
+              "next": "次回に確認",
+              "changed": "前回から変更"
+            },
+            "hearingEmpty": "ヒアリングが記録されていません。リードの画面の「ヒアリング」から記録できます。",
+            "hearingForbidden": "ヒアリングを見る権限がありません。管理者に確かめてください。",
+            "prepEmpty": "事前調査カードは、まだ書かれていません。リードの画面で用意できます。",
+            "readOnlyHint": "このファイルは読むだけです。書き換えるときは、通常の表示で開きます。",
+            "openHandoff": "引き継ぎ書を開く",
+            "openLead": "リードの画面で開く",
+            "openDeal": "商談の画面で開く"
+          }
+        }
       },
       "tones": {
         "brisk": {

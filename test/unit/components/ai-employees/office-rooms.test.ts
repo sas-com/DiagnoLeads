@@ -70,11 +70,10 @@ describe('the places of the floor guide (#1162)', () => {
 
   it('open a fixed page of the normal view when their room is not built yet', () => {
     const doors = FLOOR_PLACES.filter((place) => !isOfficeRoom(place));
-    expect(doors).toEqual(['desk', 'sales', 'engineering']);
+    expect(doors).toEqual(['desk', 'sales']);
     expect(DOOR_PAGES).toEqual({
       desk: '/today',
       sales: '/deals',
-      engineering: '/deals?kind=survey',
     });
     // A door is not a room: its key does not enter one
     for (const door of doors) expect(roomOfKey(PLACE_KEYS[door])).toBeNull();

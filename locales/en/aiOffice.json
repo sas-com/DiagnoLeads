@@ -388,7 +388,76 @@
           "undoFailed": "It could not be undone and is still marked as done. Please try again.",
           "reportNext": "Here is number {index} of {total}."
         },
-        "door": "opens a page"
+        "door": "opens a page",
+        "engineering": {
+          "board": "Survey board",
+          "report": "{open} surveys are in progress. {proposal} are in the proposal stage, and {withoutTask} have no next action.",
+          "reportEmpty": "No survey is in progress right now.",
+          "reportLoading": "Reading the figures of the board.",
+          "reportUnavailable": "The figures of the board could not be read.",
+          "ask": {
+            "open": "Show me everything in progress",
+            "qualification": "Show me the ones in qualification",
+            "discovery": "Show me the ones in discovery",
+            "proposal": "Show me the ones in the proposal stage",
+            "negotiation": "Show me the ones in negotiation"
+          },
+          "views": {
+            "open": "All in progress"
+          },
+          "columns": {
+            "deal": "Company and deal",
+            "stage": "Stage",
+            "nextAction": "Next action",
+            "owner": "Owner"
+          },
+          "daysInStage": "{days} days in this stage",
+          "due": "Due {date}",
+          "noTask": "Not set",
+          "empty": "No survey deal matches this view.",
+          "error": "The deals could not be read. Please open the room again later.",
+          "forbidden": "You do not have permission to see the deals. Please check with an administrator.",
+          "truncated": "There are many deals: the board shows up to {limit}.",
+          "openHint": "Opening a row opens its preparation file inside this room.",
+          "openList": "Open in the deals of the normal view",
+          "file": {
+            "label": "Preparation file of {company}",
+            "title": "Preparation file",
+            "reading": "Reading the hearing and the preparation.",
+            "readError": "The records could not be read. Please open the file again later.",
+            "hearingUnavailable": "The hearing could not be read.",
+            "hearingLatest": "The latest hearing was recorded on {date}. Required fields not filled: {missing}. Not confirmed: {unconfirmed}. To confirm next time: {next}.",
+            "noHearing": "No hearing has been recorded yet.",
+            "prepReady": "The prep card of the first meeting is ready.",
+            "prepNone": "The prep card of the first meeting is not ready yet.",
+            "handedOff": "Moved on from the first hearing on {date}; the handoff sheet is ready.",
+            "notHandedOff": "Has not moved on from the first hearing yet.",
+            "choices": {
+              "hearing": "Show me the hearing summary",
+              "prep": "Show me the prep card",
+              "back": "Back to the board"
+            },
+            "parts": {
+              "hearing": "Hearing summary",
+              "prep": "Prep card"
+            },
+            "hearingOn": "Hearing of {date}",
+            "notRecorded": "Not filled",
+            "flags": {
+              "missing": "Required, not filled",
+              "unconfirmed": "Not confirmed",
+              "next": "Confirm next time",
+              "changed": "Changed since last time"
+            },
+            "hearingEmpty": "No hearing has been recorded. You can record one under Hearings on the lead's page.",
+            "hearingForbidden": "You do not have permission to see the hearing. Please check with an administrator.",
+            "prepEmpty": "The prep card has not been written yet. You can prepare it on the lead's page.",
+            "readOnlyHint": "This file is read only. To change something, open it in the normal view.",
+            "openHandoff": "Open the handoff sheet",
+            "openLead": "Open the lead's page",
+            "openDeal": "Open the deal's page"
+          }
+        }
       },
       "tones": {
         "brisk": {

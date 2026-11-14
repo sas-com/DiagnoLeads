@@ -68,6 +68,7 @@ import {
 import { shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
 import { OfficeRoomDue } from './office-room-due';
+import { OfficeRoomEngineering } from './office-room-engineering';
 import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
 import {
   DOOR_PAGES,
@@ -1107,6 +1108,17 @@ export function OfficeImmersive({
                   look={looks[ROOM_ROLES[room]]}
                   keysRef={roomKeys}
                   onOpenLead={leave}
+                  onFileOpenChange={setRoomFileOpen}
+                />
+              ) : room === 'engineering' ? (
+                <OfficeRoomEngineering
+                  organizationId={organizationId}
+                  role={ROOM_ROLES[room]}
+                  status={statuses[ROOM_ROLES[room]]}
+                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
+                  look={looks[ROOM_ROLES[room]]}
+                  keysRef={roomKeys}
+                  onOpenNormal={leave}
                   onFileOpenChange={setRoomFileOpen}
                 />
               ) : (
