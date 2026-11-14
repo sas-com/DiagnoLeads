@@ -47,14 +47,7 @@ import { officeFits } from './office-app';
 import { OfficeTags2D } from './office-floor-labels';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
-import {
-  AREA_RECTS,
-  DESK_SEATS,
-  FLOOR_DEPTH,
-  FLOOR_WIDTH,
-  areaOf,
-  spotOf,
-} from './office-map-layout';
+import { DESK_SEATS, areaOf, spotOf } from './office-map-layout';
 import {
   type TalkChoice,
   type TalkLine,
@@ -69,7 +62,7 @@ import {
   talkChoices,
   talkLineKey,
 } from './office-president';
-import { STATUS_LIGHT, shade } from './office-prims';
+import { shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
 import { OfficeRoomDue } from './office-room-due';
 import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
@@ -841,9 +834,6 @@ export function OfficeImmersive({
                 )}
               </div>
 
-              {/* The map of the floor */}
-              <FloorMap statuses={statuses} selected={selected} label={t('map')} />
-
               {/* The 3D spike's trial panel: pretend a status or an event to watch the robot */}
               {OFFICE_3D_TRIAL && threeD && threeDReady && selectedEmployee && (
                 <Office3DTrialPanel
@@ -1213,57 +1203,5 @@ function HudButton({
         <span className={cn(KEY, 'absolute top-1 right-1 bg-[#0a0e18]/60')}>{hotkey}</span>
       )}
     </button>
-  );
-}
-
-/** The floor seen from above, with a light where each AI employee is */
-function FloorMap({
-  statuses,
-  selected,
-  label,
-}: {
-  statuses: Record<AiEmployeeRole, DeskStatus>;
-  selected: AiEmployeeRole;
-  label: string;
-}) {
-  const unit = 8;
-  return (
-    <div className="absolute top-36 left-6 hidden h-28 w-28 overflow-hidden rounded-full border-2 border-[#e9cf9a] bg-[#101726] shadow-[0_14px_30px_rgba(4,8,18,0.5)] xl:block">
-      <svg
-        viewBox={`-28 -46 ${FLOOR_WIDTH * unit + 56} ${FLOOR_DEPTH * unit + 92}`}
-        role="img"
-        aria-label={label}
-        className="h-full w-full"
-      >
-        <g transform={`rotate(30 ${(FLOOR_WIDTH * unit) / 2} ${(FLOOR_DEPTH * unit) / 2})`}>
-          {Object.entries(AREA_RECTS).map(([area, r], index) => (
-            <rect
-              key={area}
-              x={r.x * unit}
-              y={r.y * unit}
-              width={r.w * unit}
-              height={r.h * unit}
-              fill={index % 2 === 0 ? '#3a4257' : '#2f3a4c'}
-              stroke="#e9cf9a"
-              strokeOpacity={0.5}
-            />
-          ))}
-          {AI_EMPLOYEE_ROLES.filter((role) => statuses[role] !== 'vacant').map((role) => {
-            const spot = spotOf(role, statuses[role]);
-            return (
-              <circle
-                key={role}
-                cx={spot.x * unit}
-                cy={spot.y * unit}
-                r={role === selected ? 7 : 5}
-                fill={STATUS_LIGHT[statuses[role]]}
-                stroke="#ffffff"
-                strokeWidth={role === selected ? 2.5 : 1.5}
-              />
-            );
-          })}
-        </g>
-      </svg>
-    </div>
   );
 }
