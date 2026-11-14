@@ -271,18 +271,80 @@
           "paused": "{name} is paused. The figures are read from the records.",
           "vacant": "The {role} seat is vacant. The figures are read from the records."
         },
+        "marketing": {
+          "report": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportWithTop": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}. The largest source is \"{source}\" with {count}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportNone": "There are no new prospects in the last {days} days.",
+          "reportLoading": "Reading the figures of this room.",
+          "reportUnavailable": "The figures of this room could not be read.",
+          "ask": {
+            "sources": "Show me where they came from",
+            "funnel": "Show me how far they got",
+            "leads": "Show me the prospects"
+          },
+          "leadViews": {
+            "needsAction": "Not started",
+            "consultation": "Consultations",
+            "newThisWeek": "New this week",
+            "mine": "Mine",
+            "all": "All"
+          },
+          "period": "Prospects created in the last {days} days: {count}",
+          "periodOnly": "Prospects created in the last {days} days",
+          "loading": "Loading",
+          "error": "The figures could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see prospects. Please ask an administrator.",
+          "empty": "No prospects were created in the last {days} days.",
+          "openAnalytics": "Open the analytics in the normal view",
+          "analyticsHint": "Other periods and finer breakdowns are on the analytics page of the normal view.",
+          "sources": {
+            "board": "Source board",
+            "caption": "Prospects, SQL, wins and acquisition cost by source (prospects created in the last {days} days)",
+            "columns": {
+              "source": "Source",
+              "leads": "Prospects",
+              "share": "Share",
+              "sql": "SQL",
+              "won": "Won",
+              "cost": "Acquisition cost",
+              "wonAmount": "Won amount",
+              "roi": "ROI"
+            },
+            "unset": "No source recorded",
+            "total": "Total",
+            "shareValue": "{share}%",
+            "roiValue": "{value}x",
+            "none": "—",
+            "uncosted": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects. {count, plural, one {# has} other {# have}} no cost recorded.",
+            "costed": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects.",
+            "returns": "The won amount and the ROI are counted from the deals of these prospects (ROI = won amount ÷ acquisition cost)."
+          },
+          "funnel": {
+            "board": "Progress board",
+            "caption": "Prospects that reached each stage (prospects created in the last {days} days)",
+            "columns": {
+              "stage": "Stage",
+              "reached": "Reached",
+              "ofAll": "Of all",
+              "fromPrevious": "From the stage before"
+            },
+            "stages": {
+              "lead": "Prospect",
+              "mql": "MQL (interested)",
+              "deal": "Deal",
+              "sql": "SQL (qualified)",
+              "won": "Won"
+            },
+            "percent": "{value}%",
+            "none": "—",
+            "reachedNote": "A prospect that went further counts for the stages before it too (one that entered a deal without MQL counts as MQL).",
+            "nurturing": "Prospects being nurtured now: {count} (not counted as a stage)."
+          },
+          "scroll": "Table of the {board}. Scroll with the arrow keys",
+          "onWall": "On the wall: {board}"
+        },
         "leads": {
           "board": "Lead board",
-          "report": "New leads this week: {newThisWeek}. Consultation requests: {consultation}. Not started yet: {needsAction}.",
-          "reportLoading": "Reading the figures from the board.",
-          "reportUnavailable": "The figures could not be read from the board.",
-          "ask": {
-            "needsAction": "Show me what nobody has started on",
-            "consultation": "Show me the consultation requests",
-            "newThisWeek": "Show me this week's new leads",
-            "mine": "Show me my own leads",
-            "all": "Show me everything"
-          },
           "views": {
             "needsAction": "Not started yet (new)",
             "consultation": "Consultation requested",
