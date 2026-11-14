@@ -6,20 +6,15 @@ import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef, useState } from 'react';
 import type { Group, OrthographicCamera } from 'three';
-import {
-  AREA_RECTS,
-  CHARGING_PADS,
-  FLOOR_DEPTH,
-  FLOOR_WIDTH,
-  type FloorPoint,
-  OFFICE_AREAS,
-  type OfficeArea,
-  ROLE_DESKS,
-  TRAINING_DESKS,
-  spotOf,
-} from '../office-map-layout';
+import { FLOOR_DEPTH, FLOOR_WIDTH, type FloorPoint, spotOf } from '../office-map-layout';
 import { type OfficeEvent, emotionOf } from './office-emotion';
 import { pointAlong, routeBetween, routeLength } from './office-nav';
+import {
+  OfficeDaylight,
+  OfficeReflections,
+  OfficeScenery,
+  OfficeShadowPace,
+} from './office-scenery-3d-view';
 import {
   CAMERA_OFFSET,
   FLOOR_MIDDLE,
@@ -43,81 +38,6 @@ export interface Office3DEmployee {
   status: Exclude<DeskStatus, 'vacant'>;
   look: RobotLook;
   tone: AiTone;
-}
-
-const AREA_COLORS: Readonly<Record<OfficeArea, [day: string, night: string]>> = {
-  sales: ['#e8d3ae', '#5b4f3c'],
-  marketing: ['#dfe6ee', '#3d4654'],
-  engineering: ['#e8d3ae', '#5b4f3c'],
-  corridor: ['#f1f3f6', '#454c59'],
-  training: ['#e3e8ef', '#3f4856'],
-  lounge: ['#c9a57a', '#4f4030'],
-  charging: ['#d9dee6', '#3a424f'],
-  backoffice: ['#f3ead9', '#544a3b'],
-};
-
-/** The floor, the back walls and the furniture, from the same layout as the 2D office */
-function Floor({ night }: { night: boolean }) {
-  const wall = night ? '#39414f' : '#e9e4da';
-  const desk = night ? '#4a3a2c' : '#7a5a3f';
-  return (
-    <group>
-      <mesh position={[FLOOR_WIDTH / 2, -0.2, FLOOR_DEPTH / 2]} receiveShadow>
-        <boxGeometry args={[FLOOR_WIDTH + 0.6, 0.3, FLOOR_DEPTH + 0.6]} />
-        <meshStandardMaterial color={night ? '#1d2330' : '#5d6373'} />
-      </mesh>
-      {OFFICE_AREAS.map((area) => {
-        const r = AREA_RECTS[area];
-        return (
-          <mesh
-            key={area}
-            position={[r.x + r.w / 2, -0.02, r.y + r.h / 2]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            receiveShadow
-          >
-            <planeGeometry args={[r.w - 0.06, r.h - 0.06]} />
-            <meshStandardMaterial color={AREA_COLORS[area][night ? 1 : 0]} roughness={0.9} />
-          </mesh>
-        );
-      })}
-      {/* The two back walls */}
-      <mesh position={[FLOOR_WIDTH / 2, 1.1, -0.1]}>
-        <boxGeometry args={[FLOOR_WIDTH + 0.4, 2.3, 0.2]} />
-        <meshStandardMaterial color={wall} />
-      </mesh>
-      <mesh position={[-0.1, 1.1, FLOOR_DEPTH / 2]}>
-        <boxGeometry args={[0.2, 2.3, FLOOR_DEPTH + 0.4]} />
-        <meshStandardMaterial color={wall} />
-      </mesh>
-      {/* Glass partitions between the rooms and the corridor, with a gap for each door */}
-      {OFFICE_AREAS.filter((area) => area !== 'corridor').map((area) => {
-        const r = AREA_RECTS[area];
-        const z = r.y < AREA_RECTS.corridor.y ? r.y + r.h : r.y;
-        const half = (r.w - 2.2) / 2;
-        return [r.x + half / 2, r.x + r.w - half / 2].map((x) => (
-          <mesh key={`${area}-${x}`} position={[x, 0.75, z]}>
-            <boxGeometry args={[half - 0.1, 1.5, 0.06]} />
-            <meshStandardMaterial color="#9fd3e6" transparent opacity={0.28} />
-          </mesh>
-        ));
-      })}
-      {/* The desks of the roles, the study desks and the charging pads */}
-      {[...Object.values(ROLE_DESKS), ...TRAINING_DESKS].map((d) => (
-        <mesh key={`${d.x}-${d.y}`} position={[d.x + d.w / 2, 0.38, d.y + d.d / 2]} castShadow>
-          <boxGeometry args={[d.w, 0.76, d.d]} />
-          <meshStandardMaterial color={desk} roughness={0.7} />
-        </mesh>
-      ))}
-      {CHARGING_PADS.map((pad) => (
-        <mesh key={`${pad.x}-${pad.y}`} position={[pad.x + pad.w / 2, 0.03, pad.y + pad.d / 2]}>
-          <cylinderGeometry
-            args={[Math.min(pad.w, pad.d) / 2, Math.min(pad.w, pad.d) / 2, 0.06, 32]}
-          />
-          <meshStandardMaterial color="#3a3320" emissive="#e9cf9a" emissiveIntensity={0.25} />
-        </mesh>
-      ))}
-    </group>
-  );
 }
 
 /** Where every employee stands right now, by role: read each frame by the name tags */
@@ -355,8 +275,11 @@ export default function OfficeCanvas3D({
   onWalking?: (role: AiEmployeeRole, walking: boolean) => void;
 }) {
   const places = useRef<Places3D>({});
+  // When somebody last moved over the floor: the shadows are drawn again while they do
+  const movedAt = useRef(0);
   const onMove = (role: AiEmployeeRole, at: FloorPoint) => {
     places.current[role] = at;
+    movedAt.current = performance.now();
   };
   return (
     <Canvas
@@ -382,20 +305,12 @@ export default function OfficeCanvas3D({
         onView={onView}
       />
       <FrameCounter onFps={onFps} onReady={onReady} />
-      <ambientLight intensity={night ? 0.55 : 1.1} />
-      <directionalLight
-        position={[-8, 24, 14]}
-        intensity={night ? 0.5 : 1.6}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
-      />
+      <OfficeReflections night={night} />
+      <OfficeShadowPace walking={() => performance.now() - movedAt.current < 200} />
+      <OfficeDaylight night={night} />
       {/* The middle of the floor sits at the origin, where the camera looks */}
       <group position={[-FLOOR_WIDTH / 2, 0, -FLOOR_DEPTH / 2]}>
-        <Floor night={night} />
+        <OfficeScenery night={night} />
         {vacant.map((role) => (
           <VacantSeat key={role} role={role} night={night} />
         ))}
