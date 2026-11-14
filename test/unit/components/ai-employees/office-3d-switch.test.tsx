@@ -1,7 +1,8 @@
 /**
  * The switch to the 3D floor of the full-screen office (#1135, spike): its own key, the 2D floor
- * kept until the 3D one drew, and the way back to 2D when it cannot be shown. The 3D canvas
- * itself is mocked: three.js is never loaded here.
+ * kept until the 3D one drew, and the way back to 2D when it cannot be shown. A production build
+ * offers the switch and the frame rate but not the trial panel (#1157). The 3D canvas itself is
+ * mocked: three.js is never loaded here.
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
@@ -13,6 +14,7 @@ import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  trial: true,
   breaks: false,
   draws: true,
   statuses: [] as string[],
@@ -24,12 +26,14 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
   default: function Canvas3DStub({
     employees,
     vacant,
+    onFps,
     onReady,
     onView,
     onWalking,
   }: {
     employees: readonly { status: string }[];
     vacant?: readonly string[];
+    onFps?: (fps: number) => void;
     onReady?: () => void;
     onView?: (view: unknown, places: unknown) => void;
     onWalking?: (role: string, walking: boolean) => void;
@@ -41,6 +45,7 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
     useEffect(() => {
       if (!mocks.draws) return;
       onReady?.();
+      onFps?.(42);
       // A frame: the real canvas tells where the camera looks, and the tags are placed
       const frame = window.setTimeout(() =>
         onView?.(
@@ -54,10 +59,27 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
         )
       );
       return () => window.clearTimeout(frame);
-    }, [onReady, onView]);
+    }, [onFps, onReady, onView]);
     return <div data-testid="floor-3d" />;
   },
 }));
+
+// The development-only trial, switched off to see what a production build offers
+vi.mock(
+  '@/components/features/ai-employees/office-3d/office-3d-trial',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('@/components/features/ai-employees/office-3d/office-3d-trial')
+      >();
+    return {
+      ...actual,
+      get OFFICE_3D_TRIAL() {
+        return mocks.trial;
+      },
+    };
+  }
+);
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
@@ -106,6 +128,7 @@ async function enterOffice() {
 
 describe('the switch to the 3D floor', () => {
   beforeEach(() => {
+    mocks.trial = true;
     mocks.breaks = false;
     mocks.draws = true;
     mocks.statuses = [];
@@ -113,7 +136,7 @@ describe('the switch to the 3D floor', () => {
 
   it('is on V, not on a number: the numbers belong to the rooms', async () => {
     const { user, office } = await enterOffice();
-    expect(within(office).getByRole('button', { name: /3D（検証）/ })).toHaveTextContent('V');
+    expect(within(office).getByRole('button', { name: /3D（試験中）/ })).toHaveTextContent('V');
     await user.keyboard('3');
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
     await user.keyboard('v');
@@ -143,7 +166,7 @@ describe('the switch to the 3D floor', () => {
       await within(office).findByText('3D のフロアを表示できませんでした。2D の表示に戻しました。')
     ).toBeInTheDocument();
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /3D（検証）/ })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /3D（試験中）/ })).toBeInTheDocument();
     // The office is still there, and its keys still work
     await user.keyboard('c');
     expect(
@@ -201,5 +224,51 @@ describe('the switch to the 3D floor', () => {
     await user.keyboard('v');
     await within(office).findByText('3D の検証');
     expect(mocks.statuses).toEqual(['training']);
+  });
+});
+
+describe('the switch to the 3D floor in a production build (#1157)', () => {
+  beforeEach(() => {
+    mocks.trial = false;
+    mocks.breaks = false;
+    mocks.draws = true;
+    mocks.statuses = [];
+  });
+
+  it('starts in 2D, switches to 3D and back, and shows how fast the device draws', async () => {
+    const { user, office } = await enterOffice();
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    await user.click(within(office).getByRole('button', { name: /3D（試験中）/ }));
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(await within(office).findByText('毎秒 42 コマ')).toBeInTheDocument();
+    await user.click(within(office).getByRole('button', { name: /2D に戻す/ }));
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    expect(within(office).queryByText('毎秒 42 コマ')).not.toBeInTheDocument();
+    // The key works too
+    await user.keyboard('v');
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+  });
+
+  it('never shows the trial panel that pretends statuses', async () => {
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await within(office).findByText('毎秒 42 コマ');
+    expect(within(office).queryByText('3D の検証')).not.toBeInTheDocument();
+    expect(within(office).queryByRole('button', { name: '作業中' })).not.toBeInTheDocument();
+  });
+
+  it('says that the 3D floor loads, and goes back to 2D when it cannot be shown', async () => {
+    mocks.draws = false;
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    expect(await within(office).findByText('3D のフロアを読み込んでいます。')).toBeInTheDocument();
+    await user.keyboard('v');
+    mocks.breaks = true;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await user.keyboard('v');
+    expect(
+      await within(office).findByText('3D のフロアを表示できませんでした。2D の表示に戻しました。')
+    ).toBeInTheDocument();
+    errors.mockRestore();
   });
 });
