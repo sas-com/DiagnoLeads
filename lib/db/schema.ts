@@ -804,6 +804,89 @@ export const appointmentReviewNotices = pgTable(
 );
 
 /**
+ * AI Employees (Refs #1101, Epic #1100)
+ * Automated workers an organization hires, one per role at most. The roles and the work each one
+ * does are defined in code (lib/features/ai-employees/types/roles.ts); only the hiring is stored.
+ */
+export const aiEmployees = pgTable(
+  'ai_employees',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** AI_EMPLOYEE_ROLES */
+    role: text('role').notNull(),
+    /** Name shown on the desk */
+    name: text('name').notNull(),
+    /** 'active' works on its schedule; 'paused' does not work */
+    status: text('status').default('active').notNull(),
+    /**
+     * How the employee was customized (#1134): the look of its robot, its tone, its ability points
+     * and its work style. Read through resolveAiEmployeeProfile, which fills what is missing
+     */
+    profile: jsonb('profile').$type<Record<string, unknown>>().default({}).notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('ai_employees_organization_role_unique').on(table.organizationId, table.role),
+    check('ai_employees_status_check', sql`${table.status} IN ('active', 'paused')`),
+  ]
+);
+
+export type AiEmployee = typeof aiEmployees.$inferSelect;
+
+/**
+ * AI Employee Runs (Refs #1101, Epic #1100)
+ * One row each time an AI employee works. Counts and codes only: never a lead, a person or a
+ * prompt, so the log can be shown to every member of the organization. The rows outlive a
+ * dismissed employee (employee_id becomes null, the role stays) so the work done stays on record.
+ */
+export const aiEmployeeRuns = pgTable(
+  'ai_employee_runs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Null once the employee was dismissed */
+    employeeId: uuid('employee_id').references(() => aiEmployees.id, { onDelete: 'set null' }),
+    /** AI_EMPLOYEE_ROLES: the role of the employee when it ran */
+    role: text('role').notNull(),
+    /** 'schedule' | 'manual' */
+    trigger: text('trigger').notNull(),
+    /** 'running' | 'succeeded' | 'failed' */
+    status: text('status').default('running').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    /** How many items the run handled (leads scored, tasks checked, ...) */
+    processedCount: integer('processed_count').default(0).notNull(),
+    /**
+     * Short code of the outcome or the error (e.g. 'rate_limited'), never free text: an error
+     * message can carry a lead's values, and every member reads this column
+     */
+    resultCode: text('result_code'),
+  },
+  (table) => [
+    index('ai_employee_runs_employee_started_idx').on(table.employeeId, table.startedAt),
+    index('ai_employee_runs_organization_started_idx').on(table.organizationId, table.startedAt),
+    check('ai_employee_runs_trigger_check', sql`${table.trigger} IN ('schedule', 'manual')`),
+    check(
+      'ai_employee_runs_result_code_check',
+      sql`${table.resultCode} IS NULL OR ${table.resultCode} ~ '^[a-z_]{1,40}$'`
+    ),
+    check(
+      'ai_employee_runs_status_check',
+      sql`${table.status} IN ('running', 'succeeded', 'failed')`
+    ),
+  ]
+);
+
+export type AiEmployeeRun = typeof aiEmployeeRuns.$inferSelect;
+
+/**
  * Lead Hearings
  * What sales heard in the initial AX migration meetings, several per lead (Refs #84). Field
  * keys are defined in lib/features/lead-hearings/catalog.ts; only values are stored here.

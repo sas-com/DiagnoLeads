@@ -10,6 +10,7 @@ export const ADMIN_PAGE_PREFIXES = [
   '/deals',
   '/forecast',
   '/analytics',
+  '/office',
   '/settings',
   '/organizations',
   '/prospects',

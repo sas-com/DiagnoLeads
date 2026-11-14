@@ -4,6 +4,7 @@ import { useSidebar } from '@/context/SidebarContext';
 import {
   RiBarChartLine,
   RiBriefcase4Line,
+  RiBuilding2Line,
   RiCalendarTodoLine,
   RiDashboardLine,
   RiLineChartLine,
@@ -83,6 +84,12 @@ const AppSidebar: React.FC = () => {
         name: t('analytics'),
         nameKey: 'analytics',
         path: `/${locale}/analytics`,
+      },
+      {
+        icon: <RiBuilding2Line className="w-5 h-5" />,
+        name: t('office'),
+        nameKey: 'office',
+        path: `/${locale}/office`,
       },
     ],
     [locale, t]

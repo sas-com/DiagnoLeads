@@ -4,6 +4,7 @@ import { actTimingRouter } from '@/lib/features/act-timing/api/router';
 import { agencyContractsRouter } from '@/lib/features/agency-contracts/api/router';
 import { agencyHandoversRouter } from '@/lib/features/agency-handovers/api/router';
 import { agencyLinksRouter } from '@/lib/features/agency-links/api/router';
+import { aiEmployeesRouter } from '@/lib/features/ai-employees/api/router';
 import { aiRouter } from '@/lib/features/ai/api/router';
 import { analyticsRouter } from '@/lib/features/analytics/api/router';
 import { appointmentReviewsRouter } from '@/lib/features/appointment-reviews/api/router';
@@ -91,6 +92,7 @@ export const appRouter = router({
   salesTargets: salesTargetsRouter, // Monthly targets per member and organization (Refs #437)
   salesForecast: salesForecastRouter, // Forecast against the targets and the week's changes (Refs #437)
   fieldGlossary: fieldGlossaryRouter, // Site-wide help text and value candidates for input fields (Epic #780)
+  aiEmployees: aiEmployeesRouter, // AI employees and their office (Refs #1101, Epic #1100)
 });
 
 export type AppRouter = typeof appRouter;
