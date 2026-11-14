@@ -3,7 +3,10 @@
  * deal file in which the deal is moved by one stage and its next action is settled, with an undo.
  * Real next-intl messages; tRPC mocked.
  */
+import { OfficeDealFile } from '@/components/features/ai-employees/office-deal-file';
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
+import type { RoomKeys } from '@/components/features/ai-employees/office-room-contract';
+import type { BoardDeal } from '@/components/features/ai-employees/rooms/deals-board';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -278,12 +281,12 @@ describe('the sales floor', () => {
         .map((row) => row.textContent?.match(/見本の商談\d/)?.[0]);
     expect(names()).toEqual(['見本の商談2', '見本の商談3']);
     expect(within(board).getByRole('button', { name: /見本の商談2/ })).toHaveTextContent(
-      '2026/11/10期限を過ぎています見本の次の行動2'
+      '2026/11/10期限切れ見本の次の行動2'
     );
 
     await user.keyboard('2');
     expect(names()).toEqual(['見本の商談1', '見本の商談3']);
-    expect(within(board).getAllByText('決まっていません')).toHaveLength(2);
+    expect(within(board).getAllByText('次の行動なし')).toHaveLength(2);
 
     await user.keyboard('3');
     expect(mocks.inputs.at(-1)).toMatchObject({ organizationId: ORG_ID, owner: 'mine' });
@@ -330,7 +333,7 @@ describe('the sales floor', () => {
   it('says why a deal is listed for this week when it is its expected close date', async () => {
     const { board } = await enterSalesFloor();
     expect(within(board).getByRole('button', { name: /見本の商談3/ })).toHaveTextContent(
-      '決まっていません受注予定 2026/11/15'
+      '次の行動なし受注予定 2026/11/15'
     );
     expect(within(board).getByRole('button', { name: /見本の商談2/ })).not.toHaveTextContent(
       '受注予定'
@@ -444,8 +447,9 @@ describe('a deal file on the sales floor', () => {
     const question = within(office).getByText(
       '「課題の確認」に進める前に、初回ヒアリングの結果からリード「見本商事1」の SQL判定を記録してください。'
     );
-    // The question holds the focus, not an answer
-    expect(document.activeElement).toBe(question);
+    // The question holds the focus as a whole (read out from its title), not an answer
+    expect(document.activeElement).toBe(within(office).getByRole('region', { name: 'SQL判定' }));
+    expect(document.activeElement).toContainElement(question);
     await user.keyboard('1234z{Enter}');
     expect(mocks.moves).toHaveLength(0);
     expect(within(office).getByRole('link', { name: /不適格：商談のページで失注にする/ })).toHaveAttribute(
@@ -478,7 +482,10 @@ describe('a deal file on the sales floor', () => {
     await user.keyboard('1{Escape}');
     expect(within(office).queryByText(/SQL判定を記録してください/)).not.toBeInTheDocument();
     expect(file).toBeInTheDocument();
-    expect(choice(office, /「課題の確認」へ進める/)).not.toHaveAttribute('aria-disabled');
+    // The choice says beforehand that the question comes first
+    expect(choice(office, /「課題の確認」へ進める（先に SQL判定）/)).not.toHaveAttribute(
+      'aria-disabled'
+    );
     expect(mocks.moves).toHaveLength(0);
   });
 
@@ -529,6 +536,24 @@ describe('a deal file on the sales floor', () => {
     await user.keyboard('z');
     expect(mocks.moves.at(-1)).toMatchObject({ stage: 'discovery', probability: 20 });
     expect(mocks.marks).toHaveLength(1);
+  });
+
+  it('offers the usual due days beside the date, as buttons of the field', async () => {
+    const { user, office } = await openFile('見本の商談3');
+    await user.keyboard('4');
+    const due = within(office).getByLabelText('期限（必須）');
+    expect(within(office).getByRole('button', { name: '明日' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await user.click(within(office).getByRole('button', { name: '来週の月曜' }));
+    expect(due).toHaveValue('2026-11-16');
+    await user.click(within(office).getByRole('button', { name: '3日後' }));
+    expect(due).toHaveValue('2026-11-16');
+    // Choosing a day sends nothing
+    expect(mocks.added).toHaveLength(0);
+    await user.type(within(office).getByLabelText('次にすること（必須）'), '見積を送る{Enter}');
+    expect(mocks.added[0]).toMatchObject({ title: '見積を送る', dueOn: '2026-11-16' });
   });
 
   it('says what is missing when a next action is sent without it', async () => {
@@ -613,6 +638,38 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.moves).toHaveLength(0);
     expect(mocks.marks).toHaveLength(0);
     expect(choice(office, /ボードに戻る/)).toHaveTextContent('Esc');
+  });
+
+  it('takes no answers over a deal that left the boards meanwhile, and says why', () => {
+    const keys = { current: null as RoomKeys | null };
+    render(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <OfficeDealFile
+          organizationId={ORG_ID}
+          deal={mocks.deals[2] as unknown as BoardDeal}
+          today={TODAY}
+          canEdit
+          gone
+          header={null}
+          keysRef={keys}
+          onClose={vi.fn()}
+          onLeaveOffice={vi.fn()}
+        />
+      </NextIntlClientProvider>
+    );
+    expect(screen.getByText(/この商談は、いまのボードにありません/)).toBeInTheDocument();
+    expect(screen.queryByText('商談を変える権限がありません。')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /へ進める/ })).not.toBeInTheDocument();
+    // The keys carry nothing out either
+    for (const key of ['1', '2', '3', '4', 'Z']) {
+      keys.current?.({ key, isComposing: false, keyCode: 0, preventDefault: vi.fn() });
+    }
+    expect(mocks.moves).toHaveLength(0);
+    expect(mocks.marks).toHaveLength(0);
+    expect(screen.queryByLabelText('次にすること（必須）')).not.toBeInTheDocument();
+    // The file is still shown as it was, with the way back
+    expect(screen.getByRole('region', { name: '「見本の商談3」の商談ファイル' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ボードに戻る/ })).toHaveTextContent('Esc');
   });
 
   it('says so when a move did not go through, and leaves the deal where it was', async () => {

@@ -98,7 +98,7 @@ export function RoomChoiceButton({
         'flex min-h-11 w-full items-center gap-3 border px-3 text-left text-sm font-bold',
         closed
           ? cn(
-              'border-[#f5f1e8]/35 bg-[#f5f1e8]/5 opacity-45',
+              'border-[#f5f1e8]/35 bg-[#f5f1e8]/5 opacity-60',
               waiting ? 'cursor-wait' : 'cursor-not-allowed'
             )
           : choiceClass(filled),

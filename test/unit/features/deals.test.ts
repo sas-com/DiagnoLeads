@@ -31,6 +31,7 @@ import {
   STAGE_PROBABILITY,
   forecastCategory,
   isOpenStage,
+  moveIsUndoable,
   skipsSqlDecision,
   weightedAmount,
 } from '@/lib/features/deals/types/pipeline';
@@ -737,5 +738,12 @@ describe('canReadDeals and canWriteDeals', () => {
     expect(ctx.ability.can('delete', 'Lead')).toBe(true);
     expect(canWriteDeals(ctx, 'update')).toBe(false);
     expect(canWriteDeals(ctx, 'delete')).toBe(false);
+  });
+});
+
+describe('moveIsUndoable', () => {
+  it('offers no undo for a move that handed the lead off (#720)', () => {
+    expect(moveIsUndoable({ handedOff: false })).toBe(true);
+    expect(moveIsUndoable({ handedOff: true })).toBe(false);
   });
 });
