@@ -1,5 +1,6 @@
 'use client';
 
+import { isImeKey } from '@/components/ui/ime';
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
@@ -145,6 +146,8 @@ export function OfficeRoomDue({
   // The room's keys: each one keeps its meaning, and one that is closed right now does nothing.
   // Esc goes back to the floor, and is the office's.
   const onRoomKey: RoomKeys = (event) => {
+    // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
+    if (isImeKey(event)) return false;
     const action = dueActionOfKey(event.key);
     if (!action) return false;
     event.preventDefault();

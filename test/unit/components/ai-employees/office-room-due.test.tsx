@@ -6,7 +6,7 @@
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -312,6 +312,18 @@ describe('the reception', () => {
     expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
+  });
+
+  it('takes no key of a Japanese conversion (IME) as an answer or as the way back (#1140)', async () => {
+    const { office, board } = await enterReception();
+    fireEvent.keyDown(office, { key: '1', isComposing: true });
+    fireEvent.keyDown(office, { key: '1', keyCode: 229 });
+    fireEvent.keyDown(office, { key: '2', isComposing: true });
+    expect(mocks.updates).toHaveLength(0);
+    expect(within(board).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
+    fireEvent.keyDown(office, { key: 'Escape', isComposing: true });
+    fireEvent.keyDown(office, { key: 'Escape', keyCode: 229 });
+    expect(within(office).getByRole('region', { name: '今日の期限' })).toBeInTheDocument();
   });
 
   it('shows a takeaway with whom to check, and the note', async () => {

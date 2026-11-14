@@ -1,5 +1,6 @@
 'use client';
 
+import { isImeKey } from '@/components/ui/ime';
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { OfficeEmployee } from '@/lib/features/ai-employees/service';
 import {
@@ -114,6 +115,8 @@ export function OfficeStudio({
 
   // The studio's keys: the numbers open the tabs. Esc goes back, after the warning.
   const onStudioKey: RoomKeys = (event) => {
+    // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
+    if (isImeKey(event)) return false;
     if (event.key === 'Escape') return warnBeforeLeaving();
     const opened = studioTabOfKey(event.key);
     if (!opened) return false;
