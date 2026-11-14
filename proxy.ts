@@ -7,6 +7,7 @@ import { intlMiddleware, shouldSkipI18nMiddleware, stripLocalePrefix } from './l
 import { signInRedirect } from './lib/middleware/auth-redirect';
 import { SIGN_IN_REDIRECT_CACHE_HEADERS, getCacheHeaders } from './lib/middleware/cache-headers';
 import { contentSecurityPolicy, isLocalHost } from './lib/middleware/csp';
+import { withoutForeignOfficeEntry } from './lib/middleware/office-entry';
 import {
   checkRateLimit,
   getRateLimitConfig,
@@ -101,10 +102,17 @@ export async function proxy(request: NextRequest) {
   // 4. Signed-out visitors of admin pages go to sign-in. Each API checks the session itself;
   // this only avoids showing an empty admin shell (lib/middleware/auth-redirect.ts).
   const signIn = signInRedirect(request);
+  // 4a. Another site may not open the office in its full-screen view, where keys alone reach
+  // actions: the mark that opens it is dropped first, so that it is not carried through the
+  // sign-in either (lib/middleware/office-entry.ts, #1175)
+  const plainOffice = withoutForeignOfficeEntry(request);
+  const redirect = plainOffice ?? signIn;
   // Build on the next-intl response: it carries the locale header that server components
   // read through getTranslations() / getRequestConfig(). Replacing it with a plain
   // NextResponse.next() made every server-rendered string fall back to Japanese on /en.
-  const response = signIn ? NextResponse.redirect(signIn) : (intlResponse ?? NextResponse.next());
+  const response = redirect
+    ? NextResponse.redirect(redirect)
+    : (intlResponse ?? NextResponse.next());
 
   // 5. Add rate limit headers to response
   setRateLimitHeaders(response.headers, rateLimitResult);
@@ -115,7 +123,8 @@ export async function proxy(request: NextRequest) {
   }
 
   // 7. Add cache control headers
-  const cacheHeaders = signIn ? SIGN_IN_REDIRECT_CACHE_HEADERS : getCacheHeaders(pathname);
+  // Either redirect depends on who asks (a cookie, the site the request came from): never kept
+  const cacheHeaders = redirect ? SIGN_IN_REDIRECT_CACHE_HEADERS : getCacheHeaders(pathname);
   for (const [key, value] of Object.entries(cacheHeaders)) {
     response.headers.set(key, value);
   }
