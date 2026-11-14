@@ -1,5 +1,5 @@
 /**
- * The first-day checklist on the dashboard (Epic #877, #875): what a new owner or admin sets up,
+ * The first-day checklist on 今日 (Epic #877, #875; on the dashboard until #1164): what a new owner or admin sets up,
  * and what a new member learns first. Each item opens its screen and its help article. Items with
  * `detect` are done when the organization's data says so; the others are marked done by hand.
  * Labels live in locales (help.checklist.items.<id>).
