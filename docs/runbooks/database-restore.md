@@ -19,7 +19,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 何を | `public`・`drizzle`・`app` スキーマの定義とデータ（pg_dump 17、custom 形式）。`cms` は含めない（CMS のパスワードのハッシュがあり、本番の CMS はオフ） |
+| 何を | `public`・`drizzle`・`app` スキーマの定義とデータ（pg_dump 17、custom 形式）。`cms` は含めない（CMS のパスワードのハッシュがあり、本番の CMS はオフ）。表 `public.site_visit_salts`（訪問者のハッシュに使うその日のソルト）も含めない（`dl_readonly` は読めず、データだけを外しても pg_dump は表をロックするので止まる。戻すときに空の表を作り直す。#1126） |
 | どの接続で | 読み取り専用のユーザー `dl_readonly`。接続文字列は `~/.config/diagnoleads/prod-ro.env`（権限 600）にだけ置き、表示しない |
 | どこに | オーナーの PC（WSL）の `~/diagnoleads-backups/`（フォルダ 700・ファイル 600）。リポジトリ・チャット・Issue には置かない |
 | いつ | cron で1時間ごとに起動し、その日（日本時間）の分がまだなければ書き出す。PC が動いている日だけ取れる。本番に SQL を流す前は必ず `--now` で書き出す |
@@ -27,6 +27,8 @@
 | 誰が | 仕組みは自動。中身の確認と戻す判断はオーナー、作業は Claude とオーナー |
 | 暗号化 | ファイル自体は暗号化していない。PC のディスクの暗号化（BitLocker）と、ファイルの権限で守る |
 | スクリプト | `scripts/prod-dump.sh`（書き出し）、`scripts/prod-dump-verify.sh`（使い捨ての DB に戻して件数を出す）、`scripts/prod-restore-to.sh`（新しいプロジェクトへ戻す）。cron が動かすのは `~/diagnoleads-prod-db/prod-dump.sh` の写しで、リポジトリの版を変えたら写し直す |
+
+写し直したら、`bash ~/diagnoleads-prod-db/prod-dump.sh --now` で1回書き出して通ることを確かめる（読めない表があると、その日の控えが取れない。#1126）。
 
 状態の確かめ方：`ls -l ~/diagnoleads-backups/`（今日の日付のファイルがあるか）と `tail ~/diagnoleads-backups/dump.log`。
 
@@ -46,8 +48,9 @@
    - 新しいプロジェクトの接続文字列（Session pooler、`postgres` ユーザー）を聞かれるので貼る。画面には出ない
    - `public` に表が1つでもあれば止まる（本番に流してしまわないため）
    - 拡張機能（ltree・vector・pgcrypto・uuid-ossp）は `extensions` スキーマに自動で入れる
+   - 控えに入っていない `site_visit_salts` は、空の表として自動で作り直す（その日のソルトはその日だけ使うので、失うものはない）
 4. **CMS を使っていたら**：`cms/migrations/sql/` の SQL を、新しいプロジェクトの SQL Editor で流す（控えに cms は入っていない）
-5. **読み取り専用のユーザーを作り直す**：`~/diagnoleads-prod-db/setup-prod-ro.sh` の手順で `dl_readonly` を作り、連番の読み取り（`GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle`）も付ける
+5. **読み取り専用のユーザーを作り直す**：`~/diagnoleads-prod-db/setup-prod-ro.sh` の手順で `dl_readonly` を作り、連番の読み取り（`GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle`）も付ける。そのあと `site_visit_salts` を `dl_readonly` から読めなくする（`docs/site-visits.md` の「`dl_readonly` の権限」）。読めるままだと鍵が漏れたときに訪問者を突き合わせられ、読めなくしたあとで控えのスクリプトがこの表を含めると止まる
 6. **接続先を切り替える**（オーナー）：Vercel の Production の `DATABASE_URL`（ほかに DB の接続文字列を使う変数があればそれも）を新しいプロジェクトに替えて、再デプロイする
 
 ## 5. 戻した後

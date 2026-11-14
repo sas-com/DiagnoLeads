@@ -32,5 +32,17 @@ trap 'rm -f "$list"' EXIT
 docker run --rm -i "$PG_IMAGE" pg_restore --list < "$DUMP" | grep -vE ' (SCHEMA|COMMENT - SCHEMA) (- )?public ' > "$list"
 docker run --rm -i --network host -e TARGET_URL -v "$list:/restore.list:ro" "$PG_IMAGE" \
   sh -c 'pg_restore -d "$TARGET_URL" --no-owner --no-privileges --exit-on-error -L /restore.list' < "$DUMP"
+
+# prod-dump.sh leaves out site_visit_salts (dl_readonly cannot read it, #1126); recreate it empty.
+# Same definition as drizzle/0031_site_visits.sql (test/unit/scripts/prod-backup-scripts.test.ts
+# keeps them equal). A day's salt is only needed that day, so nothing is lost.
+psql_ <<'SQL'
+CREATE TABLE "site_visit_salts" (
+	"day" date PRIMARY KEY NOT NULL,
+	"salt" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE "site_visit_salts" ENABLE ROW LEVEL SECURITY;
+SQL
 unset TARGET_URL
 echo "Restored $(basename "$DUMP"). Next: section 4 of docs/runbooks/database-restore.md."
