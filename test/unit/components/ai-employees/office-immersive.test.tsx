@@ -10,7 +10,7 @@ import { AI_EMPLOYEE_ROLES } from '@/lib/features/ai-employees/types/roles';
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -298,6 +298,33 @@ describe('OfficeImmersive', () => {
     await user.click(within(office).getByRole('button', { name: /またあとで/ }));
     expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
     expect(mocks.updates).toEqual([]);
+  });
+
+  it('leaves the keys of a Japanese conversion (IME) alone: no order, no step back (#1140)', async () => {
+    const user = userEvent.setup();
+    const { office, onExit } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    const floor = () => within(office).queryByRole('heading', { name: '社員名簿' });
+    expect(floor()).toBeInTheDocument();
+
+    // Chrome marks the keys of an open conversion; Safari sends the last one with keyCode 229
+    fireEvent.keyDown(office, { key: 'e', isComposing: true });
+    fireEvent.keyDown(office, { key: 'E', keyCode: 229 });
+    expect(within(office).queryByText('社長（あなた）')).not.toBeInTheDocument();
+    fireEvent.keyDown(office, { key: 'Escape', isComposing: true });
+    fireEvent.keyDown(office, { key: 'Escape', keyCode: 229 });
+    expect(floor()).toBeInTheDocument();
+    expect(onExit).not.toHaveBeenCalled();
+
+    // The same keys outside a conversion still work
+    await user.keyboard('e');
+    expect(within(office).getByText('社長（あなた）')).toBeInTheDocument();
+    fireEvent.keyDown(office, { key: '1', isComposing: true });
+    expect(mocks.hires).toHaveLength(0);
+    fireEvent.keyDown(office, { key: 'Escape', keyCode: 229 });
+    expect(within(office).getByText('社長（あなた）')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(floor()).toBeInTheDocument();
   });
 
   it('steps back with Esc: conversation, office, title, out', async () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import { isImeKey } from '@/components/ui/ime';
 import { type RouterOutputs, trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
@@ -19,8 +20,16 @@ import {
 
 export type BoardLead = RouterOutputs['leads']['list']['items'][number];
 
+/**
+ * The key a room is handed: enough of the browser's event to read the key and to tell whether it
+ * belongs to a Japanese conversion (IME), which a room must never take as an answer
+ */
+export type RoomKeyEvent = Pick<KeyboardEvent, 'key' | 'isComposing' | 'keyCode'> & {
+  preventDefault: () => void;
+};
+
 /** What the keys of a room do; true when the key was used */
-export type RoomKeys = (event: { key: string; preventDefault: () => void }) => boolean;
+export type RoomKeys = (event: RoomKeyEvent) => boolean;
 
 /** The colour of a lead status on the dark board; the word is always shown with it */
 export const LEAD_STATUS_COLORS: Record<string, string> = {
@@ -127,6 +136,8 @@ export function OfficeLeadFile({
   // (it is still used up, so it never reaches the room behind the file). Enter and Tab are left
   // to the focused control; Esc goes back, and is the room's.
   const onFileKey: RoomKeys = (event) => {
+    // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
+    if (isImeKey(event)) return false;
     const action = fileActionOfKey(event.key);
     if (!action) return false;
     event.preventDefault();

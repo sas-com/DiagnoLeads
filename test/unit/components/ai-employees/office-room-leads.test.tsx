@@ -8,7 +8,7 @@ import { OfficeImmersive } from '@/components/features/ai-employees/office-immer
 import { LEAD_BOARD_PAGE_SIZE } from '@/components/features/ai-employees/office-rooms';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -531,6 +531,15 @@ describe('the customer file in the room', () => {
     expect(
       within(office).getByText('マーケターは空席です。数字は記録から読み上げています。')
     ).toBeInTheDocument();
+  });
+
+  it('records nothing and stays open on a key of a Japanese conversion (IME) (#1140)', async () => {
+    const { office } = await openFile();
+    fireEvent.keyDown(office, { key: '1', isComposing: true });
+    fireEvent.keyDown(office, { key: '3', keyCode: 229 });
+    expect(mocks.recorded).toHaveLength(0);
+    fireEvent.keyDown(office, { key: 'Escape', isComposing: true });
+    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
   });
 
   it('reads the last contact from the records', async () => {

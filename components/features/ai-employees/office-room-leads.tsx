@@ -1,5 +1,6 @@
 'use client';
 
+import { isImeKey } from '@/components/ui/ime';
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
@@ -146,6 +147,8 @@ export function OfficeRoomLeads({
   // Enter opens the focused row by itself (the rows are buttons). While a file is open, the keys
   // are the file's, and Esc closes it instead of leaving the room.
   const onRoomKey: RoomKeys = (event) => {
+    // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
+    if (isImeKey(event)) return false;
     if (open) {
       if (event.key === 'Escape') {
         setOpen(null);
