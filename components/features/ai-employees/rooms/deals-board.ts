@@ -27,8 +27,12 @@ export type DealBoardView = (typeof DEAL_BOARD_VIEWS)[number];
 /** The view the board opens on: what has to move by the end of this week */
 export const DEAL_BOARD_FIRST_VIEW: DealBoardView = 'thisWeek';
 
-/** Rows of the board per page: what fits on the wall without scrolling */
-export const DEAL_BOARD_PAGE_SIZE = 8;
+/**
+ * Rows of the board per page: what fits on the wall without scrolling on a screen 768px high,
+ * where a row with a next action and an expected close date takes three lines (measured in a
+ * browser, #1205: eight rows did not fit)
+ */
+export const DEAL_BOARD_PAGE_SIZE = 6;
 
 /** The view a number key chooses (1 is the first), if any */
 export function dealBoardViewOfKey(key: string): DealBoardView | null {
