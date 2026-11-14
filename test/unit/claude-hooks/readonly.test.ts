@@ -80,7 +80,7 @@ describe('readOnlyViolation', () => {
     allowed('bun run verify && bun run verify --plan && bun run verify --full --maxWorkers=2');
     allowed('bunx vitest run test/unit/a.test.ts && bunx tsc --noEmit');
     allowed("bunx vitest run test/unit/a.test.ts -t 'name' --reporter=verbose --silent");
-    allowed('bunx vitest run --project unit --maxWorkers 2 --bail --run -t=-negative');
+    allowed('bunx vitest run --project unit --maxWorkers 2 --bail 1 --run -t=-negative');
     allowed('bunx @biomejs/biome check . && bun x vitest --run');
     allowed('curl -sS https://code.claude.com/docs/en/hooks.md | grep -n onFailure');
     allowed("curl -o /dev/null -w '%{http_code}' https://example.com && curl -sSL https://x/a.md");
@@ -334,6 +334,12 @@ describe('readOnlyViolation', () => {
       'bun run verify --maxWorkers --outputFile x',
       'bunx vitest run -t --root /tmp',
       'bun run test:run --exclude --setupFiles /tmp/x.ts',
+      'bunx vitest run --reporter --config x',
+      'bunx vitest run --project= init browser',
+      'bunx vitest run -ut',
+      // Only the leading -- is dropped; a later one would make vitest read init as the command
+      'npm run test -- -t a -t -- init browser',
+      'bun run test:run -t a -t -- init browser',
       'bunx vitest run --config /tmp/x.ts',
       'bunx vitest run --root /tmp',
       'bunx vitest run --coverage',
