@@ -20,6 +20,26 @@
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import { AI_EMPLOYEE_ROLES, type AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import {
+  BACK_WINDOWS,
+  LEFT_WINDOWS,
+  LOUNGE_CHAIRS,
+  LOUNGE_TABLE,
+  MARKETING_DESKS,
+  MARKETING_TABLE,
+  MARKETING_TABLE_CHAIRS,
+  MEETING_CHAIRS,
+  PARTITIONS,
+  PARTITION_HEIGHT,
+  PENDANTS,
+  PENDANT_CORD_TOP,
+  PENDANT_HEIGHT,
+  PLANTS,
+  SALES_DESKS,
+  SERVER_RACKS,
+  SPARE_STUDY_DESKS,
+  chairOfDesk,
+} from './office-furniture';
+import {
   AREA_RECTS,
   CHARGING_PADS,
   DESK_SEATS,
@@ -27,7 +47,6 @@ import {
   OFFICE_AREAS,
   type OfficeArea,
   ROLE_DESKS,
-  SEAT_BEHIND_DESK,
   TRAINING_DESKS,
   spotOf,
 } from './office-map-layout';
@@ -105,39 +124,6 @@ const onBack: OnWall = (u, z, lift = 0.006) => [u, lift, z];
 const onLeft: OnWall = (u, z, lift = 0.006) => [lift, u, z];
 const rectOn = (at: OnWall, a: number, b: number, z0: number, z1: number, lift?: number) =>
   pts([at(a, z0, lift), at(b, z0, lift), at(b, z1, lift), at(a, z1, lift)]);
-
-/** The windows of the back wall (along x) and of the left wall (along y) */
-const BACK_WINDOWS: readonly (readonly [number, number])[] = [
-  [0.6, 4.7],
-  [5.3, 9.4],
-  [17.4, 19.3],
-];
-const LEFT_WINDOWS: readonly (readonly [number, number])[] = [
-  [0.6, 3.8],
-  [4.3, 7.5],
-];
-
-/**
- * Where the pendant lamps hang: over the aisles, the tables and the counter. None hangs between
- * the viewer and a place where a robot can be (a lamp is drawn 2.85 above its floor point, so it
- * would cover the robot); the test checks it.
- */
-export const PENDANTS: readonly (readonly [number, number])[] = [
-  [3.6, 6.6],
-  [7.2, 6.6],
-  [8.6, 3.9],
-  [12.4, 5.9],
-  [20.4, 6.9],
-  [12.3, 11.2],
-  [7.2, 11.0],
-  [7.5, 15.6],
-  [4.7, 9],
-  [13.3, 9],
-  [19.7, 9],
-  [22.1, 13.6],
-];
-/** How high a pendant lamp hangs */
-export const PENDANT_HEIGHT = 2.85;
 
 /** The outline of the floor on the screen, to cut the light on the floor off at its edge */
 export const FLOOR_OUTLINE = pts([
@@ -530,8 +516,8 @@ export function buildOfficeScene(
     for (let y = y0; y < y1 - 0.001; y += 1) {
       const d = Math.min(1, y1 - y);
       add(x, y + d / 2, [
-        ...box(x - 0.03, y, 0, 0.06, d, 1.5, GLASS, { op: 0.26 }),
-        line([x, y, 1.5], [x, y + d, 1.5], STEEL, 1, 1.8),
+        ...box(x - 0.03, y, 0, 0.06, d, PARTITION_HEIGHT, GLASS, { op: 0.26 }),
+        line([x, y, PARTITION_HEIGHT], [x, y + d, PARTITION_HEIGHT], STEEL, 1, 1.8),
       ]);
     }
   };
@@ -539,35 +525,16 @@ export function buildOfficeScene(
     for (let x = x0; x < x1 - 0.001; x += 1) {
       const w = Math.min(1, x1 - x);
       add(x + w / 2, y, [
-        ...box(x, y - 0.03, 0, w, 0.06, 1.5, GLASS, { op: 0.26 }),
-        line([x, y, 1.5], [x + w, y, 1.5], STEEL, 1, 1.8),
+        ...box(x, y - 0.03, 0, w, 0.06, PARTITION_HEIGHT, GLASS, { op: 0.26 }),
+        line([x, y, PARTITION_HEIGHT], [x + w, y, PARTITION_HEIGHT], STEEL, 1, 1.8),
       ]);
     }
   };
-  glassAlongY(10, 0, 3);
-  glassAlongY(10, 4.4, 8);
-  glassAlongY(17, 0, 3);
-  glassAlongY(17, 4.4, 8);
-  for (const [x0, x1] of [
-    [0, 4],
-    [5.4, 12.6],
-    [14, 19],
-    [20.4, 24],
-  ] as const) {
-    glassAlongX(8, x0, x1);
+  // Where they stand, and the doors between them, is in office-furniture.ts
+  for (const glass of PARTITIONS) {
+    if (glass.along === 'y') glassAlongY(glass.at, glass.from, glass.to);
+    else glassAlongX(glass.at, glass.from, glass.to);
   }
-  for (const [x0, x1] of [
-    [0, 3],
-    [4.4, 10.5],
-    [13.5, 17.2],
-    [18.6, 21.4],
-    [22.8, 24],
-  ] as const) {
-    glassAlongX(10, x0, x1);
-  }
-  glassAlongY(8, 10, 16);
-  glassAlongY(16, 10, 16);
-  glassAlongY(20, 10, 16);
 
   const atDesk = (role: AiEmployeeRole) =>
     statuses[role] === 'working' || statuses[role] === 'attention';
@@ -668,7 +635,7 @@ export function buildOfficeScene(
   };
   /** A pendant lamp: on at night with its halo (its pool of light is on the floor) */
   const pendant = (x: number, y: number) => {
-    const [tx, ty] = project(x, y, 3.95);
+    const [tx, ty] = project(x, y, PENDANT_CORD_TOP);
     const [lx, ly] = project(x, y, PENDANT_HEIGHT);
     const f = (value: number) => value.toFixed(1);
     const prims: ScenePrim[] = [
@@ -720,13 +687,9 @@ export function buildOfficeScene(
   }
 
   // Sales floor: two rows of desks, a credenza with the printer
-  for (const x of [1.2, 3.2, 5.2, 7.2]) {
-    if (x !== ROLE_DESKS.sales.x) {
-      desk(x, 2.3, 1.8, 0.9, 1, false);
-      chair(x + 0.9, 2.3 - SEAT_BEHIND_DESK);
-    }
-    desk(x, 5.1, 1.8, 0.9, 1, false);
-    chair(x + 0.9, 5.1 - SEAT_BEHIND_DESK);
+  for (const own of SALES_DESKS) {
+    desk(own.x, own.y, own.w, own.d, own.monitors, false);
+    chair(chairOfDesk(own).x, chairOfDesk(own).y);
   }
   add(0.9, 7.1, [
     shadow(0.9, 7.1, 34, 12),
@@ -736,15 +699,14 @@ export function buildOfficeScene(
     ...box(0.45, 6.85, 0.7, 0.6, 0.42, 0.28, '#e8eaee'),
     ...box(0.5, 6.9, 0.98, 0.5, 0.3, 0.03, '#9aa1ab'),
   ]);
-  plant(9.4, 0.7, true);
-  plant(9.5, 4.0);
+  for (const own of PLANTS.sales) plant(own.x, own.y, own.tall);
 
   // Marketing room: desks with two monitors, server racks, a small round table
-  for (const x of [10.6, 15.0]) {
-    desk(x, 2.0, 1.6, 0.9, 2, false);
-    chair(x + 0.8, 2.0 - SEAT_BEHIND_DESK);
+  for (const own of MARKETING_DESKS) {
+    desk(own.x, own.y, own.w, own.d, own.monitors, false);
+    chair(chairOfDesk(own).x, chairOfDesk(own).y);
   }
-  for (const y of [4.8, 5.8]) {
+  for (const { y } of SERVER_RACKS) {
     const prims = [shadow(16.0, y + 0.4, 18, 8), ...box(15.6, y, 0, 0.8, 0.9, 2.3, '#191c22')];
     for (let i = 0; i < 6; i++) {
       const [ax, ay] = project(15.72, y + 0.9, 0.4 + i * 0.3);
@@ -762,11 +724,9 @@ export function buildOfficeScene(
     }
     add(16.0, y + 0.45, prims);
   }
-  roundTable(12.4, 5.9, 30);
-  chair(11.5, 5.9, undefined, '+x');
-  chair(13.3, 5.9, undefined, '-x');
-  chair(12.4, 6.85, undefined, '-y');
-  plant(10.6, 7.4);
+  roundTable(MARKETING_TABLE.x, MARKETING_TABLE.y, 30);
+  for (const own of MARKETING_TABLE_CHAIRS) chair(own.x, own.y, undefined, own.facing);
+  for (const own of PLANTS.marketing) plant(own.x, own.y, own.tall);
 
   // Engineering room: the meeting table on its rug (the role's desk is by the window)
   add(21.4, 4.5, [
@@ -777,16 +737,11 @@ export function buildOfficeScene(
     line([20.0, 4.3, 0.752], [22.8, 4.3, 0.752], '#553722', 0.45),
     line([20.2, 4.8, 0.752], [22.6, 4.8, 0.752], '#553722', 0.35),
   ]);
-  for (const x of [20.3, 21.4, 22.5]) {
-    chair(x, 3.3, COGNAC);
-    chair(x, 5.7, COGNAC, '-y');
-  }
-  plant(17.6, 7.4);
-  plant(23.5, 0.7, true);
+  for (const own of MEETING_CHAIRS) chair(own.x, own.y, COGNAC, own.facing);
+  for (const own of PLANTS.engineering) plant(own.x, own.y, own.tall);
 
   // Corridor
-  plant(0.5, 9, true);
-  plant(23.5, 9);
+  for (const own of PLANTS.corridor) plant(own.x, own.y, own.tall);
 
   // Training room: study desks turned like the work desks, an open book on each
   const studyDesk = (x: number, y: number, w: number, d: number) => {
@@ -798,12 +753,11 @@ export function buildOfficeScene(
       ...box(x + w / 2 - 0.36, y + 0.16, 0.72, 0.34, 0.44, 0.03, '#ffffff'),
       ...box(x + w / 2 + 0.02, y + 0.16, 0.72, 0.34, 0.44, 0.03, '#eef2f7'),
     ]);
-    chair(x + w / 2, y - SEAT_BEHIND_DESK);
+    chair(chairOfDesk({ x, y, w }).x, chairOfDesk({ x, y, w }).y);
   };
   for (const own of TRAINING_DESKS) studyDesk(own.x, own.y, own.w, own.d);
   // Two more desks fill the back row
-  studyDesk(3.2, 14.7, 1.6, 0.8);
-  studyDesk(5.5, 14.7, 1.6, 0.8);
+  for (const own of SPARE_STUDY_DESKS) studyDesk(own.x, own.y, own.w, own.h);
 
   // Lounge: a marble counter with the espresso machine, a lit drinks cabinet, a velvet sofa with
   // cushions, a marble coffee table, a round table and a floor lamp
@@ -887,9 +841,8 @@ export function buildOfficeScene(
     ...box(10.9, 12.4, 0.34, 1.2, 1.6, 0.06, MARBLE),
     ...box(11.3, 13.0, 0.4, 0.3, 0.4, 0.05, '#27364f'),
   ]);
-  roundTable(14.4, 13.0, 32);
-  chair(15.35, 13.0, COGNAC, '-x');
-  chair(13.45, 13.0, COGNAC, '+x');
+  roundTable(LOUNGE_TABLE.x, LOUNGE_TABLE.y, 32);
+  for (const own of LOUNGE_CHAIRS) chair(own.x, own.y, COGNAC, own.facing);
   {
     // A floor lamp by the sofa
     const [sx, sy] = project(8.45, 10.5, 2.0);
@@ -903,8 +856,7 @@ export function buildOfficeScene(
     );
     add(8.45, 10.5, prims);
   }
-  plant(8.6, 15.5);
-  plant(13.2, 15.4, true);
+  for (const own of PLANTS.lounge) plant(own.x, own.y, own.tall);
 
   // Charging station: a pad with a brass ring per role, wired to slim chargers
   for (const pad of CHARGING_PADS) {
@@ -928,7 +880,7 @@ export function buildOfficeScene(
     ...box(23.25, 13.3, 0, 0.08, 1.8, 0.3, STEEL),
     ...box(23.2, 13.2, 0.3, 0.6, 2.0, 0.16, COGNAC),
   ]);
-  plant(23.7, 10.5, true);
+  for (const own of PLANTS.backoffice) plant(own.x, own.y, own.tall);
 
   // The pendant lamps
   for (const [x, y] of PENDANTS) pendant(x, y);
