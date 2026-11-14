@@ -160,6 +160,7 @@ export function OfficeRoomReception({
         <OfficeRoomMembers
           organizationId={organizationId}
           {...guideProps}
+          keysRef={shelfKeys}
           onOpenNormal={onOpenNormal}
           onBack={back}
         />

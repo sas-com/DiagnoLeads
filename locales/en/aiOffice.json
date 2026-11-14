@@ -653,7 +653,7 @@
             "error": "The members could not be read. Please open the shelf again in a while.",
             "report": "Members: {count}.",
             "reportWithInvitations": "Members: {count}. Pending invitations: {waiting}.",
-            "readOnly": "This shelf is read only. Inviting, revoking and roles are on the members page of the normal view.",
+            "readOnly": "Inviting, roles and removing a member are on the members page of the normal view.",
             "members": "Members ({count})",
             "more": "There are {count} more. Please check them in the normal view.",
             "invitations": "Pending invitations",
@@ -662,7 +662,19 @@
             "noInvitations": "No pending invitations.",
             "expires": "Expires: {date}",
             "expired": "Expired",
-            "open": "Open members in the normal view"
+            "open": "Open members in the normal view",
+            "revoke": {
+              "choice": "Revoke an invitation",
+              "title": "Revoke an invitation",
+              "note": "Once revoked, the link that was sent no longer works. It cannot be undone (to invite again, send a new one from the members page of the normal view).",
+              "label": "Type the email address of the invitation to revoke",
+              "confirm": "Revoke this invitation",
+              "mismatch": "That is not the address of a pending invitation.",
+              "back": "Back to the shelf",
+              "done": "The invitation to {email} was revoked.",
+              "gone": "That invitation was already revoked or accepted. The list was read again.",
+              "failed": "Sorry, it could not be revoked. Please try again in a while."
+            }
           },
           "settingsShelf": {
             "board": "Settings shelf",

@@ -105,3 +105,25 @@ export function membersLine(
   if (members === null) return null;
   return invitations.state === 'ready' ? 'withInvitations' : 'members';
 }
+
+/** The key that opens the revoking of an invitation on the members shelf (#1197): it only opens */
+export const REVOKE_KEY = '1';
+
+// An address as it reads: a Japanese input method types full-width letters, and case does not count
+function asRead(email: string): string {
+  return email.normalize('NFKC').trim().toLowerCase();
+}
+
+/**
+ * The pending invitation an address that was typed names (#1197). Revoking is carried out only
+ * once the address of the invited person was typed: the keys of the choices alone, pressed on and
+ * on, never reach it (decision 2026-11-14-office-entry-same-site-only).
+ */
+export function invitationNamed<Invitation extends { email: string }>(
+  typed: string,
+  invitations: readonly Invitation[]
+): Invitation | null {
+  const address = asRead(typed);
+  if (!address) return null;
+  return invitations.find((invitation) => asRead(invitation.email) === address) ?? null;
+}
