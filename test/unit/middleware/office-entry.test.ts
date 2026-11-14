@@ -46,24 +46,37 @@ describe('withoutForeignOfficeEntry', () => {
     expect(sentTo('/%6Aa/office?source=home', 'cross-site')).toBe('/%6Aa/office');
     expect(sentTo('/ja/office/?source=home', 'cross-site')).toBe('/ja/office/');
     expect(sentTo('/JA/OFFICE?source=home', 'cross-site')).toBe('/JA/OFFICE');
+    // Doubled slashes and backslashes are folded before the page is served
+    expect(sentTo('/ja//office?source=home', 'cross-site')).toBe('/ja//office');
+    expect(sentTo('//ja/office//?source=home', 'cross-site')).toBe('//ja/office//');
+    expect(sentTo('/ja/%5Coffice?source=home', 'cross-site')).toBe('/ja/%5Coffice');
+  });
+
+  it('drops the mark for a sibling host and for a value it does not know: only this site opens it', () => {
+    expect(sentTo('/ja/office?source=login', 'same-site')).toBe('/ja/office');
+    expect(sentTo('/ja/office?source=home', 'something-new')).toBe('/ja/office');
+  });
+
+  it('drops the mark whatever the method: a posted form goes on to the sign-in without it', () => {
+    expect(sentTo('/ja/office?source=home', 'cross-site', 'POST')).toBe('/ja/office');
+    expect(sentTo('/ja/office?source=home', 'cross-site', 'HEAD')).toBe('/ja/office');
   });
 
   it('leaves alone what this site and the visitor ask for', () => {
-    // Moving within the app, the installed app or a typed address, a page of a sibling host
+    // Moving within the app; the installed app or a typed address
     expect(sentTo('/ja/office?source=home', 'same-origin')).toBeNull();
+    expect(sentTo('/ja/office?source=login', 'Same-Origin')).toBeNull();
     expect(sentTo('/ja/office?source=app', 'none')).toBeNull();
-    expect(sentTo('/ja/office?source=login', 'same-site')).toBeNull();
     // A browser that does not say where the request comes from is treated as before
     expect(sentTo('/ja/office?source=home')).toBeNull();
   });
 
-  it('leaves alone every other page, an office without a mark, and what is not a page load', () => {
+  it('leaves alone every other page, and an office without a mark', () => {
     expect(sentTo('/ja/office', 'cross-site')).toBeNull();
     expect(sentTo('/ja/office?tab=1', 'cross-site')).toBeNull();
     expect(sentTo('/ja/leads?source=home', 'cross-site')).toBeNull();
     expect(sentTo('/ja/officers?source=home', 'cross-site')).toBeNull();
     expect(sentTo('/ja/office/desk?source=home', 'cross-site')).toBeNull();
-    expect(sentTo('/ja/office?source=home', 'cross-site', 'POST')).toBeNull();
   });
 });
 
