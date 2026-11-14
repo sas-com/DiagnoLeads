@@ -19,15 +19,19 @@ import {
   CAMERA_OFFSET,
   FLOOR_MIDDLE,
   type ScreenPoint,
+  type Stage3D,
   type View3D,
   cameraPosition,
   easeTarget,
-  pxPerUnit,
-  viewTarget,
+  easeView,
+  stageView,
 } from './office-view-3d';
 import { Robot3D } from './robot-3d';
 
 const NO_PAN: ScreenPoint = { x: 0, y: 0 };
+
+/** How long the camera glides to a new scene, in seconds */
+const SCENE_GLIDE = 0.9;
 
 /** How fast a robot walks, in floor units a second */
 export const WALK_SPEED = 3.2;
@@ -77,12 +81,15 @@ function Walker({
   employee,
   event,
   still,
+  attentive,
   onMove,
   onWalking,
 }: {
   employee: Office3DEmployee;
   event: OfficeEvent | null;
   still: boolean;
+  /** The president talks to this employee: it turns to the viewer */
+  attentive: boolean;
   /** Told where the employee is, each time it moves */
   onMove: (role: AiEmployeeRole, at: FloorPoint) => void;
   /** Told when the employee sets off and when it arrives */
@@ -91,7 +98,8 @@ function Walker({
   const invalidate = useThree((state) => state.invalidate);
   const group = useRef<Group>(null);
   const spot = spotOf(employee.role, employee.status);
-  const restHeading = spot.facing === 'left' ? 0 : Math.PI / 2;
+  // Towards its desk or table; towards the viewer (between the two) while it is talked to
+  const restHeading = attentive ? Math.PI / 4 : spot.facing === 'left' ? 0 : Math.PI / 2;
   const walk = useRef<{ route: FloorPoint[]; length: number; travelled: number }>({
     route: [spot],
     length: 0,
@@ -114,7 +122,7 @@ function Walker({
       // With less motion the canvas only draws when something changed: this did
       invalidate();
     }
-  }, [spot.x, spot.y, still]);
+  }, [spot.x, spot.y, still, restHeading]);
 
   // The office says in words that the employee is on its way (the canvas is decoration)
   const role = employee.role;
@@ -156,6 +164,8 @@ function Walker({
  * Each frame it tells where it looks (`onView`), so that the name tags over the canvas follow it.
  */
 function CameraRig({
+  stage,
+  subject,
   zoom,
   pan,
   still,
@@ -163,6 +173,10 @@ function CameraRig({
   places,
   onView,
 }: {
+  /** The scene of the office: the floor, or a scene that frames its subject */
+  stage: Stage3D;
+  /** What a scene other than the floor is about */
+  subject: FloorPoint | null;
   zoom: number;
   pan: ScreenPoint;
   /** Less motion: the camera jumps instead of gliding */
@@ -175,7 +189,10 @@ function CameraRig({
   const camera = useThree((state) => state.camera) as OrthographicCamera;
   const size = useThree((state) => state.size);
   const invalidate = useThree((state) => state.invalidate);
-  const looking = useRef<FloorPoint>(FLOOR_MIDDLE);
+  const shown = useRef<View3D | null>(null);
+  // After a change of scene the whole view glides for this long (seconds): on the floor itself
+  // a drag and a zoom show at once
+  const gliding = useRef(0);
 
   // The angle is set once; from then on the camera only slides
   useEffect(() => {
@@ -183,21 +200,45 @@ function CameraRig({
     camera.lookAt(0, 0, 0);
   }, [camera]);
 
-  // With less motion the canvas only draws when something changed: a new zoom, pan or size did
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new scene is the reason to glide
+  useEffect(() => {
+    gliding.current = SCENE_GLIDE;
+  }, [stage]);
+
+  // With less motion the canvas only draws when something changed: a new scene, zoom, pan or
+  // size did
   // biome-ignore lint/correctness/useExhaustiveDependencies: the values are the reason to draw again
   useEffect(() => {
     invalidate();
-  }, [invalidate, zoom, pan.x, pan.y, size.width, size.height, still]);
+  }, [
+    invalidate,
+    stage,
+    subject?.x,
+    subject?.y,
+    zoom,
+    pan.x,
+    pan.y,
+    size.width,
+    size.height,
+    still,
+  ]);
 
   useFrame((_, delta) => {
-    const to = viewTarget(zoom, follow());
-    looking.current = still ? to : easeTarget(looking.current, to, delta * 4);
-    const view: View3D = {
-      target: looking.current,
-      pxPerUnit: pxPerUnit({ w: size.width, h: size.height }, zoom),
-      pan,
+    const goal = stageView(stage, {
       size: { w: size.width, h: size.height },
-    };
+      zoom,
+      pan,
+      followed: follow(),
+      subject,
+    });
+    const from = shown.current;
+    let view: View3D;
+    if (still || !from) view = goal;
+    else if (gliding.current > 0) {
+      gliding.current -= delta;
+      view = easeView(from, goal, delta * 5);
+    } else view = { ...goal, target: easeTarget(from.target, goal.target, delta * 4) };
+    shown.current = view;
     const [x, y, z] = cameraPosition(view);
     camera.position.set(x, y, z);
     if (camera.zoom !== view.pxPerUnit) {
@@ -246,6 +287,9 @@ export default function OfficeCanvas3D({
   vacant = [],
   events,
   night,
+  stage = 'world',
+  subject = null,
+  attentive = null,
   zoom = 1,
   pan = NO_PAN,
   focus = null,
@@ -261,6 +305,12 @@ export default function OfficeCanvas3D({
   /** What just happened to an employee, by role */
   events: Partial<Record<AiEmployeeRole, OfficeEvent>>;
   night: boolean;
+  /** The scene of the office this floor is behind: the floor itself unless told otherwise */
+  stage?: Stage3D;
+  /** What a conversation, a room or the customization is about: where the camera goes */
+  subject?: FloorPoint | null;
+  /** The employee the president talks to: it turns to the viewer */
+  attentive?: AiEmployeeRole | null;
   zoom?: number;
   /** How far the floor was dragged, in screen pixels */
   pan?: ScreenPoint;
@@ -297,6 +347,8 @@ export default function OfficeCanvas3D({
       style={{ pointerEvents: 'none' }}
     >
       <CameraRig
+        stage={stage}
+        subject={subject}
         zoom={zoom}
         pan={pan}
         still={reducedMotion}
@@ -320,6 +372,7 @@ export default function OfficeCanvas3D({
             employee={employee}
             event={events[employee.role] ?? null}
             still={reducedMotion}
+            attentive={attentive === employee.role}
             onMove={onMove}
             onWalking={onWalking}
           />
