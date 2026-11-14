@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   scopes: [] as unknown[],
   board: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
   deals: [] as unknown[],
+  truncated: false,
   latestHearing: null as { id: string; heldOn: string } | null,
   handedOffOn: null as string | null,
   hearing: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
@@ -74,7 +75,7 @@ vi.mock('@/lib/trpc/client', () => ({
           mocks.boardInputs.push(input);
           return answer(mocks.board, {
             columns: columnsOf(mocks.deals as ReturnType<typeof deal>[]),
-            truncated: false,
+            truncated: mocks.truncated,
             today: '2026-11-14',
             canEdit: true,
             canDelete: true,
@@ -211,6 +212,7 @@ describe('the engineering room', () => {
     mocks.summaryInputs.length = 0;
     mocks.scopes.length = 0;
     mocks.board = 'ok';
+    mocks.truncated = false;
     mocks.deals = [
       deal(1, 'qualification'),
       deal(2, 'proposal', { nextTask: null, hasOpenTask: false }),
@@ -253,6 +255,21 @@ describe('the engineering room', () => {
       )
     ).toBeInTheDocument();
     expect(within(office).getByText('AIエンジニアが、この部屋を受け持っています。')).toBeInTheDocument();
+  });
+
+  it('does not say what it counts from the listed deals when the board is cut at its limit', async () => {
+    mocks.truncated = true;
+    const { office, board } = await enterRoom();
+    expect(
+      within(office).getByText(
+        '進行中の現行調査は 3 件です。提案の段にあるものは 1 件あります。商談が多く、ボードには一部しか出せないため、次の行動が決まっていないものの件数は、通常の表示の商談で確かめてください。'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(board).getByText(
+        '商談が多いため、ボードには先頭の 500 件までを出しています。段ごとの件数は、すべての商談を数えています。'
+      )
+    ).toBeInTheDocument();
   });
 
   it('does not put words in the mouth of an engineer that is not hired or in training', async () => {

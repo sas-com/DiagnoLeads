@@ -392,6 +392,7 @@
         "engineering": {
           "board": "Survey board",
           "report": "{open} surveys are in progress. {proposal} are in the proposal stage, and {withoutTask} have no next action.",
+          "reportTruncated": "{open} surveys are in progress. {proposal} are in the proposal stage. There are many deals and the board shows only part of them: please check how many have no next action in the deals of the normal view.",
           "reportEmpty": "No survey is in progress right now.",
           "reportLoading": "Reading the figures of the board.",
           "reportUnavailable": "The figures of the board could not be read.",
@@ -417,7 +418,7 @@
           "empty": "No survey deal matches this view.",
           "error": "The deals could not be read. Please open the room again later.",
           "forbidden": "You do not have permission to see the deals. Please check with an administrator.",
-          "truncated": "There are many deals: the board shows up to {limit}.",
+          "truncated": "There are many deals: the board shows the first {limit}. The counts by stage count every deal.",
           "openHint": "Opening a row opens its preparation file inside this room.",
           "openList": "Open in the deals of the normal view",
           "file": {

@@ -216,7 +216,11 @@ export function OfficeRoomEngineering({
                 ? tRoom('reportLoading')
                 : report.open === 0
                   ? tRoom('reportEmpty')
-                  : tRoom('report', { ...report })}
+                  : board.data.truncated
+                    ? // Past the board's limit the listed deals are only a part: what is counted
+                      // from them is not said (the counts by stage count every deal)
+                      tRoom('reportTruncated', { open: report.open, proposal: report.proposal })
+                    : tRoom('report', { ...report })}
           </p>
         </div>
         <h3 className={CAP}>{tImmersive('talk.you')}</h3>
