@@ -4,7 +4,7 @@
  * (#412, #1126), and the restore recreates it empty with the definition of the migration that made
  * it. If either side drifts, the daily dump stops again or a restored database lacks the table.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -29,6 +29,24 @@ describe('production backup scripts', () => {
     expect(migration).not.toBeNull();
     expect(createSaltsTable(restore)).toBe(migration);
     expect(restore).toContain('ALTER TABLE "site_visit_salts" ENABLE ROW LEVEL SECURITY;');
+  });
+
+  it('compare with the only migration that defines the table', () => {
+    // A later migration that changes site_visit_salts must also change the restore
+    const touching = readdirSync('drizzle')
+      .filter((name) => name.endsWith('.sql'))
+      .filter((name) => read(`drizzle/${name}`).includes('site_visit_salts'));
+    expect(touching).toEqual(['0031_site_visits.sql']);
+  });
+
+  it('create the table and turn on row level security in one transaction', () => {
+    const restore = read('scripts/prod-restore-to.sh');
+    const begin = restore.indexOf('BEGIN;');
+    expect(begin).toBeGreaterThan(-1);
+    expect(begin).toBeLessThan(restore.indexOf('CREATE TABLE "site_visit_salts"'));
+    expect(restore.indexOf('COMMIT;')).toBeGreaterThan(
+      restore.indexOf('ALTER TABLE "site_visit_salts" ENABLE ROW LEVEL SECURITY;')
+    );
   });
 
   it('recreate the table only after the dump is restored', () => {

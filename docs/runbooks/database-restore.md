@@ -49,8 +49,9 @@
    - `public` に表が1つでもあれば止まる（本番に流してしまわないため）
    - 拡張機能（ltree・vector・pgcrypto・uuid-ossp）は `extensions` スキーマに自動で入れる
    - 控えに入っていない `site_visit_salts` は、空の表として自動で作り直す（その日のソルトはその日だけ使うので、失うものはない）
+   - 途中で止まったら、そのプロジェクトには続けて流さない。新しいプロジェクトを作り直して、最初からやり直す
 4. **CMS を使っていたら**：`cms/migrations/sql/` の SQL を、新しいプロジェクトの SQL Editor で流す（控えに cms は入っていない）
-5. **読み取り専用のユーザーを作り直す**：`~/diagnoleads-prod-db/setup-prod-ro.sh` の手順で `dl_readonly` を作り、連番の読み取り（`GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle`）も付ける。そのあと `site_visit_salts` を `dl_readonly` から読めなくする（`docs/site-visits.md` の「`dl_readonly` の権限」）。読めるままだと鍵が漏れたときに訪問者を突き合わせられ、読めなくしたあとで控えのスクリプトがこの表を含めると止まる
+5. **読み取り専用のユーザーを作り直す**：`~/diagnoleads-prod-db/setup-prod-ro.sh` の手順で `dl_readonly` を作り、連番の読み取り（`GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle`）も付ける。そのあと `site_visit_salts` を `dl_readonly` から読めなくする（`docs/site-visits.md` の「`dl_readonly` の権限」）。読めるままだと鍵が漏れたときに訪問者を突き合わせられ、控えのスクリプトはこの表を外しているので、読めるままでも止まらず気づけない。`select has_table_privilege('dl_readonly', 'public.site_visit_salts', 'SELECT');` が `false` になることを確かめる
 6. **接続先を切り替える**（オーナー）：Vercel の Production の `DATABASE_URL`（ほかに DB の接続文字列を使う変数があればそれも）を新しいプロジェクトに替えて、再デプロイする
 
 ## 5. 戻した後
