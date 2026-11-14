@@ -86,8 +86,6 @@
     }
   },
   "navigation": {
-    "menu": "メニュー",
-    "management": "管理",
     "dashboard": "ダッシュボード",
     "today": "今日",
     "leads": "リード管理",
@@ -1752,7 +1750,7 @@
       "description": "組織の基本情報を管理します",
       "notFound": "組織が見つかりません",
       "notFoundDescription": "組織情報を取得できませんでした",
-      "backToDashboard": "ダッシュボードに戻る",
+      "backToOffice": "オフィスに戻る",
       "viewMode": "閲覧モード",
       "viewModeDescription": "組織情報の変更はオーナーのみ可能です。あなたの現在のロールは「{role}」です。",
       "roleAdmin": "管理者",
