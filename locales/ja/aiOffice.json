@@ -1,0 +1,541 @@
+{
+  "aiOffice": {
+    "title": "AI社員オフィス",
+    "description": "AI社員の働きぶりを、バーチャルオフィスで見ます。AI社員はロボットの姿で、状態に合わせてフロアを移動します。名札を押すと、詳細と作業記録が出ます。",
+    "forbidden": "AI社員オフィスを見る権限がありません。",
+    "loadError": "AI社員オフィスを読み込めませんでした。時間をおいて開き直してください。",
+    "noOrganization": "組織を選ぶと、AI社員オフィスが出ます。",
+    "updatedAt": "{time}時点",
+    "summary": {
+      "hired": "在籍",
+      "working": "作業中",
+      "processedToday": "今日の処理件数",
+      "attention": "要確認",
+      "people": "{count}人",
+      "items": "{count}件",
+      "heading": "今日のまとめ"
+    },
+    "floor": {
+      "label": "オフィスのフロア",
+      "entrance": "入口",
+      "scrollHint": "フロアの地図は横にスクロールできます。",
+      "legend": {
+        "desk": "作業中・要確認：自分の席",
+        "lounge": "待機中：ラウンジ",
+        "training": "研修中：研修室",
+        "charging": "休止中：充電ステーション"
+      }
+    },
+    "rooms": {
+      "sales": "営業フロア",
+      "training": "研修室",
+      "lounge": "ラウンジ",
+      "charging": "充電ステーション",
+      "marketing": "マーケティング室",
+      "engineering": "開発室",
+      "backoffice": "総務・受付"
+    },
+    "roles": {
+      "marketer": {
+        "title": "マーケター",
+        "description": "見込み客（リード）を見つけ、追う価値のある相手を見極めます。",
+        "defaultName": "AIマーケター"
+      },
+      "sales": {
+        "title": "セールス",
+        "description": "見込み客を商談に進め、追客の取りこぼしを防ぎます。",
+        "defaultName": "AIセールス"
+      },
+      "engineer": {
+        "title": "エンジニア",
+        "description": "お客様の状況を整理し、提案の準備を整えます。",
+        "defaultName": "AIエンジニア"
+      },
+      "back_office": {
+        "title": "バックオフィス",
+        "description": "期限と約束ごとを見張り、抜けを防ぎます。",
+        "defaultName": "AIバックオフィス"
+      }
+    },
+    "packs": {
+      "sales_management": {
+        "title": "営業管理",
+        "description": "どの会社の営業にもある仕事です。このアプリのリードと商談を扱います。"
+      },
+      "ax_migration": {
+        "title": "AX 移行",
+        "description": "レガシーシステムの移行の営業に固有の仕事です。"
+      }
+    },
+    "works": {
+      "score_new_leads": {
+        "title": "新しい見込み客の評価",
+        "description": "評価のない新しい見込み客（リード）を Claude で評価し、点数を付けます。氏名・メールなど個人を指す項目は送りません。"
+      },
+      "check_due_actions": {
+        "title": "次の行動の期限の確認",
+        "description": "期限が近い・過ぎた次の行動を毎朝確かめます。リードは書き換えません。"
+      },
+      "draft_meeting_prep": {
+        "title": "初回の打ち合わせの準備の下書き",
+        "description": "診断の回答から移行の論点を整理し、初回の打ち合わせの準備の下書きを用意します。"
+      },
+      "recompute_act_timing": {
+        "title": "動くべき時期の再計算",
+        "description": "ヒアリングと診断の回答から、リードの動くべき時期を毎朝計算し直します。"
+      }
+    },
+    "status": {
+      "working": "作業中",
+      "attention": "要確認",
+      "idle": "待機中",
+      "training": "研修中",
+      "paused": "休止中",
+      "vacant": "空席"
+    },
+    "statusHint": {
+      "working": "いま作業しています。",
+      "attention": "最後の作業が失敗したか、終わっていません。作業記録を確かめてください。",
+      "idle": "次の作業を待っています。",
+      "training": "この役割の仕事は準備中のため、まだ働きません。準備ができると、自動で働き始めます。",
+      "paused": "休止中は働きません。再開すると、次の作業から働きます。",
+      "vacant": "この役割の AI社員はまだいません。"
+    },
+    "desk": {
+      "hire": "採用する",
+      "openDetails": "詳細を開く",
+      "hireByAdmin": "管理者が採用できます",
+      "details": "{role}・{place}にいます・今日 {count}件",
+      "vacantDetails": "{place}の空席"
+    },
+    "sheet": {
+      "vacantTitle": "{role}の空席",
+      "role": "役割",
+      "room": "席のある部屋",
+      "hiredAt": "採用した日",
+      "name": "表示名",
+      "hireSubmit": "採用する",
+      "manage": "管理",
+      "rename": "名前を変える",
+      "pause": "休止する",
+      "resume": "再開する",
+      "dismiss": "解雇する",
+      "dismissTitle": "{name}を解雇しますか",
+      "dismissDescription": "この席は空席に戻り、元に戻せません。作業記録は残ります。あとで同じ役割の AI社員を採用し直せます。",
+      "readOnly": "AI社員の採用と管理は、管理者だけができます。",
+      "runs": "作業記録",
+      "runsCaption": "新しい順に最大20件",
+      "runsEmpty": "作業の記録はまだありません。",
+      "runsError": "作業記録を読み込めませんでした。",
+      "columns": {
+        "startedAt": "開始",
+        "trigger": "きっかけ",
+        "status": "結果",
+        "processed": "処理件数",
+        "resultCode": "コード"
+      },
+      "trigger": {
+        "schedule": "定期",
+        "manual": "手動"
+      },
+      "runStatus": {
+        "running": "作業中",
+        "succeeded": "成功",
+        "failed": "失敗"
+      },
+      "danger": "元に戻せない操作",
+      "dismissNote": "解雇すると、この席は空席に戻ります。作業記録は記録として残ります。",
+      "place": "今いる場所",
+      "works": "仕事",
+      "workPack": "業務パック：{pack}",
+      "workPreparing": "準備中",
+      "workReady": "稼働中"
+    },
+    "toast": {
+      "hired": "{name}を採用しました",
+      "renamed": "{name}に名前を変えました",
+      "paused": "{name}を休止しました",
+      "resumed": "{name}を再開しました",
+      "dismissed": "{name}を解雇しました",
+      "conflict": "この役割には、すでに AI社員がいます",
+      "error": "保存できませんでした。時間をおいてやり直してください",
+      "actionError": "操作できませんでした。時間をおいてやり直してください"
+    },
+    "loading": "読み込み中",
+    "immersive": {
+      "label": "AI社員オフィス（全画面）",
+      "president": "社長",
+      "day": "昼",
+      "night": "夜",
+      "staff": "社員名簿",
+      "map": "フロアの地図。光っている点が AI社員のいる場所です。",
+      "relay": "価値のリレー",
+      "relaySteps": {
+        "marketer": "見込み客を見つける",
+        "sales": "商談にする",
+        "engineer": "提案をつくる",
+        "back_office": "期限を守る"
+      },
+      "target": "目の前の社員",
+      "title": {
+        "tagline": "あなたは社長。優秀な AI社員とともに、新しい価値を生み出す。",
+        "clockIn": "出社する",
+        "back": "通常の表示に戻る",
+        "staff": "社長 {name}　・　AI社員 {hired}名（空席 {vacant}）",
+        "narrow": "この画面は、幅の広い画面（パソコン・タブレットの横向き）向けです。この幅では、通常の表示をお使いください。"
+      },
+      "tasks": {
+        "heading": "社長の仕事",
+        "none": "急ぎの仕事はありません。",
+        "consult": "{role}の相談に乗る",
+        "consultWhy": "作業が止まっています",
+        "resume": "{role}を呼び戻す",
+        "resumeWhy": "休止中です",
+        "hire": "{role}を採用する",
+        "hireWhy": "この部門に社員がいません",
+        "noneReadOnly": "急ぎの仕事はありません。採用と再開は管理者が行います。"
+      },
+      "actions": {
+        "talk": "話しかける",
+        "zoomIn": "近づく",
+        "zoomOut": "全体を見る",
+        "resetView": "視点を戻す",
+        "list": "通常の表示に戻る",
+        "clockOut": "退社する"
+      },
+      "talk": {
+        "with": "{name}と会話中",
+        "you": "社長（あなた）",
+        "hired": "{name}です。よろしくお願いします、社長。まずは研修を受けて、仕事の準備ができしだい働き始めます。",
+        "paused": "承知しました、社長。{name}はしばらく休みます。",
+        "resumed": "{name}、仕事に戻ります。",
+        "failed": "すみません、うまくいきませんでした。時間をおいてもう一度お願いします。",
+        "lines": {
+          "vacant": "ここは{role}の席です。まだ誰もいません。{work}",
+          "training": "社長、いまは研修中です。仕事の準備ができしだい、自動で働き始めます。私の仕事はこうなる予定です。{work}",
+          "paused": "社長、いまは休止中です。声をかけていただければ、すぐに戻ります。",
+          "idle": "社長、お疲れさまです。次の作業を待っています。",
+          "working": "社長、いま作業中です。終わりしだい報告します。",
+          "attention": "社長、すみません。作業が途中で止まってしまいました。作業記録に理由が残っています。"
+        },
+        "choices": {
+          "hire": "採用する",
+          "pause": "しばらく休んでいい",
+          "resume": "戻ってきて",
+          "leave": "またあとで",
+          "back": "オフィスに戻る"
+        },
+        "resumedTraining": "{name}、研修に戻ります。仕事の準備ができしだい働き始めます。",
+        "trainingFirst": "採用しても、仕事の準備ができるまでは研修中です。"
+      },
+      "floorGuide": "フロア案内",
+      "room": {
+        "back": "フロアへ戻る",
+        "work": {
+          "marketing": "リード管理",
+          "backoffice": "今日の期限"
+        },
+        "guide": {
+          "employee": "{name}が、この部屋を受け持っています。",
+          "attention": "{name}の作業が止まっています。数字は記録から読み上げています。",
+          "training": "{name}は研修中で、まだこの部屋の仕事を受け持っていません。数字は記録から読み上げています。",
+          "paused": "{name}は休止中です。数字は記録から読み上げています。",
+          "vacant": "{role}は空席です。数字は記録から読み上げています。"
+        },
+        "leads": {
+          "board": "見込み客ボード",
+          "report": "今週の新しい見込み客は {newThisWeek} 件です。相談の申込は {consultation} 件、まだ着手していないものは {needsAction} 件あります。",
+          "reportLoading": "ボードの数字を読んでいます。",
+          "reportUnavailable": "ボードの数字を読めませんでした。",
+          "ask": {
+            "needsAction": "まだ着手していないものを見せて",
+            "consultation": "相談の申込を見せて",
+            "newThisWeek": "今週の新しいものを見せて",
+            "mine": "自分の担当を見せて",
+            "all": "全部見せて"
+          },
+          "views": {
+            "needsAction": "まだ着手していない（新規）",
+            "consultation": "相談の申込あり",
+            "newThisWeek": "今週の新規",
+            "mine": "自分の担当",
+            "all": "すべて"
+          },
+          "count": "{count} 件",
+          "keys": {
+            "rows": "行を選ぶ",
+            "open": "開く"
+          },
+          "columns": {
+            "lead": "会社・名前",
+            "mql": "MQL段階",
+            "status": "状態",
+            "assignee": "担当",
+            "created": "登録日"
+          },
+          "noCompany": "会社名なし",
+          "noLevel": "—",
+          "unassigned": "担当未定",
+          "empty": "この絞り込みに当たる見込み客はいません。",
+          "loading": "読み込んでいます",
+          "error": "見込み客を読めませんでした。時間をおいて、もう一度開いてください。",
+          "forbidden": "見込み客を見る権限がありません。管理者に確かめてください。",
+          "range": "{total} 件中 {from}〜{to} 件",
+          "openHint": "行を開くと、この部屋の中で顧客ファイルが開きます。",
+          "openList": "通常の表示の一覧で開く",
+          "prev": "前へ",
+          "next": "次へ",
+          "page": "{page} / {pages}"
+        },
+        "file": {
+          "label": "{company}のファイル",
+          "title": "顧客ファイル",
+          "reading": "連絡の記録を読んでいます。",
+          "readError": "連絡の記録を読めませんでした。時間をおいて、もう一度開いてください。",
+          "noContact": "この見込み客には、まだ連絡の記録がありません。",
+          "latest": "最後の連絡は {date} の「{kind}」です。連絡の記録は {total} 件あります。",
+          "recorded": "「{kind}」を記録しました。間違えたときは、取り消せます。",
+          "undone": "記録を取り消しました。",
+          "failed": "すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。",
+          "readOnly": "連絡を記録する権限がありません。",
+          "choices": {
+            "call": "電話した",
+            "email": "メールした",
+            "no_answer": "つながらなかった",
+            "back": "ボードに戻る",
+            "undo": "いまの記録を取り消す"
+          },
+          "contact": "連絡先",
+          "email": "メールアドレス",
+          "phone": "電話番号",
+          "created": "登録日",
+          "assignee": "担当",
+          "notSet": "未設定",
+          "contacts": "連絡の記録",
+          "contactsSummary": "{total} 件（つながらなかった {noAnswer} 回）",
+          "contactsEmpty": "まだ記録がありません。",
+          "by": "{name}が記録",
+          "openDetail": "通常の表示で詳細を開く",
+          "detailHint": "ヒアリング・次の行動・編集は、通常の表示の詳細で行います。",
+          "undoFailed": "取り消せませんでした。記録は残っています。もう一度お願いします。"
+        },
+        "due": {
+          "board": "今日の期限",
+          "position": "{total} 件中 {index} 件目",
+          "reading": "期限を確かめています。",
+          "error": "期限を読めませんでした。時間をおいて、もう一度開いてください。",
+          "forbidden": "次の行動を見る権限がありません。管理者に確かめてください。",
+          "empty": "あなたの、期限が今日までの次の行動は、ありません。",
+          "report": "あなたの、期限が今日までの次の行動は {total} 件です。{index} 件目をお渡しします。",
+          "more": "このほかに {count} 件あります。通常の表示の「今日」で確かめてください。",
+          "done": "済みにしました。間違えたときは、取り消せます。",
+          "undone": "済みを取り消しました。",
+          "failed": "すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。",
+          "finished": "これで全部です。{done} 件を済みにしました。残りは {left} 件です。",
+          "readOnly": "次の行動を済みにする権限がありません。",
+          "choices": {
+            "done": "済みにする",
+            "later": "あとで（次の件へ）",
+            "next": "次の件へ",
+            "undo": "いまのを取り消す"
+          },
+          "dueToday": "期限は今日",
+          "overdue": "期限を {days} 日過ぎています",
+          "takeaway": "持ち帰り事項",
+          "checkWith": "確かめる相手：{name}",
+          "lead": "相手",
+          "noLead": "相手の名前なし",
+          "note": "メモ",
+          "queue": "この順にお渡しします",
+          "states": {
+            "done": "済み",
+            "current": "いま",
+            "later": "あとで",
+            "waiting": "これから"
+          },
+          "allSeen": "全部に目を通しました。",
+          "openLead": "通常の表示でリードを開く",
+          "openToday": "通常の表示の「今日」を開く",
+          "undoFailed": "取り消せませんでした。済みのままです。もう一度お願いします。",
+          "reportNext": "{total} 件中 {index} 件目をお渡しします。"
+        }
+      },
+      "tones": {
+        "brisk": {
+          "training": "研修中です。準備ができしだい働きます。予定の仕事：{work}",
+          "paused": "休止中です。呼ばれれば戻ります。",
+          "idle": "待機中です。次の作業を待っています。",
+          "working": "作業中です。終わったら報告します。",
+          "attention": "作業が止まりました。理由は作業記録にあります。",
+          "pausedDone": "了解です。{name}は休みます。",
+          "resumed": "{name}、戻ります。",
+          "resumedTraining": "{name}、研修に戻ります。",
+          "failed": "失敗しました。時間をおいて、もう一度お願いします。"
+        },
+        "friendly": {
+          "training": "社長、こんにちは！いまは研修中なんです。準備ができたら、すぐ働き始めますね。仕事はこうなる予定です。{work}",
+          "paused": "社長、いまはお休み中です。声をかけてもらえたら、すぐ戻りますよ。",
+          "idle": "社長、お疲れさまです！次の作業、いつでもどうぞ。",
+          "working": "社長、いま作業中です！終わったら、すぐお知らせしますね。",
+          "attention": "社長、ごめんなさい。作業が途中で止まってしまいました。作業記録に理由が残っています。",
+          "pausedDone": "わかりました、社長。{name}は少しお休みしますね。",
+          "resumed": "{name}、戻りました！またよろしくお願いします。",
+          "resumedTraining": "{name}、研修に戻りますね。準備ができたら働き始めます。",
+          "failed": "ごめんなさい、うまくいきませんでした。少し時間をおいて、もう一度お願いします。"
+        },
+        "spirited": {
+          "training": "社長！いまは研修中です！準備ができしだい、全力で働きます！仕事はこうなる予定です。{work}",
+          "paused": "社長！いまは休止中です！呼んでいただければ、すぐに戻ります！",
+          "idle": "社長、お疲れさまです！次の作業、いつでも行けます！",
+          "working": "社長！いま全力で作業中です！終わりしだい報告します！",
+          "attention": "社長、申し訳ありません！作業が途中で止まりました！作業記録に理由が残っています！",
+          "pausedDone": "承知しました、社長！{name}、しっかり休んで備えます！",
+          "resumed": "{name}、戻りました！全力でいきます！",
+          "resumedTraining": "{name}、研修に戻ります！準備ができしだい働きます！",
+          "failed": "申し訳ありません！うまくいきませんでした！時間をおいて、もう一度お願いします！"
+        }
+      },
+      "studio": {
+        "title": "カスタマイズ",
+        "of": "{name}のカスタマイズ",
+        "open": "カスタマイズ",
+        "preview": "{name}のプレビュー",
+        "sample": "話し方の見本",
+        "hint": "見た目と性格は、保存するとすぐに反映されます。",
+        "dirty": "保存していない変更があります。",
+        "discard": "保存していない変更があります。もう一度 Esc を押すと、変更を捨てて戻ります。",
+        "saved": "保存しました。",
+        "failed": "すみません、保存できませんでした。時間をおいて、もう一度お願いします。",
+        "save": "保存する",
+        "reset": "もとに戻す",
+        "back": "戻る",
+        "random": "おまかせ",
+        "tabs": {
+          "look": "見た目",
+          "tone": "性格と話し方",
+          "stats": "能力値",
+          "work": "働き方"
+        },
+        "parts": {
+          "head": "頭の形",
+          "eyes": "目",
+          "antenna": "アンテナ",
+          "gear": "装備",
+          "shell": "本体の色",
+          "accent": "差し色"
+        },
+        "options": {
+          "head": {
+            "helmet": "ヘルメット",
+            "round": "まる",
+            "square": "しかく",
+            "dome": "ドーム"
+          },
+          "eyes": {
+            "led": "LED",
+            "bar": "ライン",
+            "wide": "ぱっちり"
+          },
+          "antenna": {
+            "single": "1本",
+            "double": "2本",
+            "ring": "リング",
+            "none": "なし"
+          },
+          "gear": {
+            "role": "役割の装備",
+            "headset": "ヘッドセット",
+            "scanner": "スキャナー",
+            "goggles": "ゴーグル",
+            "eyeshade": "サンバイザー",
+            "bow_tie": "蝶ネクタイ",
+            "none": "なし"
+          },
+          "shell": {
+            "white": "ホワイト",
+            "silver": "シルバー",
+            "graphite": "グラファイト",
+            "sand": "サンド",
+            "mint": "ミント",
+            "sky": "スカイ",
+            "rose": "ローズ"
+          },
+          "accent": {
+            "role": "役割の色",
+            "violet": "バイオレット",
+            "teal": "ティール",
+            "blue": "ブルー",
+            "orange": "オレンジ",
+            "pink": "ピンク",
+            "lime": "ライム",
+            "gold": "ゴールド",
+            "red": "レッド"
+          }
+        },
+        "toneNote": "選んだ性格で、会話の言い回しが変わります。左の「話し方の見本」で確かめられます。",
+        "tones": {
+          "polite": {
+            "name": "丁寧",
+            "hint": "落ち着いた敬語で話します"
+          },
+          "brisk": {
+            "name": "簡潔",
+            "hint": "要点だけを短く話します"
+          },
+          "friendly": {
+            "name": "フレンドリー",
+            "hint": "やわらかく、親しみやすく話します"
+          },
+          "spirited": {
+            "name": "熱血",
+            "hint": "元気よく、力強く話します"
+          }
+        },
+        "notYet": "この設定は、AI社員の仕事が動き出したときの進め方に使います。仕事はまだ準備中なので、今は働きには効きません。",
+        "points": "残り {left} ポイント（全部で {total}）",
+        "raise": "{name}を上げる",
+        "lower": "{name}を下げる",
+        "value": "{name}：{max} のうち {value}",
+        "stats": {
+          "speed": {
+            "name": "スピード",
+            "hint": "早く片づけることを優先"
+          },
+          "care": {
+            "name": "丁寧さ",
+            "hint": "抜けや間違いを減らすことを優先"
+          },
+          "insight": {
+            "name": "提案力",
+            "hint": "気づきや案を出すことを優先"
+          },
+          "grit": {
+            "name": "粘り強さ",
+            "hint": "あきらめずに追い続けることを優先"
+          }
+        },
+        "autonomy": {
+          "label": "自分で進めてよい範囲",
+          "ask": {
+            "name": "毎回確かめる",
+            "hint": "動く前に、人に確かめます"
+          },
+          "report": {
+            "name": "進めてから報告",
+            "hint": "任された仕事の中では自分で進め、あとで報告します"
+          }
+        },
+        "reporting": {
+          "label": "報告の細かさ",
+          "brief": "要点だけ",
+          "standard": "ふつう",
+          "detailed": "くわしく"
+        },
+        "discardBack": "変更を捨てて戻る",
+        "soon": "準備中"
+      }
+    },
+    "enterOffice": "出社する（全画面）",
+    "installApp": "アプリとしてインストール"
+  }
+}

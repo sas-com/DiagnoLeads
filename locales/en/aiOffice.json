@@ -1,0 +1,541 @@
+{
+  "aiOffice": {
+    "title": "AI office",
+    "description": "See how the AI employees work in a virtual office. Each AI employee is a robot that moves around the floor with its status. Open a name tag for its details and work log.",
+    "forbidden": "You do not have permission to view the AI office.",
+    "loadError": "The AI office could not be loaded. Please try again later.",
+    "noOrganization": "Choose an organization to see its AI office.",
+    "updatedAt": "As of {time}",
+    "summary": {
+      "hired": "On staff",
+      "working": "Working",
+      "processedToday": "Handled today",
+      "attention": "Needs attention",
+      "people": "{count}",
+      "items": "{count}",
+      "heading": "Today's summary"
+    },
+    "floor": {
+      "label": "Office floor",
+      "entrance": "Entrance",
+      "scrollHint": "Scroll the floor map sideways.",
+      "legend": {
+        "desk": "Working or needs attention: at its desk",
+        "lounge": "Waiting: lounge",
+        "training": "In training: training room",
+        "charging": "Paused: charging station"
+      }
+    },
+    "rooms": {
+      "sales": "Sales floor",
+      "training": "Training room",
+      "lounge": "Lounge",
+      "charging": "Charging station",
+      "marketing": "Marketing room",
+      "engineering": "Engineering room",
+      "backoffice": "Reception"
+    },
+    "roles": {
+      "marketer": {
+        "title": "Marketer",
+        "description": "Finds prospects (leads) and tells which ones are worth following.",
+        "defaultName": "AI Marketer"
+      },
+      "sales": {
+        "title": "Sales",
+        "description": "Turns prospects into deals and keeps follow-ups from being dropped.",
+        "defaultName": "AI Sales"
+      },
+      "engineer": {
+        "title": "Engineer",
+        "description": "Sorts out the customer's situation and prepares the proposal.",
+        "defaultName": "AI Engineer"
+      },
+      "back_office": {
+        "title": "Back office",
+        "description": "Keeps watch on the dates and the promises, so that nothing is missed.",
+        "defaultName": "AI Back office"
+      }
+    },
+    "packs": {
+      "sales_management": {
+        "title": "Sales management",
+        "description": "Work any company's sales has, on the leads and deals of this app."
+      },
+      "ax_migration": {
+        "title": "AX migration",
+        "description": "Work specific to selling the migration of legacy systems."
+      }
+    },
+    "works": {
+      "score_new_leads": {
+        "title": "Scoring new prospects",
+        "description": "Scores new prospects (leads) without a score with Claude. Names, emails and other fields that point at a person are never sent."
+      },
+      "check_due_actions": {
+        "title": "Checking the next actions due",
+        "description": "Checks the next actions due soon or overdue every morning. It never changes a lead."
+      },
+      "draft_meeting_prep": {
+        "title": "Drafting the first meeting's preparation",
+        "description": "Sorts out the points of the migration from the diagnosis answers and drafts the preparation of the first meeting."
+      },
+      "recompute_act_timing": {
+        "title": "Recomputing when to act",
+        "description": "Recomputes when to act on each lead every morning, from the hearings and the diagnosis answers."
+      }
+    },
+    "status": {
+      "working": "Working",
+      "attention": "Needs attention",
+      "idle": "Waiting",
+      "training": "In training",
+      "paused": "Paused",
+      "vacant": "Vacant"
+    },
+    "statusHint": {
+      "working": "Working right now.",
+      "attention": "The last run failed or has not finished. Check the work log.",
+      "idle": "Waiting for the next run.",
+      "training": "The work of this role is still being prepared, so it does not work yet. It starts working by itself once ready.",
+      "paused": "A paused employee does not work. Resume it to work from the next run.",
+      "vacant": "No AI employee has this role yet."
+    },
+    "desk": {
+      "hire": "Hire",
+      "openDetails": "Open details",
+      "hireByAdmin": "An admin can hire one",
+      "details": "{role}, in the {place}, {count} handled today",
+      "vacantDetails": "Vacant desk in the {place}"
+    },
+    "sheet": {
+      "vacantTitle": "Vacant desk: {role}",
+      "role": "Role",
+      "room": "Desk in",
+      "hiredAt": "Hired on",
+      "name": "Name",
+      "hireSubmit": "Hire",
+      "manage": "Manage",
+      "rename": "Rename",
+      "pause": "Pause",
+      "resume": "Resume",
+      "dismiss": "Dismiss",
+      "dismissTitle": "Dismiss {name}?",
+      "dismissDescription": "The desk returns to vacant, and this cannot be undone. The work log is kept. You can hire an AI employee for the role again later.",
+      "readOnly": "Only admins can hire and manage AI employees.",
+      "runs": "Work log",
+      "runsCaption": "Up to 20, newest first",
+      "runsEmpty": "No work yet.",
+      "runsError": "The work log could not be loaded.",
+      "columns": {
+        "startedAt": "Started",
+        "trigger": "Trigger",
+        "status": "Result",
+        "processed": "Handled",
+        "resultCode": "Code"
+      },
+      "trigger": {
+        "schedule": "Scheduled",
+        "manual": "Manual"
+      },
+      "runStatus": {
+        "running": "Working",
+        "succeeded": "Succeeded",
+        "failed": "Failed"
+      },
+      "danger": "Cannot be undone",
+      "dismissNote": "Dismissing returns the desk to vacant. The work log is kept as a record.",
+      "place": "Now in",
+      "works": "Work",
+      "workPack": "Work pack: {pack}",
+      "workPreparing": "Being prepared",
+      "workReady": "Running"
+    },
+    "toast": {
+      "hired": "Hired {name}",
+      "renamed": "Renamed to {name}",
+      "paused": "Paused {name}",
+      "resumed": "Resumed {name}",
+      "dismissed": "Dismissed {name}",
+      "conflict": "An AI employee already has this role",
+      "error": "Could not save. Please try again later",
+      "actionError": "Could not do that. Please try again later"
+    },
+    "loading": "Loading",
+    "immersive": {
+      "label": "AI office (full screen)",
+      "president": "President",
+      "day": "Day",
+      "night": "Night",
+      "staff": "Staff",
+      "map": "Map of the floor. The lit points are where the AI employees are.",
+      "relay": "How value passes on",
+      "relaySteps": {
+        "marketer": "Finds prospects",
+        "sales": "Turns them into deals",
+        "engineer": "Prepares the proposal",
+        "back_office": "Keeps the dates"
+      },
+      "target": "In front of you",
+      "title": {
+        "tagline": "You are the president. With your AI employees, you create new value.",
+        "clockIn": "Enter the office",
+        "back": "Back to the normal view",
+        "staff": "President {name} · {hired} AI employees ({vacant} vacant)",
+        "narrow": "This screen is made for wide screens (a computer, or a tablet held sideways). At this width, please use the normal view."
+      },
+      "tasks": {
+        "heading": "The president's tasks",
+        "none": "Nothing urgent.",
+        "consult": "{role}: talk it over",
+        "consultWhy": "Its work stopped",
+        "resume": "{role}: call back",
+        "resumeWhy": "It is paused",
+        "hire": "{role}: hire",
+        "hireWhy": "This department has nobody",
+        "noneReadOnly": "Nothing urgent. Hiring and resuming are done by an admin."
+      },
+      "actions": {
+        "talk": "Talk",
+        "zoomIn": "Closer",
+        "zoomOut": "Step back",
+        "resetView": "Reset view",
+        "list": "Back to the normal view",
+        "clockOut": "Leave"
+      },
+      "talk": {
+        "with": "Talking with {name}",
+        "you": "President (you)",
+        "hired": "I am {name}. Glad to work with you, President. I will train first and start working once my work is ready.",
+        "paused": "Understood, President. {name} will rest for a while.",
+        "resumed": "{name}, back to work.",
+        "failed": "Sorry, that did not work. Please try again later.",
+        "lines": {
+          "vacant": "This desk ({role}) is vacant. {work}",
+          "training": "President, I am in training. I will start working by myself once my work is ready. This is what I will do: {work}",
+          "paused": "President, I am paused. Say the word and I will come back.",
+          "idle": "President, good to see you. I am waiting for my next work.",
+          "working": "President, I am working right now. I will report when I am done.",
+          "attention": "President, I am sorry. My work stopped half way. The work log has the reason."
+        },
+        "choices": {
+          "hire": "Hire",
+          "pause": "Rest for a while",
+          "resume": "Come back",
+          "leave": "Later",
+          "back": "Back to the office"
+        },
+        "resumedTraining": "{name}, back to training. I will start working once my work is ready.",
+        "trainingFirst": " Until its work is ready, a new hire stays in training."
+      },
+      "floorGuide": "Floor guide",
+      "room": {
+        "back": "Back to the floor",
+        "work": {
+          "marketing": "Leads",
+          "backoffice": "Due today"
+        },
+        "guide": {
+          "employee": "{name} looks after this room.",
+          "attention": "The work of {name} has stopped. The figures are read from the records.",
+          "training": "{name} is in training and does not look after this room yet. The figures are read from the records.",
+          "paused": "{name} is paused. The figures are read from the records.",
+          "vacant": "The {role} seat is vacant. The figures are read from the records."
+        },
+        "leads": {
+          "board": "Lead board",
+          "report": "New leads this week: {newThisWeek}. Consultation requests: {consultation}. Not started yet: {needsAction}.",
+          "reportLoading": "Reading the figures from the board.",
+          "reportUnavailable": "The figures could not be read from the board.",
+          "ask": {
+            "needsAction": "Show me what nobody has started on",
+            "consultation": "Show me the consultation requests",
+            "newThisWeek": "Show me this week's new leads",
+            "mine": "Show me my own leads",
+            "all": "Show me everything"
+          },
+          "views": {
+            "needsAction": "Not started yet (new)",
+            "consultation": "Consultation requested",
+            "newThisWeek": "New this week",
+            "mine": "Assigned to me",
+            "all": "All"
+          },
+          "count": "{count, plural, one {# lead} other {# leads}}",
+          "keys": {
+            "rows": "choose a row",
+            "open": "open"
+          },
+          "columns": {
+            "lead": "Company and name",
+            "mql": "MQL level",
+            "status": "Status",
+            "assignee": "Assignee",
+            "created": "Created"
+          },
+          "noCompany": "No company name",
+          "noLevel": "—",
+          "unassigned": "Unassigned",
+          "empty": "No leads match this view.",
+          "loading": "Loading",
+          "error": "The leads could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see leads. Please ask an administrator.",
+          "range": "{from}–{to} of {total}",
+          "openHint": "Opening a row opens the customer file in this room.",
+          "openList": "Open the list in the normal view",
+          "prev": "Previous",
+          "next": "Next",
+          "page": "{page} / {pages}"
+        },
+        "file": {
+          "label": "The file of {company}",
+          "title": "Customer file",
+          "reading": "Reading the contact records.",
+          "readError": "The contact records could not be read. Please open the file again in a while.",
+          "noContact": "There is no contact record for this lead yet.",
+          "latest": "The last contact was \"{kind}\" on {date}. Contact records in all: {total}.",
+          "recorded": "Recorded \"{kind}\". You can undo it if it was a mistake.",
+          "undone": "The record was undone.",
+          "failed": "Sorry, that did not work. Please try again in a while.",
+          "readOnly": "You do not have permission to record contacts.",
+          "choices": {
+            "call": "I called",
+            "email": "I emailed",
+            "no_answer": "No answer",
+            "back": "Back to the board",
+            "undo": "Undo this record"
+          },
+          "contact": "Contact",
+          "email": "Email",
+          "phone": "Phone",
+          "created": "Created",
+          "assignee": "Assignee",
+          "notSet": "Not set",
+          "contacts": "Contact records",
+          "contactsSummary": "{total} in all (no answer: {noAnswer})",
+          "contactsEmpty": "No records yet.",
+          "by": "recorded by {name}",
+          "openDetail": "Open the details in the normal view",
+          "detailHint": "Hearings, next actions and edits are done on the details page in the normal view.",
+          "undoFailed": "The record could not be undone and is still there. Please try again."
+        },
+        "due": {
+          "board": "Due today",
+          "position": "{index} of {total}",
+          "reading": "Checking what is due.",
+          "error": "What is due could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see next actions. Please ask an administrator.",
+          "empty": "You have no next actions due today or earlier.",
+          "report": "Your next actions due today or earlier: {total}. Here is number {index}.",
+          "more": "There are {count} more. Please check them on Today in the normal view.",
+          "done": "Marked as done. You can undo it if it was a mistake.",
+          "undone": "It is no longer marked as done.",
+          "failed": "Sorry, that did not work. Please try again in a while.",
+          "finished": "That is all. Marked as done: {done}. Left: {left}.",
+          "readOnly": "You do not have permission to mark next actions as done.",
+          "choices": {
+            "done": "Mark as done",
+            "later": "Later (go to the next)",
+            "next": "Go to the next",
+            "undo": "Undo this one"
+          },
+          "dueToday": "Due today",
+          "overdue": "{days, plural, one {# day} other {# days}} overdue",
+          "takeaway": "Takeaway",
+          "checkWith": "Check with: {name}",
+          "lead": "For",
+          "noLead": "No name",
+          "note": "Note",
+          "queue": "In this order",
+          "states": {
+            "done": "Done",
+            "current": "Now",
+            "later": "Later",
+            "waiting": "Coming"
+          },
+          "allSeen": "You have seen them all.",
+          "openLead": "Open the lead in the normal view",
+          "openToday": "Open Today in the normal view",
+          "undoFailed": "It could not be undone and is still marked as done. Please try again.",
+          "reportNext": "Here is number {index} of {total}."
+        }
+      },
+      "tones": {
+        "brisk": {
+          "training": "In training. I start once the work is ready. Planned work: {work}",
+          "paused": "Paused. Call me and I am back.",
+          "idle": "Waiting for the next task.",
+          "working": "Working. I will report when done.",
+          "attention": "The work stopped. The reason is in the work log.",
+          "pausedDone": "Understood. {name} takes a break.",
+          "resumed": "{name}, back.",
+          "resumedTraining": "{name}, back to training.",
+          "failed": "That failed. Please try again in a while."
+        },
+        "friendly": {
+          "training": "Hi, boss! I am in training right now. I will get going as soon as the work is ready. Here is what I will do: {work}",
+          "paused": "I am taking a break right now, boss. Just call me and I will be right back.",
+          "idle": "Hi, boss! Ready for the next task whenever you are.",
+          "working": "I am on it, boss! I will let you know as soon as I am done.",
+          "attention": "Sorry, boss. The work stopped halfway. The reason is in the work log.",
+          "pausedDone": "Got it, boss. {name} will take a little break.",
+          "resumed": "{name} is back! Glad to be here again.",
+          "resumedTraining": "{name} is going back to training. I will start once the work is ready.",
+          "failed": "Sorry, that did not work. Please try again in a little while."
+        },
+        "spirited": {
+          "training": "Boss! I am in training! I will give it everything once the work is ready! Here is what I will do: {work}",
+          "paused": "Boss! I am paused! Call me and I am back at once!",
+          "idle": "Boss! Ready for the next task, any time!",
+          "working": "Boss! Working at full power! I will report as soon as I am done!",
+          "attention": "Boss, my apologies! The work stopped halfway! The reason is in the work log!",
+          "pausedDone": "Understood, boss! {name} will rest and be ready!",
+          "resumed": "{name} is back! Full power!",
+          "resumedTraining": "{name} is going back to training! I start once the work is ready!",
+          "failed": "My apologies! That did not work! Please try again in a while!"
+        }
+      },
+      "studio": {
+        "title": "Customize",
+        "of": "Customize {name}",
+        "open": "Customize",
+        "preview": "Preview of {name}",
+        "sample": "How it talks",
+        "hint": "The look and the personality show as soon as you save.",
+        "dirty": "There are unsaved changes.",
+        "discard": "There are unsaved changes. Press Esc again to discard them and go back.",
+        "saved": "Saved.",
+        "failed": "Sorry, that could not be saved. Please try again in a while.",
+        "save": "Save",
+        "reset": "Reset",
+        "back": "Back",
+        "random": "Surprise me",
+        "tabs": {
+          "look": "Look",
+          "tone": "Personality",
+          "stats": "Abilities",
+          "work": "Work style"
+        },
+        "parts": {
+          "head": "Head",
+          "eyes": "Eyes",
+          "antenna": "Antenna",
+          "gear": "Gear",
+          "shell": "Shell colour",
+          "accent": "Accent colour"
+        },
+        "options": {
+          "head": {
+            "helmet": "Helmet",
+            "round": "Round",
+            "square": "Square",
+            "dome": "Dome"
+          },
+          "eyes": {
+            "led": "LED",
+            "bar": "Bar",
+            "wide": "Wide"
+          },
+          "antenna": {
+            "single": "One",
+            "double": "Two",
+            "ring": "Ring",
+            "none": "None"
+          },
+          "gear": {
+            "role": "The role's gear",
+            "headset": "Headset",
+            "scanner": "Scanner",
+            "goggles": "Goggles",
+            "eyeshade": "Eyeshade",
+            "bow_tie": "Bow tie",
+            "none": "None"
+          },
+          "shell": {
+            "white": "White",
+            "silver": "Silver",
+            "graphite": "Graphite",
+            "sand": "Sand",
+            "mint": "Mint",
+            "sky": "Sky",
+            "rose": "Rose"
+          },
+          "accent": {
+            "role": "The role's colour",
+            "violet": "Violet",
+            "teal": "Teal",
+            "blue": "Blue",
+            "orange": "Orange",
+            "pink": "Pink",
+            "lime": "Lime",
+            "gold": "Gold",
+            "red": "Red"
+          }
+        },
+        "toneNote": "The personality changes how it talks in a conversation. Check it under \"How it talks\" on the left.",
+        "tones": {
+          "polite": {
+            "name": "Polite",
+            "hint": "Calm and courteous"
+          },
+          "brisk": {
+            "name": "Brisk",
+            "hint": "Short and to the point"
+          },
+          "friendly": {
+            "name": "Friendly",
+            "hint": "Soft and approachable"
+          },
+          "spirited": {
+            "name": "Spirited",
+            "hint": "Lively and forceful"
+          }
+        },
+        "notYet": "This setting decides how the AI employee goes about its work once the work runs. The work is still being prepared, so it changes nothing yet.",
+        "points": "{left} points left (of {total})",
+        "raise": "Raise {name}",
+        "lower": "Lower {name}",
+        "value": "{name}: {value} of {max}",
+        "stats": {
+          "speed": {
+            "name": "Speed",
+            "hint": "Getting things done quickly comes first"
+          },
+          "care": {
+            "name": "Care",
+            "hint": "Fewer gaps and mistakes come first"
+          },
+          "insight": {
+            "name": "Insight",
+            "hint": "Noticing and suggesting comes first"
+          },
+          "grit": {
+            "name": "Grit",
+            "hint": "Following up without giving up comes first"
+          }
+        },
+        "autonomy": {
+          "label": "How far it may go on its own",
+          "ask": {
+            "name": "Ask every time",
+            "hint": "It checks with a person before acting"
+          },
+          "report": {
+            "name": "Act, then report",
+            "hint": "It acts within its work and reports afterwards"
+          }
+        },
+        "reporting": {
+          "label": "How detailed its reports are",
+          "brief": "Brief",
+          "standard": "Standard",
+          "detailed": "Detailed"
+        },
+        "discardBack": "Discard and go back",
+        "soon": "Not yet in use"
+      }
+    },
+    "enterOffice": "Enter the office (full screen)",
+    "installApp": "Install as an app"
+  }
+}
