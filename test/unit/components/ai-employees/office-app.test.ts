@@ -1,6 +1,7 @@
 import {
   OFFICE_MIN_WIDTH,
   isAppWindow,
+  cameHome,
   justArrived,
   launchedAsApp,
   officeFits,
@@ -36,10 +37,28 @@ describe('justArrived', () => {
   });
 });
 
+describe('cameHome (#1169)', () => {
+  it('is true for someone who came by the logo, and not for someone who signed in', () => {
+    expect(cameHome('?source=home')).toBe(true);
+    expect(cameHome('?tab=1&source=home')).toBe(true);
+    expect(cameHome('?source=login')).toBe(false);
+    expect(cameHome('?source=app')).toBe(false);
+    expect(cameHome('')).toBe(false);
+    expect(justArrived('?source=home')).toBe(false);
+  });
+});
+
 describe('withoutArrival', () => {
   it('drops the mark once it was read, and keeps the rest of the address', () => {
     expect(withoutArrival('/ja/office', '?source=login')).toBe('/ja/office');
     expect(withoutArrival('/ja/office', '?tab=1&source=login', '#staff')).toBe(
+      '/ja/office?tab=1#staff'
+    );
+  });
+
+  it('drops the mark of coming home too', () => {
+    expect(withoutArrival('/ja/office', '?source=home')).toBe('/ja/office');
+    expect(withoutArrival('/ja/office', '?source=home&tab=1', '#staff')).toBe(
       '/ja/office?tab=1#staff'
     );
   });

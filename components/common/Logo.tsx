@@ -1,6 +1,6 @@
 'use client';
 
-import { HOME_PATH } from '@/lib/routes/home';
+import { HOME_ENTRY_PATH } from '@/lib/routes/home';
 import Link from 'next/link';
 
 interface LogoProps {
@@ -9,7 +9,7 @@ interface LogoProps {
   showText?: boolean;
   /**
    * Where the logo leads. Home (the AI office) unless given: without a language, so the site's
-   * language redirect adds it; callers that know the language pass `homePath(locale)`. An empty
+   * language redirect adds it; callers that know the language pass `homeEntryPath(locale)`. An empty
    * value draws the logo without a link
    */
   href?: string;
@@ -19,7 +19,7 @@ export function Logo({
   collapsed = false,
   size = 'md',
   showText = true,
-  href = HOME_PATH,
+  href = HOME_ENTRY_PATH,
 }: LogoProps) {
   const sizeClasses = {
     sm: 'w-8 h-8',
