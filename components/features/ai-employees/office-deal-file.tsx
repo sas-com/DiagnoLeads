@@ -106,7 +106,8 @@ export function OfficeDealFile({
   organizationId,
   deal,
   today,
-  canEdit,
+  canEdit: mayEdit,
+  gone = false,
   header,
   guide,
   keysRef,
@@ -119,6 +120,8 @@ export function OfficeDealFile({
   /** Japan calendar day the board was read on */
   today: string;
   canEdit: boolean;
+  /** The boards no longer hold the deal (deleted, closed elsewhere): shown as it was, no answers */
+  gone?: boolean;
   /** Whose room this is: shown over the report, like over the board */
   header: ReactNode;
   /** The line that says who holds the room */
@@ -130,6 +133,8 @@ export function OfficeDealFile({
   onLeaveOffice: () => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room.dealFile');
+  // What is shown may be out of date once the deal left the boards: nothing is changed then
+  const canEdit = mayEdit && !gone;
   const tImmersive = useTranslations('aiOffice.immersive');
   const tDeals = useTranslations('deals');
   const tTasks = useTranslations('leadFollowUp.tasks');
@@ -380,10 +385,10 @@ export function OfficeDealFile({
           <p className="text-base leading-relaxed font-medium" aria-live="polite">
             {report}
           </p>
-          {!canEdit && <p className="text-sm text-[#d8d2c4]">{t('readOnly')}</p>}
+          {!canEdit && <p className="text-sm text-[#d8d2c4]">{t(gone ? 'gone' : 'readOnly')}</p>}
         </div>
 
-        {matter === 'sql' && next && (
+        {canEdit && matter === 'sql' && next && (
           // The question takes the focus as a whole, not an answer: it is read out from its title,
           // and Enter pressed once more decides nothing
           <section
@@ -418,7 +423,7 @@ export function OfficeDealFile({
           </section>
         )}
 
-        {matter === 'add' && (
+        {canEdit && matter === 'add' && (
           <form onSubmit={saveTask} className="flex flex-col gap-2">
             <h3 className={CAP}>{t('add.title')}</h3>
             <label htmlFor={titleId} className="text-sm text-[#d8d2c4]">
@@ -492,7 +497,7 @@ export function OfficeDealFile({
           </form>
         )}
 
-        {!matter && (
+        {(!matter || !canEdit) && (
           <>
             <h3 className={CAP}>{tImmersive('talk.you')}</h3>
             <ul className="space-y-2">

@@ -3,7 +3,10 @@
  * deal file in which the deal is moved by one stage and its next action is settled, with an undo.
  * Real next-intl messages; tRPC mocked.
  */
+import { OfficeDealFile } from '@/components/features/ai-employees/office-deal-file';
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
+import type { RoomKeys } from '@/components/features/ai-employees/office-room-contract';
+import type { BoardDeal } from '@/components/features/ai-employees/rooms/deals-board';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -635,6 +638,38 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.moves).toHaveLength(0);
     expect(mocks.marks).toHaveLength(0);
     expect(choice(office, /ボードに戻る/)).toHaveTextContent('Esc');
+  });
+
+  it('takes no answers over a deal that left the boards meanwhile, and says why', () => {
+    const keys = { current: null as RoomKeys | null };
+    render(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <OfficeDealFile
+          organizationId={ORG_ID}
+          deal={mocks.deals[2] as unknown as BoardDeal}
+          today={TODAY}
+          canEdit
+          gone
+          header={null}
+          keysRef={keys}
+          onClose={vi.fn()}
+          onLeaveOffice={vi.fn()}
+        />
+      </NextIntlClientProvider>
+    );
+    expect(screen.getByText(/この商談は、いまのボードにありません/)).toBeInTheDocument();
+    expect(screen.queryByText('商談を変える権限がありません。')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /へ進める/ })).not.toBeInTheDocument();
+    // The keys carry nothing out either
+    for (const key of ['1', '2', '3', '4', 'Z']) {
+      keys.current?.({ key, isComposing: false, keyCode: 0, preventDefault: vi.fn() });
+    }
+    expect(mocks.moves).toHaveLength(0);
+    expect(mocks.marks).toHaveLength(0);
+    expect(screen.queryByLabelText('次にすること（必須）')).not.toBeInTheDocument();
+    // The file is still shown as it was, with the way back
+    expect(screen.getByRole('region', { name: '「見本の商談3」の商談ファイル' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ボードに戻る/ })).toHaveTextContent('Esc');
   });
 
   it('says so when a move did not go through, and leaves the deal where it was', async () => {

@@ -203,7 +203,8 @@ export function OfficeRoomSales({
         organizationId={organizationId}
         deal={shown}
         today={today}
-        canEdit={canEdit && (opened !== null || !everyone.data)}
+        canEdit={canEdit}
+        gone={opened === null && everyone.data !== undefined}
         header={header}
         guide={guideLine}
         keysRef={fileKeys}

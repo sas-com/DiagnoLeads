@@ -617,7 +617,8 @@
           "openDetail": "Open the deal in the normal view",
           "detailHint": "Winning and losing, changes to the amount or the expected close date, and contact records are made on the deal's page in the normal view.",
           "closeLate": "Past the expected close",
-          "noAmount": "No amount yet"
+          "noAmount": "No amount yet",
+          "gone": "This deal is no longer on the board (it was deleted, or closed as won or lost). It is shown as it was when opened."
         },
         "reception": {
           "board": "General affairs counter",
