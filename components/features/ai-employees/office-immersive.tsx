@@ -137,6 +137,7 @@ export function OfficeImmersive({
   presidentName,
   employees,
   canManage,
+  startOn = 'title',
   onExit,
 }: {
   organizationId: string;
@@ -144,6 +145,12 @@ export function OfficeImmersive({
   presidentName: string | null;
   employees: readonly OfficeEmployee[];
   canManage: boolean;
+  /**
+   * The scene the office opens on: the title for who comes in, the floor for who comes home by
+   * the logo (#1169). On the floor at once there was no press to ask the browser for its own
+   * full screen with, so the office only covers the page
+   */
+  startOn?: 'title' | 'world';
   onExit: () => void;
 }) {
   const t = useTranslations('aiOffice.immersive');
@@ -155,7 +162,7 @@ export function OfficeImmersive({
   const utils = trpc.useUtils();
   const rootRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
-  const [stage, setStage] = useState<Stage>('title');
+  const [stage, setStage] = useState<Stage>(startOn);
   const [now, setNow] = useState(() => new Date());
   const [size, setSize] = useState({ w: 1280, h: 800 });
   const [zoom, setZoom] = useState(1);
@@ -471,7 +478,16 @@ export function OfficeImmersive({
   };
 
   const time = format.dateTime(now, { hour: '2-digit', minute: '2-digit' });
-  const show3d = threeD && stage === 'world';
+  // The 3D floor stays behind a conversation, a room and the customization (#1148)
+  const show3d = threeD && stage !== 'title';
+  // What a scene other than the floor is about: the desk of the room's employee, or the employee
+  // the president talks to or customizes
+  const subject3d =
+    stage === 'room'
+      ? DESK_SEATS[ROOM_ROLES[room]]
+      : stage === 'talk' || stage === 'studio'
+        ? spot
+        : null;
   // What the 3D floor shows: the real statuses, with what the trial panel pretends on top
   const shown3d = Object.fromEntries(
     AI_EMPLOYEE_ROLES.map((role) => [
@@ -586,8 +602,16 @@ export function OfficeImmersive({
               <OfficeCanvas3D
                 employees={floor3d}
                 vacant={AI_EMPLOYEE_ROLES.filter((role) => statuses[role] === 'vacant')}
-                events={trialEvent}
+                // The president standing in front of an employee is something that happens to it
+                events={
+                  stage === 'talk' && !trialEvent[selected]
+                    ? { ...trialEvent, [selected]: 'president_near' }
+                    : trialEvent
+                }
                 night={night}
+                stage={stage}
+                subject={subject3d}
+                attentive={stage === 'talk' ? selected : null}
                 zoom={zoom}
                 pan={pan}
                 focus={selectedEmployee ? selected : null}
@@ -603,7 +627,7 @@ export function OfficeImmersive({
             </Office3DBoundary>
           )}
           {/* The 3D floor is a picture: its name tags are the same buttons as on the 2D floor */}
-          {show3d && threeDReady && (
+          {show3d && threeDReady && stage === 'world' && (
             <Office3DTags
               ref={tags3d}
               lastShown={shown3dView}

@@ -90,6 +90,79 @@ export function cameraPosition(view: View3D): [x: number, y: number, z: number] 
   ];
 }
 
+/** The scenes of the full-screen office that the 3D floor stays behind (#1148) */
+export type Stage3D = 'world' | 'talk' | 'room' | 'studio';
+
+/**
+ * How a scene other than the floor frames what it is about: how close (next to the floor's
+ * starting close-up), and where on the screen, as shares of its width and height. The same
+ * places as in the 2D office: a conversation and the customization keep the employee left of
+ * their panel, a room keeps the desk of its employee in the upper left, clear of the board.
+ */
+export const STAGE_FRAMES: Readonly<
+  Record<Exclude<Stage3D, 'world'>, { close: number; at: ScreenPoint }>
+> = {
+  talk: { close: 2, at: { x: 0.32, y: 0.42 } },
+  studio: { close: 2, at: { x: 0.32, y: 0.42 } },
+  room: { close: 1.8, at: { x: 0.15, y: 0.3 } },
+};
+
+/** The height over the floor of what a scene frames: the middle of a robot */
+export const SUBJECT_HEIGHT = 1.2;
+
+/**
+ * What the camera shows in a scene. On the floor it is the zoom and the drag of the president;
+ * in a conversation, a room or the customization it is the scene's subject (an employee, or the
+ * desk of the room's employee) at the scene's place on the screen. Without a subject, the floor.
+ */
+export function stageView(
+  stage: Stage3D,
+  {
+    size,
+    zoom,
+    pan,
+    followed,
+    subject,
+  }: {
+    size: ScreenSize;
+    zoom: number;
+    pan: ScreenPoint;
+    /** Where the chosen employee is, for the floor */
+    followed: FloorPoint | null;
+    /** What the scene is about, for the other scenes */
+    subject: FloorPoint | null;
+  }
+): View3D {
+  if (stage === 'world' || !subject) {
+    return { target: viewTarget(zoom, followed), pxPerUnit: pxPerUnit(size, zoom), pan, size };
+  }
+  const frame = STAGE_FRAMES[stage];
+  const scale = pxPerUnit(size, frame.close);
+  return {
+    target: subject,
+    pxPerUnit: scale,
+    // The target lands in the middle of the screen; the pan moves the subject's middle (a
+    // height over the target, so higher on the screen) to the scene's place
+    pan: {
+      x: (frame.at.x - 0.5) * size.w,
+      y: (frame.at.y - 0.5) * size.h + ((2 * SUBJECT_HEIGHT) / SQRT6) * scale,
+    },
+    size,
+  };
+}
+
+/** One step of the whole view gliding to another: where it looks, how close, and its pan */
+export function easeView(from: View3D, to: View3D, share: number): View3D {
+  const step = Math.max(0, Math.min(1, share));
+  const between = (a: number, b: number) => a + (b - a) * step;
+  return {
+    target: easeTarget(from.target, to.target, step),
+    pxPerUnit: between(from.pxPerUnit, to.pxPerUnit),
+    pan: { x: between(from.pan.x, to.pan.x), y: between(from.pan.y, to.pan.y) },
+    size: to.size,
+  };
+}
+
 /** One step of the camera gliding from where it looks to where it should look */
 export function easeTarget(from: FloorPoint, to: FloorPoint, share: number): FloorPoint {
   const step = Math.max(0, Math.min(1, share));

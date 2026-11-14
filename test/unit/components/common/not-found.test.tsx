@@ -35,7 +35,7 @@ describe('not found', () => {
     expect(screen.getByRole('link', { name: 'リード一覧へ' })).toHaveAttribute('href', '/ja/leads');
     expect(screen.getByRole('link', { name: 'ホームに戻る' })).toHaveAttribute(
       'href',
-      '/ja/office'
+      '/ja/office?source=home'
     );
   });
 

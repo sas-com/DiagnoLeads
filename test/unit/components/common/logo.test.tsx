@@ -95,7 +95,7 @@ describe('Logo with href', () => {
   it('should render as link with default href', () => {
     render(<Logo />);
     // Home is the AI office (#1153), without a language: the language redirect adds it
-    expect(screen.getByRole('link')).toHaveAttribute('href', '/office');
+    expect(screen.getByRole('link')).toHaveAttribute('href', '/office?source=home');
   });
 
   it('should render as link with custom href', () => {
