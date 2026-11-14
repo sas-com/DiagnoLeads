@@ -9,7 +9,7 @@ import {
   DEFAULT_AI_EMPLOYEE_PROFILE,
 } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -313,6 +313,17 @@ describe('the studio', () => {
     await user.click(within(board).getByRole('button', { name: /^Esc\s*変更を捨てて戻る$/ }));
     expect(within(office).queryByRole('region', { name: /のカスタマイズ/ })).not.toBeInTheDocument();
     expect(mocks.updates).toHaveLength(0);
+  });
+
+  it('does not leave or switch tabs on a key of a Japanese conversion (IME) (#1140)', async () => {
+    const { office, board } = await openStudio();
+    fireEvent.keyDown(office, { key: '2', isComposing: true });
+    expect(within(board).getByRole('tab', { name: /見た目/ })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    fireEvent.keyDown(office, { key: 'Escape', keyCode: 229 });
+    expect(within(office).getByRole('region', { name: /のカスタマイズ/ })).toBeInTheDocument();
   });
 
   it('leaves at once with Esc when nothing was changed', async () => {

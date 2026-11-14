@@ -47,6 +47,7 @@ paths: ["components/features/ai-employees/**", "components/layout/**", "app/[loc
     - 選択肢のボタンは `RoomChoiceButton`（`office-room-parts.tsx`）
   - 場面が開いたときと、実行のあとのフォーカスは報告の文に置く（Enter の押しすぎで実行されない）
   - Esc は `onEscapeKeyDown` から1回だけ部屋に渡す（`onKeyDown` からも渡すと2回届く）
+  - 日本語入力（IME）の変換中のキーは、出社の画面の入口（`onKeyDown`・`onEscapeKeyDown`）でも、部屋のキーの処理の先頭でも除く（`components/ui/ime.ts` の `isImeKey`・`ignoreImeEscape`）。部屋には、変換中かどうかが分かるブラウザのイベントを渡す（`RoomKeyEvent`）。#1129 の検査が、Enter・Esc を見る行の上10行以内にこの確認があることを求める（#1140）
   - 記録は既存の API（`leadFollowUp.recordContact`・`deleteContact`）で行い、その記録を出すほかの画面（リードの詳細・今日・ダッシュボード）のキャッシュを捨てる。結果は部屋の中の文で伝える（トーストは出社の画面の後ろに隠れる）
   - 変える権限は API の答え（`canEdit`）で見て、無い人には実行の選択肢を出さない
 - **まだ決まっていないこと**（オーナーに確かめる）:

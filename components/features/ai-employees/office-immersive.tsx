@@ -1,5 +1,6 @@
 'use client';
 
+import { ignoreImeEscape, isImeKey } from '@/components/ui/ime';
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { OfficeEmployee } from '@/lib/features/ai-employees/service';
 import { AI_EMPLOYEE_ROLES, type AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
@@ -260,8 +261,15 @@ export function OfficeImmersive({
 
   // Esc is handled by the dialog (onEscapeKeyDown), Tab by its focus scope
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // A key of a Japanese conversion (IME) belongs to what is being typed, never to the office
+    if (isImeKey(event.nativeEvent)) return;
     // Leave the browser's and the screen reader's own shortcuts alone, and never repeat an order
     if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+    if (stage === 'room' || stage === 'studio') {
+      // Esc reaches the room once, through onEscapeKeyDown: here it would be handled twice
+      if (event.key !== 'Escape') roomKeys.current?.(event.nativeEvent);
+      return;
+    }
     if (stage === 'world') {
       if (event.key === 'e' || event.key === 'E') {
         event.preventDefault();
@@ -285,11 +293,6 @@ export function OfficeImmersive({
           enterRoom(entered);
         }
       }
-      return;
-    }
-    if (stage === 'room' || stage === 'studio') {
-      // Esc reaches the room once, through onEscapeKeyDown: here it would be handled twice
-      if (event.key !== 'Escape') roomKeys.current?.(event);
       return;
     }
     if (stage === 'talk' && /^[1-9]$/.test(event.key)) {
@@ -393,14 +396,14 @@ export function OfficeImmersive({
           ref={rootRef}
           aria-describedby={undefined}
           onKeyDown={onKeyDown}
-          onEscapeKeyDown={(event) => {
+          // The Esc that cancels a Japanese conversion (IME) only ends the conversion
+          onEscapeKeyDown={ignoreImeEscape((event) => {
             // Esc steps back one stage; only the title leaves the office. A room may use it
             // first, to close what is open in it
             event.preventDefault();
-            const inRoom = { key: 'Escape', preventDefault: () => undefined };
-            if ((stage === 'room' || stage === 'studio') && roomKeys.current?.(inRoom)) return;
+            if ((stage === 'room' || stage === 'studio') && roomKeys.current?.(event)) return;
             stepBack();
-          }}
+          })}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             rootRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
