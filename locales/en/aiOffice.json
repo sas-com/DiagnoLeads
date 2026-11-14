@@ -533,6 +533,20 @@
         },
         "discardBack": "Discard and go back",
         "soon": "Not yet in use"
+      },
+      "trial3d": {
+        "on": "3D (trial)",
+        "off": "Back to 2D",
+        "title": "3D trial",
+        "note": "Switch the status of {name} and what happened to it, on this screen only, to watch it walk and feel. The real status does not change.",
+        "fps": "{fps} frames a second",
+        "events": {
+          "run_succeeded": "A run succeeded",
+          "president_near": "The president came near",
+          "hired": "Hired"
+        },
+        "loading": "Loading the 3D floor.",
+        "failed": "The 3D floor could not be shown. The office is back in 2D."
       }
     },
     "enterOffice": "Enter the office (full screen)",

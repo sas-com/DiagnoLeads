@@ -11,6 +11,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   AlertTriangle,
   ArrowDown,
+  Box,
   DoorOpen,
   List,
   MessageCircle,
@@ -24,6 +25,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { useFormatter, useTimeZone, useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
 import {
   type KeyboardEvent,
   type PointerEvent,
@@ -33,6 +35,13 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  OFFICE_3D_KEY,
+  OFFICE_3D_TRIAL,
+  Office3DBoundary,
+  Office3DTrialPanel,
+} from './office-3d/office-3d-trial';
+import type { OfficeEvent } from './office-3d/office-emotion';
 import { officeFits } from './office-app';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
@@ -68,6 +77,12 @@ import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
+
+/**
+ * The floor in 3D (#1135, spike): three.js is loaded only when the president switches to it, so
+ * the rest of the app does not carry it
+ */
+const OfficeCanvas3D = dynamic(() => import('./office-3d/office-canvas-3d'), { ssr: false });
 
 /** How far the office can be dragged past the edge of the screen */
 const PAN_MARGIN = { x: 320, y: 200 };
@@ -134,6 +149,37 @@ export function OfficeImmersive({
   const roomKeys = useRef<RoomKeys | null>(null);
   // Something is open inside the room (a customer file): Esc closes that first
   const [roomFileOpen, setRoomFileOpen] = useState(false);
+  // The 3D spike (#1135): whether the floor is drawn in 3D, and what the trial panel pretends
+  // (a status and an event for the chosen employee, on this screen only)
+  const [threeD, setThreeD] = useState(false);
+  const [trialStatus, setTrialStatus] = useState<Partial<Record<AiEmployeeRole, DeskStatus>>>({});
+  const [trialEvent, setTrialEvent] = useState<Partial<Record<AiEmployeeRole, OfficeEvent>>>({});
+  const [fps, setFps] = useState<number | null>(null);
+  // The 2D floor stays until the 3D one drew its first frame, and comes back if it cannot be shown
+  const [threeDReady, setThreeDReady] = useState(false);
+  const [threeDFailed, setThreeDFailed] = useState(false);
+  const leave3d = (failed: boolean) => {
+    setThreeD(false);
+    setThreeDReady(false);
+    setThreeDFailed(failed);
+    // What the trial panel pretended ends with the trial
+    setTrialStatus({});
+    setTrialEvent({});
+    setFps(null);
+  };
+  const toggle3d = () => {
+    if (!OFFICE_3D_TRIAL) return;
+    if (threeD) leave3d(false);
+    else {
+      setThreeDFailed(false);
+      setThreeD(true);
+    }
+  };
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    setReducedMotion(query?.matches ?? false);
+  }, []);
 
   const statuses = statusByRole(employees);
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
@@ -283,6 +329,9 @@ export function OfficeImmersive({
       } else if (event.key === '0') {
         event.preventDefault();
         resetView();
+      } else if (OFFICE_3D_TRIAL && event.key.toUpperCase() === OFFICE_3D_KEY) {
+        event.preventDefault();
+        toggle3d();
       } else if ((event.key === 'c' || event.key === 'C') && canCustomize) {
         event.preventDefault();
         setStage('studio');
@@ -382,6 +431,17 @@ export function OfficeImmersive({
   };
 
   const time = format.dateTime(now, { hour: '2-digit', minute: '2-digit' });
+  const show3d = threeD && stage === 'world';
+  const floor3d = employees.map((employee) => {
+    const status = trialStatus[employee.role] ?? statuses[employee.role];
+    return {
+      role: employee.role,
+      name: employee.name,
+      status: status === 'vacant' ? ('idle' as const) : status,
+      look: employee.profile.look,
+      tone: employee.profile.tone,
+    };
+  });
   const president = presidentName ?? t('president');
 
   return (
@@ -439,7 +499,9 @@ export function OfficeImmersive({
               className={cn(
                 'absolute top-0 left-0 origin-top-left motion-reduce:transition-none',
                 // The floor follows the pointer at once while it is dragged, and glides otherwise
-                !dragging && 'transition-transform duration-700 ease-out'
+                !dragging && 'transition-transform duration-700 ease-out',
+                // The 3D floor takes the place of the drawing in the office
+                show3d && threeDReady && 'hidden'
               )}
             >
               <SceneDrawing
@@ -463,6 +525,20 @@ export function OfficeImmersive({
                 ))}
             </div>
           </div>
+          {show3d && (
+            <Office3DBoundary onError={() => leave3d(true)}>
+              <OfficeCanvas3D
+                employees={floor3d}
+                events={trialEvent}
+                night={night}
+                zoom={zoom}
+                focus={selectedEmployee ? selected : null}
+                reducedMotion={reducedMotion}
+                onFps={setFps}
+                onReady={() => setThreeDReady(true)}
+              />
+            </Office3DBoundary>
+          )}
           {/* Seen through a camera */}
           <div
             aria-hidden="true"
@@ -671,6 +747,34 @@ export function OfficeImmersive({
               {/* The map of the floor */}
               <FloorMap statuses={statuses} selected={selected} label={t('map')} />
 
+              {/* The 3D spike's trial panel: pretend a status or an event to watch the robot */}
+              {OFFICE_3D_TRIAL && threeD && threeDReady && selectedEmployee && (
+                <Office3DTrialPanel
+                  name={selectedEmployee.name}
+                  status={trialStatus[selected] ?? selectedStatus}
+                  event={trialEvent[selected]}
+                  fps={fps}
+                  onStatus={(status) => {
+                    setTrialStatus((current) => ({ ...current, [selected]: status }));
+                    setTrialEvent((current) => ({ ...current, [selected]: undefined }));
+                  }}
+                  onEvent={(event) =>
+                    setTrialEvent((current) => ({ ...current, [selected]: event }))
+                  }
+                />
+              )}
+              {/* While the 3D floor loads the 2D one stays; if it cannot be shown, the office says so */}
+              {OFFICE_3D_TRIAL && ((threeD && !threeDReady) || threeDFailed) && (
+                <output
+                  className={cn(
+                    PANEL,
+                    'absolute bottom-32 left-1/2 block -translate-x-1/2 px-4 py-3 text-sm'
+                  )}
+                >
+                  {t(threeDFailed ? 'trial3d.failed' : 'trial3d.loading')}
+                </output>
+              )}
+
               {/* The floor guide: the rooms that hold work */}
               <nav
                 aria-label={t('floorGuide')}
@@ -715,6 +819,12 @@ export function OfficeImmersive({
                     <ZoomOut className="h-6 w-6" aria-hidden="true" />
                     {t('actions.zoomOut')}
                   </HudButton>
+                  {OFFICE_3D_TRIAL && (
+                    <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
+                      <Box className="h-6 w-6" aria-hidden="true" />
+                      {t(threeD ? 'trial3d.off' : 'trial3d.on')}
+                    </HudButton>
+                  )}
                   <HudButton onClick={resetView} hotkey="0">
                     <ScanSearch className="h-6 w-6" aria-hidden="true" />
                     {t('actions.resetView')}
