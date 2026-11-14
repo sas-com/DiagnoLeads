@@ -4,18 +4,28 @@
  */
 import { LeadPrepCard } from '@/components/features/lead-prep/lead-prep-card';
 import messages from '@/locales/ja/common.json';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ result: {} as Record<string, unknown>, mutate: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  result: {} as Record<string, unknown>,
+  mutate: vi.fn(),
+  // What the card gave the mutation: called to answer a save
+  hook: {} as { onSuccess?: () => void; onError?: (error: { data?: { code?: string } }) => void },
+}));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({ leadPrep: { get: { invalidate: vi.fn() } } }),
     leadPrep: {
       get: { useQuery: () => mocks.result },
-      save: { useMutation: () => ({ mutate: mocks.mutate, isPending: false }) },
+      save: {
+        useMutation: (options: typeof mocks.hook) => {
+          mocks.hook = options;
+          return { mutate: mocks.mutate, isPending: false };
+        },
+      },
     },
   },
 }));
@@ -69,7 +79,106 @@ describe('LeadPrepCard', () => {
         recentNews: '新工場を建設中',
         firstQuestions: ['手引きの質問1', '手引きの質問2', '手引きの質問3'],
       }),
+      // No card was there when the editing started
+      expectedUpdatedAt: null,
     });
+  });
+
+  const SAVED_AT = new Date('2026-10-18T01:00:00Z');
+  const savedCard = {
+    estimatedSystem: 'AS/400',
+    estimatedSystemBasis: null,
+    recentNews: null,
+    hypotheses: {},
+    firstQuestions: ['質問A'],
+    updatedAt: SAVED_AT,
+    updatedByName: '営業 太郎',
+  };
+
+  it('saves with the date the card had when the editing started, not a later one (#1225)', () => {
+    mocks.result = { data: { card: savedCard, canEdit: true, draftSource }, isError: false };
+    const { rerender } = renderCard();
+    fireEvent.click(screen.getByRole('button', { name: '編集' }));
+    // The card is read again while the form is open (the office saved it): a newer date arrives
+    mocks.result = {
+      data: {
+        card: { ...savedCard, recentNews: '開発室の下書き', updatedAt: new Date('2026-10-18T02:00:00Z') },
+        canEdit: true,
+        draftSource,
+      },
+      isError: false,
+    };
+    rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <LeadPrepCard organizationId={ORG_ID} leadId={LEAD_ID} />
+      </NextIntlClientProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedUpdatedAt: SAVED_AT })
+    );
+  });
+
+  it('keeps what was typed when somebody else saved first, and reads the card again on request (#1225)', async () => {
+    const latest = {
+      ...savedCard,
+      recentNews: '同僚が書いた動き',
+      updatedAt: new Date('2026-10-18T02:00:00Z'),
+    };
+    const refetch = vi.fn(async () => ({ data: { card: latest, canEdit: true, draftSource } }));
+    mocks.result = {
+      data: { card: savedCard, canEdit: true, draftSource },
+      isError: false,
+      refetch,
+    };
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: '編集' }));
+    fireEvent.change(screen.getByLabelText('最近の動き'), { target: { value: '自分が書いた動き' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    act(() => mocks.hook.onError?.({ data: { code: 'CONFLICT' } }));
+
+    // The form stays open with what was typed, and says what happened
+    expect(screen.getByText('ほかの人が先に保存しました')).toBeInTheDocument();
+    expect(screen.getByLabelText('最近の動き')).toHaveValue('自分が書いた動き');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込む' }));
+    });
+    expect(refetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('最近の動き')).toHaveValue('同僚が書いた動き');
+    expect(screen.queryByText('ほかの人が先に保存しました')).not.toBeInTheDocument();
+    // The next save carries the date of the card just read
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.mutate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ expectedUpdatedAt: latest.updatedAt })
+    );
+  });
+
+  it('shows a card saved empty as none, and still saves over that row with its date (#1225)', () => {
+    const emptyAt = new Date('2026-10-18T03:00:00Z');
+    mocks.result = {
+      data: {
+        card: {
+          estimatedSystem: null,
+          estimatedSystemBasis: null,
+          recentNews: null,
+          hypotheses: {},
+          firstQuestions: [],
+          updatedAt: emptyAt,
+          updatedByName: '営業 太郎',
+        },
+        canEdit: true,
+        draftSource,
+      },
+      isError: false,
+    };
+    renderCard();
+    expect(screen.getByText(/まだ準備していません/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '準備を始める' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedUpdatedAt: emptyAt })
+    );
   });
 
   it('shows a saved card, marked ready with three questions', () => {

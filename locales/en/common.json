@@ -5343,6 +5343,9 @@
     "drafted": "Drafted into the empty fields. Check and save.",
     "saved": "Prep card saved",
     "saveError": "Could not save it. Please try again.",
+    "conflictTitle": "Someone else saved first",
+    "conflictBody": "What you typed is still on this screen. Loading the latest card discards it.",
+    "reload": "Load the latest card",
     "updatedBy": "Updated by {name} on {date}",
     "drafts": {
       "basisDiagnosis": "The Web diagnosis answer (migration source)",

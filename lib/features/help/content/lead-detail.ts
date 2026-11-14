@@ -7,7 +7,7 @@ export const leadDetailArticle: HelpArticle = {
   summary:
     '1件のリードについて、連絡・ヒアリング・次の行動・商談をここで記録します。診断の結果や商談前の準備もこの画面で確かめます。',
   routes: ['/leads/[leadId]'],
-  reviewedAt: '2026-11-10',
+  reviewedAt: '2026-11-14',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'header', text: '画面の上の部分' },
@@ -75,6 +75,12 @@ export const leadDetailArticle: HelpArticle = {
         ['メモ', '社内向けのコメントとメモ'],
         ['診断回答', '診断フォームでの回答そのもの'],
       ],
+    },
+    {
+      type: 'note',
+      tone: 'tip',
+      content:
+        '事前調査カードは、編集を始めたあとにほかの人が先に保存していると、保存できません（出社の画面の開発室でも、このカードの下書きを用意できます）。「ほかの人が先に保存しました」と出て、入力した内容は画面に残ります。「最新の内容を読み込む」を押すと、最新のカードから編集し直せます（入力中の内容は消えます）。中身が空のカードは、「まだ準備していません」と出ます。',
     },
     {
       type: 'p',

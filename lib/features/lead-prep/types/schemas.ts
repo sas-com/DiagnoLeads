@@ -56,4 +56,12 @@ export const leadScopeSchema = z.object({
   leadId: z.string().uuid(),
 });
 
-export const savePrepCardSchema = leadScopeSchema.extend({ card: prepCardFieldsSchema });
+/**
+ * Saving replaces the whole card, so it takes the card's `updatedAt` as it was read (#1225): a
+ * card somebody else saved since is not written over. null: no card was there when it was read.
+ * The key is required, so that a screen that does not send it never saves blindly.
+ */
+export const savePrepCardSchema = leadScopeSchema.extend({
+  card: prepCardFieldsSchema,
+  expectedUpdatedAt: z.date().nullable(),
+});

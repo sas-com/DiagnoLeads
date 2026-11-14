@@ -764,6 +764,7 @@
             "drafted": "The empty fields of the prep card were filled from the Web diagnosis and the sales playbook, and saved. What was already written was kept. You can undo this.",
             "undone": "The draft was undone and the prep card is as it was.",
             "failed": "Sorry, that did not work. Please try again later.",
+            "refused": "Somebody changed the prep card just before the save. The draft was not saved. The latest card was read again: ask once more if it is still needed.",
             "undoFailed": "The draft could not be undone and is still saved. You can ask to undo it again.",
             "changedSince": "The prep card was changed after the draft. Undoing would wipe what was written since, so it cannot be undone here. To change it, open the lead's page.",
             "noMaterial": "There is nothing to draft from for this customer (no Web diagnosis answers, no sales playbook).",

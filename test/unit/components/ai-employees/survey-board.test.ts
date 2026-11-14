@@ -14,7 +14,6 @@ import {
   prepActionOfKey,
   prepActionOpen,
   prepCardFields,
-  prepCardFilled,
   prepPartOfKey,
   samePrepCard,
   savedPrepCard,
@@ -26,6 +25,7 @@ import {
   surveyViewOfKey,
 } from '@/components/features/ai-employees/rooms/survey-board';
 import type { DealCard } from '@/lib/features/deals/service';
+import { prepCardFilled } from '@/lib/features/lead-prep/draft';
 import { boardSchema } from '@/lib/features/deals/types/schemas';
 import { describe, expect, it } from 'vitest';
 

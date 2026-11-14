@@ -3,18 +3,24 @@
 import { InlineLoadError } from '@/components/common/inline-load-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { buildPrepDraft, hasDraftMaterial, isPrepReady } from '@/lib/features/lead-prep/draft';
+import {
+  buildPrepDraft,
+  hasDraftMaterial,
+  isPrepReady,
+  prepCardFilled,
+} from '@/lib/features/lead-prep/draft';
 import {
   PREP_CHALLENGES,
   PREP_LIMITS,
   type PrepCardFields,
 } from '@/lib/features/lead-prep/types/schemas';
 import { trpc } from '@/lib/trpc/client';
-import { Loader2, Pencil, Search, Sparkles } from 'lucide-react';
+import { AlertTriangle, Loader2, Pencil, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useId, useState } from 'react';
 import { toast } from 'sonner';
@@ -36,6 +42,11 @@ interface LeadPrepCardProps {
  * Pre-meeting prep card (Refs #156): the guessed core system and why, recent news, a hypothesis
  * per challenge and the first three questions. A draft fills the empty fields from the diagnosis
  * and the sales playbook; nothing is saved until 保存. Works for leads without a diagnosis too.
+ *
+ * Saving replaces the whole card, so it is only taken while the card is still as it was when the
+ * editing started (#1225, like the hearing editor): when somebody else saved it meanwhile (the
+ * office drafts this card too), the save is refused, what was typed stays in the form, and the
+ * card can be read again. A card saved empty is shown as none.
  */
 export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
   const t = useTranslations('leadPrep');
@@ -49,33 +60,56 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
     { enabled: !!organizationId, retry: false }
   );
   const [form, setForm] = useState<PrepCardFields | null>(null);
+  // The card's updatedAt when the editing started (null: there was no card). Kept apart from the
+  // query: the query can be read again while the form is open (the office saves the same card),
+  // and a token taken at the save would then be the new one, letting the save write over it
+  const [base, setBase] = useState<Date | null>(null);
+  const [conflict, setConflict] = useState(false);
   const save = trpc.leadPrep.save.useMutation({
     onSuccess: () => {
       setForm(null);
+      setConflict(false);
       utils.leadPrep.get.invalidate({ organizationId, leadId });
       toast.success(t('saved'));
     },
-    onError: () => toast.error(t('saveError')),
+    onError: (error) => {
+      // Somebody else saved first: what was typed stays, until the card is read again
+      if (error.data?.code === 'CONFLICT') setConflict(true);
+      else toast.error(t('saveError'));
+    },
   });
 
   // A failed request shows an error in the card (#431); only "not allowed" hides it
   if (query.error?.data?.code === 'FORBIDDEN') return null;
   const data = query.data;
-  const card = data?.card ?? null;
+  // The row as it is stored: its updatedAt is the token, also when the card says nothing
+  const stored = data?.card ?? null;
+  // A card saved empty is shown as none (undoing a draft in the office leaves such a row)
+  const card = stored && prepCardFilled(stored) ? stored : null;
   const editing = form !== null;
 
-  const startEditing = () =>
+  const fill = (from: typeof stored) => {
     setForm(
-      card
+      from
         ? {
-            estimatedSystem: card.estimatedSystem,
-            estimatedSystemBasis: card.estimatedSystemBasis,
-            recentNews: card.recentNews,
-            hypotheses: { ...card.hypotheses },
-            firstQuestions: [...card.firstQuestions],
+            estimatedSystem: from.estimatedSystem,
+            estimatedSystemBasis: from.estimatedSystemBasis,
+            recentNews: from.recentNews,
+            hypotheses: { ...from.hypotheses },
+            firstQuestions: [...from.firstQuestions],
           }
         : EMPTY
     );
+    setBase(from?.updatedAt ?? null);
+    setConflict(false);
+  };
+  const startEditing = () => fill(stored);
+  // Read the card as it is now and start over from it: what was typed is dropped
+  const reload = async () => {
+    const latest = await query.refetch();
+    if (latest.data) fill(latest.data.card);
+    else toast.error(t('saveError'));
+  };
 
   const draft = () => {
     if (!form || !data?.draftSource) return;
@@ -113,9 +147,24 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
-            save.mutate({ organizationId, leadId, card: form });
+            save.mutate({ organizationId, leadId, card: form, expectedUpdatedAt: base });
           }}
         >
+          {conflict && (
+            <Callout title={t('conflictTitle')} icon={AlertTriangle} color="red">
+              <p>{t('conflictBody')}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-3"
+                onClick={() => void reload()}
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                {t('reload')}
+              </Button>
+            </Callout>
+          )}
           {data.draftSource && hasDraftMaterial(data.draftSource) && (
             <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/50 p-3">
               <p className="text-xs text-muted-foreground">{t('draftHint')}</p>
@@ -209,7 +258,15 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
               {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               {t('save')}
             </Button>
-            <Button type="button" size="sm" variant="outline" onClick={() => setForm(null)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setForm(null);
+                setConflict(false);
+              }}
+            >
               {t('cancel')}
             </Button>
           </div>

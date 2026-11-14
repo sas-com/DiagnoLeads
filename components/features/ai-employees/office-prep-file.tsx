@@ -2,7 +2,7 @@
 
 import { isImeKey } from '@/components/ui/ime';
 import type { DealCard } from '@/lib/features/deals/service';
-import { buildPrepDraft, hasDraftMaterial } from '@/lib/features/lead-prep/draft';
+import { buildPrepDraft, hasDraftMaterial, prepCardFilled } from '@/lib/features/lead-prep/draft';
 import { PREP_CHALLENGES, type PrepCardFields } from '@/lib/features/lead-prep/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,6 @@ import {
   prepActionOfKey,
   prepActionOpen,
   prepCardFields,
-  prepCardFilled,
   prepPartOfKey,
   samePrepCard,
   savedPrepCard,
@@ -34,6 +33,8 @@ type Outcome =
   // through, so the draft is still saved and can be undone again
   | { kind: 'drafted'; before: PrepCardFields; after: PrepCardFields; undoFailed?: boolean }
   | { kind: 'undone' }
+  // The server refused the draft: somebody saved the card in the moment after it was read
+  | { kind: 'refused' }
   | { kind: 'failed' };
 
 /** A calendar day ('YYYY-MM-DD') as it is written on the board */
@@ -126,6 +127,10 @@ export function OfficePrepFile({
   // runs when the file was closed (a link at the foot) before the save came back
   const save = trpc.leadPrep.save.useMutation({
     onSuccess: () => void utils.leadPrep.get.invalidate(scope),
+    // Refused because the card was changed (#1225): the file shows the card as it is now
+    onError: (error) => {
+      if (error.data?.code === 'CONFLICT') void utils.leadPrep.get.invalidate(scope);
+    },
   });
   // An answer first reads the card again, then saves: both count as working on it
   const [checking, setChecking] = useState(false);
@@ -138,10 +143,11 @@ export function OfficePrepFile({
   const state = { canEdit, drafted, busy: working || rereading, fillable, stale };
 
   /**
-   * The card as the server holds it right now (#1221). `leadPrep.save` replaces the whole card
-   * and takes no condition, so an answer never starts from the card on the screen, which
-   * somebody may have changed on the lead's page since it was read: it reads the card again and
-   * works from that. What is left is the moment between this read and the save.
+   * The card as the server holds it right now (#1221). `leadPrep.save` replaces the whole card,
+   * so an answer never starts from the card on the screen, which somebody may have changed on
+   * the lead's page since it was read: it reads the card again and works from that. The save
+   * carries the `updatedAt` of that read (#1225), so a card saved in the moment between the read
+   * and the save is not written over either: the server refuses, and the file says so.
    */
   // Not tried again: while it runs, Esc and the way back are closed
   const readNow = () => utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false });
@@ -176,27 +182,33 @@ export function OfficePrepFile({
         // Nothing left to fill (somebody filled it meanwhile): the file now shows why
         if (!filled || samePrepCard(now, filled)) return;
         save.mutate(
-          { ...scope, card: filled },
+          // The row's own date, also for a card saved empty (which the file shows as none)
+          { ...scope, card: filled, expectedUpdatedAt: fresh.card?.updatedAt ?? null },
           {
             onSuccess: () => {
               setOutcome({ kind: 'drafted', before: now, after: filled });
               setPart('prep');
             },
-            onError: () => setOutcome({ kind: 'failed' }),
+            onError: (error) =>
+              setOutcome({ kind: error.data?.code === 'CONFLICT' ? 'refused' : 'failed' }),
           }
         );
       } else if (outcome?.kind === 'drafted') {
         // The card no longer says what the draft put there: the file now says so, nothing is sent
         if (!samePrepCard(now, outcome.after)) return;
         save.mutate(
-          { ...scope, card: outcome.before },
+          { ...scope, card: outcome.before, expectedUpdatedAt: fresh.card?.updatedAt ?? null },
           {
             onSuccess: () => setOutcome({ kind: 'undone' }),
-            // The draft is still there: keep it in hand, so the undo can be asked for again
-            onError: () =>
+            onError: (error) => {
+              // Refused: the card was changed just now. It is read again, and the file then says
+              // that the draft can no longer be undone (stale)
+              if (error.data?.code === 'CONFLICT') return;
+              // The draft is still there: keep it in hand, so the undo can be asked for again
               setOutcome((kept) =>
                 kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : { kind: 'failed' }
-              ),
+              );
+            },
           }
         );
       }
@@ -282,7 +294,9 @@ export function OfficePrepFile({
                     : t('drafted')
                 : outcome.kind === 'undone'
                   ? t('undone')
-                  : t('failed')}
+                  : outcome.kind === 'refused'
+                    ? t('refused')
+                    : t('failed')}
             </p>
           )}
           {/* Why the draft is closed, to those who could ask for it */}
