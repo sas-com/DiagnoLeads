@@ -104,7 +104,7 @@ describe('InviteAcceptance', () => {
     ).toHaveAttribute('href', `/ja/login?callbackUrl=${back}`);
   });
 
-  it('joins with one click when signed in with the invited address, then opens the dashboard', async () => {
+  it('joins with one click when signed in with the invited address, then opens the AI office (#1153)', async () => {
     mocks.session = { data: { user: { email: 'New@Example.com' } }, isPending: false };
     const user = userEvent.setup();
     renderPage();
@@ -114,10 +114,10 @@ describe('InviteAcceptance', () => {
 
     await mocks.acceptOptions?.onSuccess({ organizationId: ORG_ID });
     expect(mocks.setOrganization).toHaveBeenCalledWith(ORG_ID);
-    expect(mocks.push).toHaveBeenCalledWith('/ja/dashboard');
+    expect(mocks.push).toHaveBeenCalledWith('/ja/office?source=login');
   });
 
-  it('drops the list of organizations read before it opens the dashboard (#1046)', async () => {
+  it('drops the list of organizations read before it opens the AI office (#1046)', async () => {
     mocks.session = { data: { user: { email: 'new@example.com' } }, isPending: false };
     let listDropped = () => {};
     mocks.resetList.mockReturnValue(
@@ -138,7 +138,7 @@ describe('InviteAcceptance', () => {
 
     listDropped();
     await joined;
-    expect(mocks.push).toHaveBeenCalledWith('/ja/dashboard');
+    expect(mocks.push).toHaveBeenCalledWith('/ja/office?source=login');
   });
 
   describe('when the address must be verified first (#128)', () => {

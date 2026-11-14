@@ -241,6 +241,46 @@ describe('OfficeScreen', () => {
     });
   });
 
+  describe('opened right after signing in (#1153)', () => {
+    const width = window.innerWidth;
+    const arriveAt = (value: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value });
+      window.history.replaceState(null, '', '/ja/office?source=login');
+      renderScreen();
+    };
+    afterEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      window.history.replaceState(null, '', '/');
+    });
+
+    it('starts in the full-screen office, and drops the mark of coming in from the address', async () => {
+      arriveAt(1440);
+      expect(
+        await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+      ).toBeInTheDocument();
+      // A reload, or coming back to the page, is not coming in again
+      expect(`${window.location.pathname}${window.location.search}`).toBe('/ja/office');
+    });
+
+    it('stays in the normal view on a narrow screen, and drops the mark there too', async () => {
+      arriveAt(390);
+      expect(await screen.findByRole('button', { name: '出社する（全画面）' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+      ).not.toBeInTheDocument();
+      expect(window.location.search).toBe('');
+    });
+
+    it('does not open by itself for the office opened from the menu', () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+      window.history.replaceState(null, '', '/ja/office');
+      renderScreen();
+      expect(
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it('tells a viewer without permission instead of drawing the floor', () => {
     mocks.office = {
       data: undefined,

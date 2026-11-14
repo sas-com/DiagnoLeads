@@ -1,11 +1,17 @@
 'use client';
 
+import { HOME_PATH } from '@/lib/routes/home';
 import Link from 'next/link';
 
 interface LogoProps {
   collapsed?: boolean;
   size?: 'sm' | 'md' | 'lg';
   showText?: boolean;
+  /**
+   * Where the logo leads. Home (the AI office) unless given: without a language, so the site's
+   * language redirect adds it; callers that know the language pass `homePath(locale)`. An empty
+   * value draws the logo without a link
+   */
   href?: string;
 }
 
@@ -13,7 +19,7 @@ export function Logo({
   collapsed = false,
   size = 'md',
   showText = true,
-  href = '/ja/dashboard',
+  href = HOME_PATH,
 }: LogoProps) {
   const sizeClasses = {
     sm: 'w-8 h-8',
@@ -125,5 +131,5 @@ export function Logo({
 }
 
 export function LogoMark({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
-  return <Logo collapsed showText={false} size={size} href={undefined} />;
+  return <Logo collapsed showText={false} size={size} href="" />;
 }

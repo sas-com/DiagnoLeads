@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { homePath } from '@/lib/routes/home';
 import { FileQuestion } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -25,7 +26,7 @@ export default function LocaleNotFound() {
             <Link href={`/${locale}/leads`}>{t('toLeads')}</Link>
           </Button>
           <Button asChild variant="outline">
-            <Link href={`/${locale}/dashboard`}>{t('backHome')}</Link>
+            <Link href={homePath(locale)}>{t('backHome')}</Link>
           </Button>
         </div>
       </div>

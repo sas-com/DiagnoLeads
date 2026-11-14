@@ -1,0 +1,34 @@
+---
+id: 2026-11-14-login-lands-on-office
+date: 2026-11-14
+category: UI
+title: "ログイン後の行き先とホームを、ダッシュボードから AI社員オフィスにする（#1153）"
+status: active
+superseded_by: []
+issues: [1153, 1100, 1120]
+paths: ["lib/routes/home.ts", "lib/auth/safe-callback.ts", "components/auth/**", "components/common/Logo.tsx", "components/features/members/invite-acceptance.tsx", "components/dashboard/organization-switcher.tsx", "components/features/ai-employees/office-app.ts", "components/features/ai-employees/office-screen.tsx"]
+---
+
+### [UI] ログイン後の行き先とホームを、ダッシュボードから AI社員オフィスにする（#1153）
+- **日付**: 2026-11-14
+- **決定**（オーナーの指示。2026-11-14「ログイン後の行き先をオフィスにする」。形と範囲は、その場で確かめた）:
+  - ログインして戻る先が無いときの行き先を、AI社員オフィスにする。幅 768px 以上では、**全画面の出社の画面**（タイトル）から始まる。768px 未満は、通常の表示のオフィスのページ（決定 `2026-11-13-installable-app-fullscreen` の「狭い幅の扱い」）
+  - ログイン以外の入口も、オフィスにする：ロゴ（ホーム）・招待を承認したあと・組織を切り替えたあと・404 の「ホームに戻る」
+  - ダッシュボードのページは残す。サイドメニューから開く
+- **理由**: 業務システムの土台を AI社員バーチャルオフィスにする（決定 `2026-11-13-office-is-the-base`「ログインするとフロアに立つ」）
+- **作り**:
+  - 行き先は `lib/routes/home.ts` の決まったパスだけ：ホーム `HOME_PATH`（`/office`）と、入ってきた直後の `ARRIVAL_PATH`（`/office?source=login`）。`safeCallbackPath` の既定がこれになる
+  - 「入ってきた」と数えるのは、ログインした直後と、招待を承認した直後。この2つだけ、出社の画面が自分で開く。ロゴ・組織の切り替え・404 は、通常の表示の中の移動なので、印を付けない（`homePath`）
+  - 印を外すときは `window.history.replaceState(null, '', …)` と書く（状態は `null`）。`window.history.state` を渡すと、Next.js は自分の書き込みと見なしてルーターのアドレスを更新せず、次の移動で印が戻る（`security-specialist` のレビューで見つかり、ブラウザで、移動・戻る・読み直しのあとも印が戻らないことを確かめた）
+  - 入ってきた印（`source=login`）は、アプリの開始の URL と同じキーの別の値。オフィスは、読んだらアドレスから外す（`withoutArrival`。読み直しや、あとで戻ってきたときに、また全画面にならないように）。アプリの `source=app` は外さない
+- **ルール**:
+  - ログインのあとの行き先を、利用者が渡した値から作らない。`callbackUrl` は `safeCallbackPath` を通したものだけに従い、通らなければ `ARRIVAL_PATH` にする。行き先を足すときも、`lib/routes/home.ts` の定数を使う
+  - 「元の場所へ戻る」動き（管理画面を開こうとしてログインへ送られたとき・招待）は変えない
+  - ログインが通ったあと、移る前にクエリのキャッシュを捨てる動き（決定 `2026-11-10-leave-signed-out-as-new-page`）は変えない
+  - オフィスは、どの役割でも読める（`aiEmployees.office` は `read Analytics`）。役割を足す・権限を変えるときは、ログイン直後に「権限がありません」にならないことを確かめる
+  - E2E：`login()` はオフィスに着くまで待つ。ログインの直後に管理画面の枠（ヘッダー・ユーザーメニュー）を使うテストは、先に `leaveFullScreenOffice()` で出社の画面を出る（出社の画面が枠を覆うため）
+- **却下案**:
+  - 通常の表示のオフィスのページから始める：今までの操作感に近いが、オフィスを土台にする方針に合わない（オーナーが全画面を選んだ）
+  - ロゴや組織の切り替えでも出社の画面を開く：通常の表示で作業している人が、移動のたびに全画面に戻される
+  - 入ってきた印をセッション（sessionStorage）で渡す：行き先がページの URL だけで決まらなくなり、テストと、別のタブで開いたときの動きが分かりにくい
+- **まだ決まっていないこと**: サイドメニューの並び（オフィスを先頭にするか）、設定の画面の「ダッシュボードへ戻る」の行き先

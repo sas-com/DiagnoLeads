@@ -45,7 +45,7 @@ export function LoginForm() {
     if (takeAccountDeleted()) setAccountDeleted(true);
   }, []);
 
-  // Get callback URL from query params, default to /dashboard
+  // The page to go back to, from the query; without one, the AI office (safeCallbackPath)
   const callbackUrl = safeCallbackPath(
     searchParams.get('callbackUrl') || searchParams.get('redirect')
   );

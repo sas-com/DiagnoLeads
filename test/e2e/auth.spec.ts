@@ -1,8 +1,10 @@
 import { type Page, type Response, expect, test } from '@playwright/test';
+import jaOffice from '../../locales/ja/aiOffice.json';
 import ja from '../../locales/ja/common.json';
 import {
   TEST_USERS,
   type TestUser,
+  leaveFullScreenOffice,
   login,
   logout,
   submitAuthForm,
@@ -27,6 +29,7 @@ import { connectE2EDatabase, localDatabaseUrl } from './helpers/database';
  */
 
 const auth = ja.settings.auth;
+const office = jaOffice.aiOffice;
 const members = ja.settings.members;
 
 async function fillSignIn(page: Page, user: Pick<TestUser, 'email' | 'password'>) {
@@ -98,7 +101,7 @@ test.describe('Authentication', () => {
       const password = 'Invitee-pw-2026';
 
       // The owner invites the address from the members page; the dialog shows the link to pass on.
-      // The owner loads three admin pages (the dashboard after sign-in, the members page and its
+      // The owner loads three admin pages (the AI office after sign-in, the members page and its
       // reload at the end), each reading the session once: 3 of the 5 session reads a minute that
       // the proxy allows an address (#519). One more read per page would fail this test with 429
       // at times, so keep that in mind when adding page loads here before #519 is fixed
@@ -161,9 +164,11 @@ test.describe('Authentication', () => {
         expect(created.status()).toBe(200);
         await invitee.waitForURL((url) => url.pathname === invitePath);
 
-        // Joining opens the dashboard, signed in as the new account
+        // Joining opens the AI office, full screen, signed in as the new account (#1153)
         await invitee.getByRole('button', { name: auth.invite.join, exact: true }).click();
-        await invitee.waitForURL(/\/ja\/dashboard/);
+        await invitee.waitForURL((url) => url.pathname === '/ja/office');
+        await expect(invitee.getByRole('dialog', { name: office.immersive.label })).toBeVisible();
+        await leaveFullScreenOffice(invitee);
         await expect(invitee.getByTestId('user-menu')).toContainText(invited);
       } finally {
         await context.close();
@@ -254,6 +259,9 @@ test.describe('Authentication', () => {
       request,
     }) => {
       await login(page, TEST_USERS.member);
+      // Signing in opens the full-screen office (#1153); the user menu is in the shell under it
+      await expect(page.getByRole('dialog', { name: office.immersive.label })).toBeVisible();
+      await leaveFullScreenOffice(page);
       const cookies = await page.context().cookies();
       if (!cookies.some((cookie) => cookie.name.endsWith('.session_token'))) {
         throw new Error('No session cookie after sign-in');
@@ -407,7 +415,9 @@ test.describe('Authentication', () => {
 
         await fillSignIn(page, { email, password: newPassword });
         expect((await submitAuthForm(page, '/sign-in/email')).status()).toBe(200);
-        await page.waitForURL(/\/ja\/dashboard/);
+        // Without a page to go back to, signing in leads to the AI office (#1153)
+        await page.waitForURL((url) => url.pathname === '/ja/office');
+        await leaveFullScreenOffice(page);
         await expect(page.getByTestId('user-menu')).toContainText(email);
       } finally {
         // Close the connection even when the clean-up fails
