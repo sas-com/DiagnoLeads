@@ -78,6 +78,8 @@ const mocks = vi.hoisted(() => ({
   canEdit: true,
   failRecord: false,
   failDelete: false,
+  /** A contact record is being saved: the request is out, its answer is not there yet */
+  saving: false,
   contactsFail: false,
   refreshed: vi.fn(),
 }));
@@ -310,7 +312,7 @@ vi.mock('@/lib/trpc/client', () => ({
             onError?: () => void;
           } = {}
         ) => ({
-          isPending: false,
+          isPending: mocks.saving,
           mutate: (input: { organizationId: string; leadId: string; kind: ContactRecord['kind'] }) => {
             if (mocks.failRecord) {
               options.onError?.();
@@ -432,6 +434,7 @@ function reset() {
   mocks.canEdit = true;
   mocks.failRecord = false;
   mocks.failDelete = false;
+  mocks.saving = false;
   mocks.contactsFail = false;
   mocks.refreshed.mockClear();
 }
@@ -1212,6 +1215,18 @@ describe('the customer file in the room', () => {
     await user.keyboard('Z');
     expect(mocks.deleted).toEqual([{ organizationId: ORG_ID, id: 'contact-1' }]);
     expect(mocks.recorded).toHaveLength(1);
+  });
+
+  it('stays open while a record is being saved: Esc and the way back are closed (#1205)', async () => {
+    mocks.saving = true;
+    const { user, office } = await openFile();
+    const back = within(office).getByRole('button', { name: /ボードに戻る/ });
+    expect(back).toHaveAttribute('aria-disabled', 'true');
+    await user.keyboard('{Escape}');
+    await user.click(back);
+    // The request is out: the file waits for its answer instead of looking called off
+    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
+    expect(within(office).queryByRole('region', { name: '見込み客ボード' })).not.toBeInTheDocument();
   });
 
   it('shows who holds the room over the file too', async () => {
