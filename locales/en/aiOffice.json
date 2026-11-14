@@ -168,7 +168,6 @@
       "day": "Day",
       "night": "Night",
       "staff": "Staff",
-      "map": "Map of the floor. The lit points are where the AI employees are.",
       "relay": "How value passes on",
       "relaySteps": {
         "marketer": "Finds prospects",

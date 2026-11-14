@@ -44,16 +44,10 @@ import {
 import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
 import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
 import { officeFits } from './office-app';
+import { OfficeTags2D } from './office-floor-labels';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
-import {
-  AREA_RECTS,
-  DESK_SEATS,
-  FLOOR_DEPTH,
-  FLOOR_WIDTH,
-  areaOf,
-  spotOf,
-} from './office-map-layout';
+import { DESK_SEATS, areaOf, spotOf } from './office-map-layout';
 import {
   type TalkChoice,
   type TalkLine,
@@ -68,7 +62,7 @@ import {
   talkChoices,
   talkLineKey,
 } from './office-president';
-import { STATUS_LIGHT, shade } from './office-prims';
+import { shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
 import { OfficeRoomDue } from './office-room-due';
 import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
@@ -77,7 +71,7 @@ import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
 import { OfficeTalkStaff, type StaffMatter } from './office-talk-staff';
-import { StatusDot, WorldTagButton } from './office-world-tag';
+import { StatusDot } from './office-world-tag';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 
@@ -584,23 +578,26 @@ export function OfficeImmersive({
                 statuses={statuses}
                 looks={looks}
                 night={stage === 'title' ? true : night}
-                labels={stage === 'world'}
+                // The names of the rooms are DOM over the floor, clear of the panels (#1177)
+                labels={false}
               />
-              {stage === 'world' &&
-                AI_EMPLOYEE_ROLES.map((role) => (
-                  <WorldTag
-                    key={role}
-                    role={role}
-                    status={statuses[role]}
-                    name={byRole.get(role)?.name ?? null}
-                    chosen={role === selected}
-                    scale={scale}
-                    onChoose={() => setSelected(role)}
-                    onTalk={() => talkTo(role)}
-                  />
-                ))}
             </div>
           </div>
+          {/* The name tags and the room names of the 2D floor, laid out clear of each other */}
+          {stage === 'world' && !(show3d && threeDReady) && (
+            <OfficeTags2D
+              statuses={statuses}
+              names={names3d}
+              selected={selected}
+              onChoose={setSelected}
+              onTalk={talkTo}
+              camera={camera}
+              scale={scale}
+              width={width}
+              size={size}
+              glide={!dragging && !reducedMotion}
+            />
+          )}
           {show3d && (
             <Office3DBoundary onError={() => leave3d(true)}>
               <OfficeCanvas3D
@@ -617,7 +614,8 @@ export function OfficeImmersive({
                 subject={subject3d}
                 attentive={stage === 'talk' ? selected : null}
                 zoom={zoom}
-                pan={pan}
+                // Centred between the side panels, like the 2D floor
+                pan={{ x: pan.x + home.x, y: pan.y }}
                 focus={selectedEmployee ? selected : null}
                 reducedMotion={reducedMotion}
                 onFps={setFps}
@@ -862,9 +860,6 @@ export function OfficeImmersive({
                 )}
               </div>
 
-              {/* The map of the floor */}
-              <FloorMap statuses={statuses} selected={selected} label={t('map')} />
-
               {/* The 3D spike's trial panel: pretend a status or an event to watch the robot */}
               {OFFICE_3D_TRIAL && threeD && threeDReady && selectedEmployee && (
                 <Office3DTrialPanel
@@ -918,41 +913,48 @@ export function OfficeImmersive({
 
               {/* The actions */}
               <div className="absolute inset-x-0 bottom-6 flex flex-col items-center">
-                <div className="flex gap-2.5">
-                  <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
-                    <MessageCircle className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.talk')}
-                  </HudButton>
-                  {canCustomize && (
-                    <HudButton onClick={() => setStage('studio')} hotkey="C">
-                      <Palette className="h-6 w-6" aria-hidden="true" />
-                      {t('studio.open')}
+                {/* Three groups: the employee, the view, the way out */}
+                <div className="flex gap-5">
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
+                      <MessageCircle className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.talk')}
                     </HudButton>
-                  )}
-                  <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
-                    <ZoomIn className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.zoomIn')}
-                  </HudButton>
-                  <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
-                    <ZoomOut className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.zoomOut')}
-                  </HudButton>
-                  <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
-                    <Box className="h-6 w-6" aria-hidden="true" />
-                    {t(threeD ? 'trial3d.off' : 'trial3d.on')}
-                  </HudButton>
-                  <HudButton onClick={resetView} hotkey="0">
-                    <ScanSearch className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.resetView')}
-                  </HudButton>
-                  <HudButton onClick={leave} hotkey="">
-                    <List className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.list')}
-                  </HudButton>
-                  <HudButton onClick={() => setStage('title')} hotkey="Esc">
-                    <DoorOpen className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.clockOut')}
-                  </HudButton>
+                    {canCustomize && (
+                      <HudButton onClick={() => setStage('studio')} hotkey="C">
+                        <Palette className="h-6 w-6" aria-hidden="true" />
+                        {t('studio.open')}
+                      </HudButton>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
+                      <ZoomIn className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomIn')}
+                    </HudButton>
+                    <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
+                      <ZoomOut className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomOut')}
+                    </HudButton>
+                    <HudButton onClick={resetView} hotkey="0">
+                      <ScanSearch className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.resetView')}
+                    </HudButton>
+                    <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
+                      <Box className="h-6 w-6" aria-hidden="true" />
+                      {t(threeD ? 'trial3d.off' : 'trial3d.on')}
+                    </HudButton>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={leave} hotkey="">
+                      <List className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.list')}
+                    </HudButton>
+                    <HudButton onClick={() => setStage('title')} hotkey="Esc">
+                      <DoorOpen className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.clockOut')}
+                    </HudButton>
+                  </div>
                 </div>
                 {/* How fast this device draws the 3D floor, to measure real devices (#1157) */}
                 {threeD && threeDReady && fps !== null && (
@@ -1238,7 +1240,7 @@ function HudButton({
       className={cn(
         // The cut corners are drawn on a layer behind the button: clipping the button itself would
         // clip its focus ring too
-        'relative isolate flex h-[5.25rem] w-[5.25rem] flex-col items-center justify-center gap-1.5 text-xs text-[#f5f1e8] before:absolute before:inset-0 before:-z-10 before:border before:border-[#e9cf9a]/55 before:bg-[rgba(10,14,24,0.86)] before:[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)] hover:before:bg-[rgba(36,44,64,0.95)]',
+        'relative isolate flex h-[5.25rem] w-[5.25rem] flex-col items-center justify-center gap-1.5 text-center text-xs leading-tight [word-break:auto-phrase] text-[#f5f1e8] before:absolute before:inset-0 before:-z-10 before:border before:border-[#e9cf9a]/55 before:bg-[rgba(10,14,24,0.86)] before:[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)] hover:before:bg-[rgba(36,44,64,0.95)]',
         FOCUS
       )}
     >
@@ -1247,96 +1249,5 @@ function HudButton({
         <span className={cn(KEY, 'absolute top-1 right-1 bg-[#0a0e18]/60')}>{hotkey}</span>
       )}
     </button>
-  );
-}
-
-/** The name over an AI employee in the office: choose it, or talk to the chosen one */
-function WorldTag({
-  role,
-  status,
-  name,
-  chosen,
-  scale,
-  onChoose,
-  onTalk,
-}: {
-  role: AiEmployeeRole;
-  status: DeskStatus;
-  name: string | null;
-  chosen: boolean;
-  /** The scale of the stage: the tag undoes it, so its text and its target keep their size */
-  scale: number;
-  onChoose: () => void;
-  onTalk: () => void;
-}) {
-  const spot = spotOf(role, status);
-  const [x, y] = project(spot.x, spot.y);
-  return (
-    <WorldTagButton
-      role={role}
-      status={status}
-      name={name}
-      chosen={chosen}
-      onChoose={onChoose}
-      onTalk={onTalk}
-      style={{
-        left: `${(x / SCENE_WIDTH) * 100}%`,
-        top: `${((y + 10) / SCENE_HEIGHT) * 100}%`,
-        transform: `translate(-50%, 0) scale(${1 / scale})`,
-        transformOrigin: 'top center',
-      }}
-    />
-  );
-}
-
-/** The floor seen from above, with a light where each AI employee is */
-function FloorMap({
-  statuses,
-  selected,
-  label,
-}: {
-  statuses: Record<AiEmployeeRole, DeskStatus>;
-  selected: AiEmployeeRole;
-  label: string;
-}) {
-  const unit = 8;
-  return (
-    <div className="absolute top-36 left-6 hidden h-28 w-28 overflow-hidden rounded-full border-2 border-[#e9cf9a] bg-[#101726] shadow-[0_14px_30px_rgba(4,8,18,0.5)] xl:block">
-      <svg
-        viewBox={`-28 -46 ${FLOOR_WIDTH * unit + 56} ${FLOOR_DEPTH * unit + 92}`}
-        role="img"
-        aria-label={label}
-        className="h-full w-full"
-      >
-        <g transform={`rotate(30 ${(FLOOR_WIDTH * unit) / 2} ${(FLOOR_DEPTH * unit) / 2})`}>
-          {Object.entries(AREA_RECTS).map(([area, r], index) => (
-            <rect
-              key={area}
-              x={r.x * unit}
-              y={r.y * unit}
-              width={r.w * unit}
-              height={r.h * unit}
-              fill={index % 2 === 0 ? '#3a4257' : '#2f3a4c'}
-              stroke="#e9cf9a"
-              strokeOpacity={0.5}
-            />
-          ))}
-          {AI_EMPLOYEE_ROLES.filter((role) => statuses[role] !== 'vacant').map((role) => {
-            const spot = spotOf(role, statuses[role]);
-            return (
-              <circle
-                key={role}
-                cx={spot.x * unit}
-                cy={spot.y * unit}
-                r={role === selected ? 7 : 5}
-                fill={STATUS_LIGHT[statuses[role]]}
-                stroke="#ffffff"
-                strokeWidth={role === selected ? 2.5 : 1.5}
-              />
-            );
-          })}
-        </g>
-      </svg>
-    </div>
   );
 }

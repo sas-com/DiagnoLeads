@@ -8,6 +8,9 @@ import {
   cameraOffset,
   firstRoleToVisit,
   HOME_CLOSE_UP,
+  HUD_SIDES,
+  homeCloseUp,
+  homeShift,
   homeView,
   hourIn,
   isNightHour,
@@ -122,17 +125,38 @@ describe('the president’s office', () => {
     expect(offset).toEqual({ x: 320 - 1000, y: 400 - 350 });
   });
 
-  it('starts closer than the whole floor on a wide screen, covering the screen on a narrow one', () => {
+  it('starts closer than the whole floor where the side panels leave room, covering the screen on a narrow one', () => {
     const aspect = 10 / 7;
-    // 1440 x 900: the floor that covers the screen is 1440 wide, the one that fits is 900 * 10 / 7
-    const wide = homeView({ w: 1440, h: 900 }, aspect);
-    expect(wide.zoom).toBeCloseTo(((900 * aspect) / 1440) * HOME_CLOSE_UP, 5);
-    expect(wide).toMatchObject({ x: 0, y: -27 });
+    // 1920 x 1080: room between the panels, so the floor starts larger than the screen holds
+    const wide = homeView({ w: 1920, h: 1080 }, aspect);
+    const closeUp = homeCloseUp({ w: 1920, h: 1080 }, aspect);
+    expect(closeUp).toBeGreaterThan(1.1);
+    expect(closeUp).toBeLessThanOrEqual(HOME_CLOSE_UP);
+    expect(wide.zoom).toBeCloseTo(((1080 * aspect) / 1920) * closeUp, 5);
     // Stepping back as far as the camera goes brings the whole floor into view
-    expect(wide.zoom * wide.out).toBeCloseTo((900 * aspect) / 1440, 5);
+    expect(wide.zoom * wide.out).toBeCloseTo((1080 * aspect) / 1920, 5);
     // A screen wider than the floor: the floor already fits by its height
     const ultra = homeView({ w: 2560, h: 1080 }, aspect);
+    expect(homeCloseUp({ w: 2560, h: 1080 }, aspect)).toBe(HOME_CLOSE_UP);
     expect(ultra.zoom * ultra.out).toBeCloseTo((1080 * aspect) / 2560, 5);
     expect(homeView({ w: 390, h: 844 }, aspect)).toEqual({ zoom: 1, x: 0, y: 0, out: 1 });
+  });
+
+  it('starts with the whole floor in view where the side panels leave little room (#1183)', () => {
+    const aspect = 10 / 7;
+    // 1440 x 900: closer, the training room in the left corner would stand under the staff list
+    for (const size of [
+      { w: 1280, h: 720 },
+      { w: 1440, h: 900 },
+      { w: 1680, h: 1050 },
+    ]) {
+      expect(homeCloseUp(size, aspect)).toBe(1);
+      expect(homeView(size, aspect).out).toBe(1);
+    }
+    const home = homeView({ w: 1440, h: 900 }, aspect);
+    expect(home.zoom).toBeCloseTo((900 * aspect) / 1440, 5);
+    // Centred between the side panels, which are not equally wide
+    expect(home).toMatchObject({ x: (HUD_SIDES.left - HUD_SIDES.right) / 2, y: -27 });
+    expect(homeShift({ w: 390, h: 844 })).toBe(0);
   });
 });
