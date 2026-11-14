@@ -1280,6 +1280,11 @@ describe('the customer file in the room', () => {
     expect(
       within(office).getByText('記録しています。終わるまでファイルは閉じません。')
     ).toBeInTheDocument();
+    // The office's own way to the floor is closed too: leaving the room would hide the answer
+    const floor = within(office).getByRole('button', { name: 'フロアへ戻る' });
+    expect(floor).toHaveAttribute('aria-disabled', 'true');
+    await user.click(floor);
+    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
     const detail = within(file).getByRole('link', { name: '通常の表示で詳細を開く' });
     expect(detail).toHaveAttribute('aria-disabled', 'true');
     await user.click(detail);

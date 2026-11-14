@@ -57,6 +57,7 @@ export function OfficeLeadFile({
   keysRef,
   onClose,
   onOpenDetail,
+  onBusyChange,
 }: {
   organizationId: string;
   lead: BoardLead;
@@ -69,6 +70,8 @@ export function OfficeLeadFile({
   onClose: () => void;
   /** The lead's page is opened in the normal view: the office closes */
   onOpenDetail: () => void;
+  /** Told while a record is being saved (the office keeps the room open), and when it is over */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room.file');
   const tLeads = useTranslations('aiOffice.immersive.room.leads');
@@ -110,6 +113,11 @@ export function OfficeLeadFile({
       ),
   });
   const busy = record.isPending || remove.isPending;
+  // The office closes its own way to the floor meanwhile, like the file closes Esc (#1205)
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const canEdit = contacts.data?.canEdit === true;
   const recorded = outcome?.kind === 'recorded';
   const state = { canEdit, recorded, busy };
