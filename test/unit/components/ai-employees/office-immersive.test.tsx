@@ -184,19 +184,19 @@ describe('OfficeImmersive', () => {
       '1社長のデスク今日の予定ページを開く',
       '2マーケティング室リード管理',
       '3営業フロア商談',
-      '4開発室現行調査ページを開く',
+      '4開発室現行調査',
       '5総務・受付今日の期限',
     ]);
     expect(within(guide).getByRole('link', { name: /社長のデスク/ })).toHaveAttribute(
       'href',
       '/ja/today'
     );
-    expect(within(guide).getByRole('link', { name: /開発室/ })).toHaveAttribute(
-      'href',
-      '/ja/deals?kind=survey'
-    );
+    // The engineering room is built (#1194): it is entered, not opened as a page
+    expect(within(guide).queryByRole('link', { name: /開発室/ })).not.toBeInTheDocument();
+    expect(within(guide).getByRole('button', { name: /開発室/ })).toBeInTheDocument();
+    expect(within(guide).getByRole('button', { name: /営業フロア/ })).toBeInTheDocument();
     // A door leaves the full-screen office for its page
-    await user.click(within(guide).getByRole('link', { name: /開発室/ }));
+    await user.click(within(guide).getByRole('link', { name: /社長のデスク/ }));
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
@@ -206,10 +206,7 @@ describe('OfficeImmersive', () => {
     const { office, onExit } = renderOffice();
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     await user.keyboard('1');
-    expect(onExit).toHaveBeenCalledTimes(1);
-    expect(router.push).toHaveBeenCalledWith('/ja/today');
-    await user.keyboard('4');
-    expect(router.push).toHaveBeenLastCalledWith('/ja/deals?kind=survey');
+    expect(router.push).toHaveBeenLastCalledWith('/ja/today');
   });
 
   it('shows the staff and the president’s tasks once in the office', async () => {

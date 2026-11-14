@@ -271,18 +271,80 @@
           "paused": "{name} is paused. The figures are read from the records.",
           "vacant": "The {role} seat is vacant. The figures are read from the records."
         },
+        "marketing": {
+          "report": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportWithTop": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}. The largest source is \"{source}\" with {count}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportNone": "There are no new prospects in the last {days} days.",
+          "reportLoading": "Reading the figures of this room.",
+          "reportUnavailable": "The figures of this room could not be read.",
+          "ask": {
+            "sources": "Show me where they came from",
+            "funnel": "Show me how far they got",
+            "leads": "Show me the prospects"
+          },
+          "leadViews": {
+            "needsAction": "Not started",
+            "consultation": "Consultations",
+            "newThisWeek": "New this week",
+            "mine": "Mine",
+            "all": "All"
+          },
+          "period": "Prospects created in the last {days} days: {count}",
+          "periodOnly": "Prospects created in the last {days} days",
+          "loading": "Loading",
+          "error": "The figures could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see prospects. Please ask an administrator.",
+          "empty": "No prospects were created in the last {days} days.",
+          "openAnalytics": "Open the analytics in the normal view",
+          "analyticsHint": "Other periods and finer breakdowns are on the analytics page of the normal view.",
+          "sources": {
+            "board": "Source board",
+            "caption": "Prospects, SQL, wins and acquisition cost by source (prospects created in the last {days} days)",
+            "columns": {
+              "source": "Source",
+              "leads": "Prospects",
+              "share": "Share",
+              "sql": "SQL",
+              "won": "Won",
+              "cost": "Acquisition cost",
+              "wonAmount": "Won amount",
+              "roi": "ROI"
+            },
+            "unset": "No source recorded",
+            "total": "Total",
+            "shareValue": "{share}%",
+            "roiValue": "{value}x",
+            "none": "—",
+            "uncosted": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects. {count, plural, one {# has} other {# have}} no cost recorded.",
+            "costed": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects.",
+            "returns": "The won amount and the ROI are counted from the deals of these prospects (ROI = won amount ÷ acquisition cost)."
+          },
+          "funnel": {
+            "board": "Progress board",
+            "caption": "Prospects that reached each stage (prospects created in the last {days} days)",
+            "columns": {
+              "stage": "Stage",
+              "reached": "Reached",
+              "ofAll": "Of all",
+              "fromPrevious": "From the stage before"
+            },
+            "stages": {
+              "lead": "Prospect",
+              "mql": "MQL (interested)",
+              "deal": "Deal",
+              "sql": "SQL (qualified)",
+              "won": "Won"
+            },
+            "percent": "{value}%",
+            "none": "—",
+            "reachedNote": "A prospect that went further counts for the stages before it too (one that entered a deal without MQL counts as MQL).",
+            "nurturing": "Prospects being nurtured now: {count} (not counted as a stage)."
+          },
+          "scroll": "Table of the {board}. Scroll with the arrow keys",
+          "onWall": "On the wall: {board}"
+        },
         "leads": {
           "board": "Lead board",
-          "report": "New leads this week: {newThisWeek}. Consultation requests: {consultation}. Not started yet: {needsAction}.",
-          "reportLoading": "Reading the figures from the board.",
-          "reportUnavailable": "The figures could not be read from the board.",
-          "ask": {
-            "needsAction": "Show me what nobody has started on",
-            "consultation": "Show me the consultation requests",
-            "newThisWeek": "Show me this week's new leads",
-            "mine": "Show me my own leads",
-            "all": "Show me everything"
-          },
           "views": {
             "needsAction": "Not started yet (new)",
             "consultation": "Consultation requested",
@@ -505,7 +567,77 @@
           "closeLate": "Past the expected close",
           "noAmount": "No amount yet"
         },
-        "door": "opens a page"
+        "door": "opens a page",
+        "engineering": {
+          "board": "Survey board",
+          "report": "{open} surveys are in progress. {proposal} are in the proposal stage, and {withoutTask} have no next action.",
+          "reportTruncated": "{open} surveys are in progress. {proposal} are in the proposal stage. There are many deals and the board shows only part of them: please check how many have no next action in the deals of the normal view.",
+          "reportEmpty": "No survey is in progress right now.",
+          "reportLoading": "Reading the figures of the board.",
+          "reportUnavailable": "The figures of the board could not be read.",
+          "ask": {
+            "open": "Show me everything in progress",
+            "qualification": "Show me the ones in qualification",
+            "discovery": "Show me the ones in discovery",
+            "proposal": "Show me the ones in the proposal stage",
+            "negotiation": "Show me the ones in negotiation"
+          },
+          "views": {
+            "open": "All in progress"
+          },
+          "columns": {
+            "deal": "Company and deal",
+            "stage": "Stage",
+            "nextAction": "Next action",
+            "owner": "Owner"
+          },
+          "daysInStage": "{days} days in this stage",
+          "due": "Due {date}",
+          "noTask": "Not set",
+          "empty": "No survey deal matches this view.",
+          "error": "The deals could not be read. Please open the room again later.",
+          "forbidden": "You do not have permission to see the deals. Please check with an administrator.",
+          "truncated": "There are many deals: the board shows the first {limit}. The counts by stage count every deal.",
+          "openHint": "Opening a row opens its preparation file inside this room.",
+          "openList": "Open in the deals of the normal view",
+          "file": {
+            "label": "Preparation file of {company}",
+            "title": "Preparation file",
+            "reading": "Reading the hearing and the preparation.",
+            "readError": "The records could not be read. Please open the file again later.",
+            "hearingUnavailable": "The hearing could not be read.",
+            "hearingLatest": "The latest hearing was recorded on {date}. Required fields not filled: {missing}. Not confirmed: {unconfirmed}. To confirm next time: {next}.",
+            "noHearing": "No hearing has been recorded yet.",
+            "prepReady": "The prep card of the first meeting is ready.",
+            "prepNone": "The prep card of the first meeting is not ready yet.",
+            "handedOff": "Moved on from the first hearing on {date}; the handoff sheet is ready.",
+            "notHandedOff": "Has not moved on from the first hearing yet.",
+            "choices": {
+              "hearing": "Show me the hearing summary",
+              "prep": "Show me the prep card",
+              "back": "Back to the board"
+            },
+            "parts": {
+              "hearing": "Hearing summary",
+              "prep": "Prep card"
+            },
+            "hearingOn": "Hearing of {date}",
+            "notRecorded": "Not filled",
+            "flags": {
+              "missing": "Required, not filled",
+              "unconfirmed": "Not confirmed",
+              "next": "Confirm next time",
+              "changed": "Changed since last time"
+            },
+            "hearingEmpty": "No hearing has been recorded. You can record one under Hearings on the lead's page.",
+            "hearingForbidden": "You do not have permission to see the hearing. Please check with an administrator.",
+            "prepEmpty": "The prep card has not been written yet. You can prepare it on the lead's page.",
+            "readOnlyHint": "This file is read only. To change something, open it in the normal view.",
+            "openHandoff": "Open the handoff sheet",
+            "openLead": "Open the lead's page",
+            "openDeal": "Open the deal's page"
+          }
+        }
       },
       "tones": {
         "brisk": {

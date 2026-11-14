@@ -3,6 +3,7 @@
 import type { ComponentType } from 'react';
 import type { OfficeRoomProps } from './office-room-contract';
 import { OfficeRoomDue } from './office-room-due';
+import { OfficeRoomEngineering } from './office-room-engineering';
 import { OfficeRoomLeads } from './office-room-leads';
 import { OfficeRoomSales } from './office-room-sales';
 import type { OfficeRoom } from './office-rooms';
@@ -12,8 +13,7 @@ import type { OfficeRoom } from './office-rooms';
  * and hands it the same props (office-room-contract.ts), so a room is added with its own files, a
  * line here and its entries in office-rooms.ts.
  *
- * The first two rooms were built before the contract: they are handed its props under the names
- * they already take.
+ * The rooms built before the contract are handed its props under the names they already take.
  */
 export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomProps>>> = {
   marketing: ({ organizationId, guide, keysRef, onLeaveOffice, onFileOpenChange }) =>
@@ -30,6 +30,19 @@ export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomPro
       />
     ),
   sales: OfficeRoomSales,
+  engineering: ({ organizationId, guide, keysRef, onLeaveOffice, onFileOpenChange }) =>
+    guide && (
+      <OfficeRoomEngineering
+        organizationId={organizationId}
+        role={guide.role}
+        status={guide.status}
+        employeeName={guide.name}
+        look={guide.look}
+        keysRef={keysRef}
+        onOpenNormal={onLeaveOffice}
+        onFileOpenChange={onFileOpenChange}
+      />
+    ),
   backoffice: ({ organizationId, guide, keysRef, onLeaveOffice }) =>
     guide && (
       <OfficeRoomDue

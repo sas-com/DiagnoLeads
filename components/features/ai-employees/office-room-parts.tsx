@@ -4,6 +4,7 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import { FOCUS, KEY } from './office-hud';
@@ -113,4 +114,19 @@ export function RoomChoiceButton({
 /** The line that says who holds the room, over the room's report */
 export function RoomGuideLine({ children }: { children: ReactNode }) {
   return <p className="text-sm leading-relaxed text-[#d8d2c4]">{children}</p>;
+}
+
+/** What a board says instead of its rows: nothing to show, no permission, or reading failed */
+export function RoomBoardMessage({ children }: { children: ReactNode }) {
+  return <p className="m-auto max-w-md px-6 text-center text-base leading-relaxed">{children}</p>;
+}
+
+/** A board that is still reading */
+export function RoomBoardLoading({ children }: { children: ReactNode }) {
+  return (
+    <output className="m-auto flex items-center gap-3 text-sm text-[#d8d2c4]">
+      <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+      {children}
+    </output>
+  );
 }
