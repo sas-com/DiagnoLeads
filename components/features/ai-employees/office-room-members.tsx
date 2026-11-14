@@ -106,7 +106,11 @@ export function OfficeRoomMembers({
   const [outcome, setOutcome] = useState<
     { kind: 'done'; email: string } | { kind: 'gone' | 'failed' } | null
   >(null);
-  const revoke = trpc.members.revokeInvitation.useMutation();
+  const revoke = trpc.members.revokeInvitation.useMutation({
+    // Read again whatever came of it, and even when the shelf was left meanwhile: the counter
+    // reads the same list, and its figure follows
+    onSettled: () => void utils.members.listInvitations.invalidate({ organizationId }),
+  });
   const pending = invitations.data ?? [];
   // Revoking is offered only to who may see the invitations, and open while there is one
   const mayRevoke = invited.state === 'ready';
@@ -143,8 +147,6 @@ export function OfficeRoomMembers({
         onError: (error) =>
           setOutcome({ kind: error.data?.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
         onSettled: () => {
-          // The counter reads the same list: its figure follows
-          void utils.members.listInvitations.invalidate({ organizationId });
           close();
           reportRef.current?.focus();
         },
@@ -224,7 +226,12 @@ export function OfficeRoomMembers({
             <Input
               ref={fieldRef}
               id={fieldId}
-              type="email"
+              // Not an email field: a browser may offer addresses it remembers for one, and the
+              // address has to be typed
+              type="text"
+              inputMode="email"
+              autoCapitalize="none"
+              spellCheck={false}
               value={typed}
               maxLength={320}
               autoComplete="off"
@@ -338,7 +345,7 @@ export function OfficeRoomMembers({
                       className="flex items-start justify-between gap-3 border-b border-[#f5f1e8]/10 py-2 text-sm"
                     >
                       <span className="min-w-0">
-                        <span className="block truncate text-base font-bold">
+                        <span className="block text-base font-bold break-all">
                           {invitation.email}
                         </span>
                         <span

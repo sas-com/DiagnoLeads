@@ -80,7 +80,7 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
       revokeInvitation: {
-        useMutation: () => ({
+        useMutation: (shared: { onSettled?: () => void } = {}) => ({
           isPending: mocks.revokePending,
           mutate: (
             input: { organizationId: string; invitationId: string },
@@ -94,6 +94,7 @@ vi.mock('@/lib/trpc/client', () => ({
             if (mocks.revokeFails) options.onError?.({ data: { code: mocks.revokeFails } });
             else options.onSuccess?.();
             options.onSettled?.();
+            shared.onSettled?.();
           },
         }),
       },
