@@ -267,18 +267,80 @@
           "paused": "{name}は休止中です。数字は記録から読み上げています。",
           "vacant": "{role}は空席です。数字は記録から読み上げています。"
         },
+        "marketing": {
+          "report": "過去{days}日の新しい見込み客は {leads} 件です。関心あり（MQL）以上に進んだのは {mql} 件、商談に進んだのは {deals} 件です。{withoutSource, plural, =0 {} other {流入元の記録が無いものが # 件あります。}}",
+          "reportWithTop": "過去{days}日の新しい見込み客は {leads} 件です。関心あり（MQL）以上に進んだのは {mql} 件、商談に進んだのは {deals} 件です。いちばん多い流入元は「{source}」の {count} 件です。{withoutSource, plural, =0 {} other {流入元の記録が無いものが # 件あります。}}",
+          "reportNone": "過去{days}日は、新しい見込み客がいません。",
+          "reportLoading": "この部屋の数字を読んでいます。",
+          "reportUnavailable": "この部屋の数字を読めませんでした。",
+          "ask": {
+            "sources": "どこから来たかを見せて",
+            "funnel": "どこまで進んだかを見せて",
+            "leads": "見込み客を見せて"
+          },
+          "leadViews": {
+            "needsAction": "未着手",
+            "consultation": "相談の申込",
+            "newThisWeek": "今週の新規",
+            "mine": "自分の担当",
+            "all": "すべて"
+          },
+          "period": "過去{days}日に登録された見込み客・{count} 件",
+          "periodOnly": "過去{days}日に登録された見込み客",
+          "loading": "読み込んでいます",
+          "error": "数字を読めませんでした。時間をおいて、もう一度開いてください。",
+          "forbidden": "見込み客を見る権限がありません。管理者に確かめてください。",
+          "empty": "過去{days}日に登録された見込み客はいません。",
+          "openAnalytics": "通常の表示の分析で開く",
+          "analyticsHint": "期間の切り替えと細かい内訳は、通常の表示の分析で見ます。",
+          "sources": {
+            "board": "流入元ボード",
+            "caption": "流入元ごとの見込み客・SQL・受注・獲得費用（過去{days}日に登録された見込み客）",
+            "columns": {
+              "source": "流入元",
+              "leads": "見込み客",
+              "share": "割合",
+              "sql": "SQL",
+              "won": "受注",
+              "cost": "獲得費用",
+              "wonAmount": "受注額",
+              "roi": "ROI"
+            },
+            "unset": "流入元の記録なし",
+            "total": "合計",
+            "shareValue": "{share}%",
+            "roiValue": "{value} 倍",
+            "none": "—",
+            "uncosted": "獲得費用は、見込み客に記録した金額（税抜）の合計です。{count} 件は費用が未記録です。",
+            "costed": "獲得費用は、見込み客に記録した金額（税抜）の合計です。",
+            "returns": "受注額と ROI は、これらの見込み客の商談から数えています（ROI ＝ 受注額 ÷ 獲得費用）。"
+          },
+          "funnel": {
+            "board": "進み具合ボード",
+            "caption": "段ごとの、そこまで進んだ見込み客の数（過去{days}日に登録された見込み客）",
+            "columns": {
+              "stage": "段",
+              "reached": "進んだ数",
+              "ofAll": "全体に対して",
+              "fromPrevious": "前の段から"
+            },
+            "stages": {
+              "lead": "見込み客",
+              "mql": "MQL（関心あり）",
+              "deal": "商談",
+              "sql": "SQL（適格）",
+              "won": "受注"
+            },
+            "percent": "{value}%",
+            "none": "—",
+            "reachedNote": "先の段に進んだ見込み客は、前の段にも数えます（MQL を経ずに商談に入ったものも MQL に数えます）。",
+            "nurturing": "再育成（ナーチャリング）中の見込み客は {count} 件です（段には数えません）。"
+          },
+          "scroll": "{board}の表。矢印キーでスクロールできます",
+          "onWall": "壁のボード：{board}"
+        },
         "leads": {
           "board": "見込み客ボード",
-          "report": "今週の新しい見込み客は {newThisWeek} 件です。相談の申込は {consultation} 件、まだ着手していないものは {needsAction} 件あります。",
-          "reportLoading": "ボードの数字を読んでいます。",
-          "reportUnavailable": "ボードの数字を読めませんでした。",
-          "ask": {
-            "needsAction": "まだ着手していないものを見せて",
-            "consultation": "相談の申込を見せて",
-            "newThisWeek": "今週の新しいものを見せて",
-            "mine": "自分の担当を見せて",
-            "all": "全部見せて"
-          },
           "views": {
             "needsAction": "まだ着手していない（新規）",
             "consultation": "相談の申込あり",

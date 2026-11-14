@@ -4,10 +4,12 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import type { ReactNode } from 'react';
+import { type MutableRefObject, type ReactNode, useEffect, useRef } from 'react';
 import { FOCUS, KEY } from './office-hud';
 import { ROLE_ACCENTS } from './office-robot';
+import type { RoomKeys } from './office-room-contract';
 import { RobotPortrait } from './office-scene-svg';
 
 /** Whose room this is: the AI employee of the room (or its vacant seat) with its status */
@@ -113,4 +115,34 @@ export function RoomChoiceButton({
 /** The line that says who holds the room, over the room's report */
 export function RoomGuideLine({ children }: { children: ReactNode }) {
   return <p className="text-sm leading-relaxed text-[#d8d2c4]">{children}</p>;
+}
+
+/**
+ * Hands the keys of a room, or of a board of a room, to whoever calls them (the office calls the
+ * room, the room calls its board). The handler of the latest render is the one that is called.
+ */
+export function useRoomKeys(keysRef: MutableRefObject<RoomKeys | null>, handler: RoomKeys) {
+  const latest = useRef(handler);
+  latest.current = handler;
+  useEffect(() => {
+    keysRef.current = (event) => latest.current(event);
+    return () => {
+      keysRef.current = null;
+    };
+  }, [keysRef]);
+}
+
+/** What a board says instead of its rows: nothing to show, no permission, or reading failed */
+export function RoomBoardMessage({ children }: { children: ReactNode }) {
+  return <p className="m-auto max-w-md px-6 text-center text-base leading-relaxed">{children}</p>;
+}
+
+/** A board that is still reading */
+export function RoomBoardLoading({ children }: { children: ReactNode }) {
+  return (
+    <output className="m-auto flex items-center gap-3 text-sm text-[#d8d2c4]">
+      <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+      {children}
+    </output>
+  );
 }

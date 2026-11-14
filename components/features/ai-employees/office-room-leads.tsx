@@ -4,55 +4,53 @@ import { isImeKey } from '@/components/ui/ime';
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
-import { DEFAULT_LEAD_SORT, leadListHref } from '@/lib/features/leads/list-query';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
-import { useFormatter, useLocale, useTranslations } from 'next-intl';
-import Link from 'next/link';
-import { type MutableRefObject, useEffect, useRef, useState } from 'react';
-import { CAP, FOCUS, KEY, PANEL } from './office-hud';
+import { useTranslations } from 'next-intl';
+import { type MutableRefObject, useEffect, useId, useRef, useState } from 'react';
+import { OfficeBoardProgress, OfficeBoardSources } from './office-board-figures';
+import { OfficeBoardLeads } from './office-board-leads';
+import { CAP, PANEL } from './office-hud';
+import { type BoardLead, OfficeLeadFile, type RoomKeys } from './office-lead-file';
 import {
-  type BoardLead,
-  LEAD_STATUS_COLORS,
-  OfficeLeadFile,
-  type RoomKeys,
-} from './office-lead-file';
+  MARKETING_FIGURE_BOARDS,
+  MARKETING_FIRST_CHOICE,
+  MARKETING_RANGE,
+  MARKETING_RANGE_DAYS,
+  type MarketingChoice,
+  UNSET_SOURCE,
+  figureState,
+  isLeadBoardView,
+  marketingChoiceKey,
+  marketingChoiceOfKey,
+  marketingReport,
+} from './office-marketing';
 import {
-  ROOM_BOARD,
   ROOM_FRAME,
   RoomChoiceButton,
   RoomGuideHeader,
   RoomGuideLine,
+  useRoomKeys,
 } from './office-room-parts';
-import {
-  LEAD_BOARD_FIRST_VIEW,
-  LEAD_BOARD_PAGE_SIZE,
-  LEAD_BOARD_VIEWS,
-  type LeadBoardView,
-  leadBoardFilters,
-  leadBoardInput,
-  leadBoardPages,
-  leadBoardViewOfKey,
-  leadCountInput,
-  nextRow,
-  roomGuide,
-} from './office-rooms';
-
-/** How many of the two marks an MQL level fills (対象外 and no diagnosis fill none) */
-const MQL_MARKS: Record<string, number> = { interest: 2, fit: 1 };
+import { LEAD_BOARD_VIEWS, roomGuide } from './office-rooms';
 
 export type { RoomKeys };
 
 /**
- * The marketing room of the full-screen office (#1127): the lead list as the room's wall board,
- * and the room's figures read out next to the AI employee the room belongs to.
+ * The marketing room of the full-screen office (#1127, remade as the marketer's room in #1200):
+ * the marketer finds prospects and tells which ones are worth following, so the room reports
+ * where the prospects of the last 30 days came from and how far they got, and its wall shows the
+ * board the president asks for: the sources, the progress, or a view of the lead board.
  *
- * The board reads `leads.list` (the API scopes it to the organization and checks the permission).
- * The figures are the totals of three views of that list, nothing else: an AI employee that is in
- * training, paused or not hired is shown as such and reports nothing of its own. The president
- * switches the view with the choices (number keys), moves over the rows with the arrow keys and
- * opens a lead with Enter: its customer file opens inside the room (office-lead-file.tsx, #1128).
+ * The report is made of the figures of the analytics API and nothing else: an AI employee that is
+ * in training, paused or not hired is shown as such and reports nothing of its own. The
+ * president's choices switch the board (number keys; a key keeps its meaning whichever board is
+ * on the wall). On the lead board the arrow keys move over the rows and Enter opens a lead: its
+ * customer file opens inside the room (office-lead-file.tsx, #1128).
+ *
+ * The file and the component keep the name they had while the room was the lead board only, so
+ * the office that holds the rooms is not touched while other work changes it; they are renamed
+ * when the rooms get their registry (#1142).
  */
 export function OfficeRoomLeads({
   organizationId,
@@ -73,80 +71,56 @@ export function OfficeRoomLeads({
   look?: RobotLook;
   /** Filled with the room's key handler while the room is shown */
   keysRef: MutableRefObject<RoomKeys | null>;
-  /** The list or a lead's page is opened in the normal view: the office closes */
+  /** A page of the normal view is opened (a list, a lead, the analytics): the office closes */
   onOpenLead: () => void;
   /** Told when a file opens or closes: while one is open, Esc closes it, not the room */
   onFileOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
-  const tLeads = useTranslations('aiOffice.immersive.room.leads');
+  const tRoom = useTranslations('aiOffice.immersive.room.marketing');
   const tOffice = useTranslations('aiOffice');
   const tImmersive = useTranslations('aiOffice.immersive');
-  const tStatus = useTranslations('status');
-  const tLevels = useTranslations('leadActivity.summary.mqlLevels');
-  const tLead = useTranslations('leads');
-  const format = useFormatter();
-  const locale = useLocale();
-  const boardRef = useRef<HTMLElement>(null);
-  const [view, setView] = useState<LeadBoardView>(LEAD_BOARD_FIRST_VIEW);
+  const tInflow = useTranslations('pipeline.inflowSource');
+  const [choice, setChoice] = useState<MarketingChoice>(MARKETING_FIRST_CHOICE);
+  // The page of the lead board, and whether it was turned within the view that is on
   const [page, setPage] = useState(1);
+  const [turned, setTurned] = useState(false);
   // The lead whose file is open on the room's table, and the row to go back to
   const [open, setOpen] = useState<BoardLead | null>(null);
   const fileKeys = useRef<RoomKeys | null>(null);
+  const boardKeys = useRef<RoomKeys | null>(null);
   const lastOpened = useRef<string | null>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
   // "This week" is fixed when the room opens, so the queries keep their keys
   const [now] = useState(() => new Date());
+  const leadsAskId = useId();
 
-  // Turning a page keeps the rows of the page before until the next ones arrive; another view
-  // never shows the rows or the count of the one before under its own name
-  const [pagedView, setPagedView] = useState<LeadBoardView | null>(null);
-  const list = trpc.leads.list.useQuery(leadBoardInput(view, page, organizationId, now), {
-    placeholderData: (previous) => (pagedView === view ? previous : undefined),
-  });
-  const turning = list.isPlaceholderData === true;
-  const newThisWeek = trpc.leads.list.useQuery(leadCountInput('newThisWeek', organizationId, now));
-  const consultation = trpc.leads.list.useQuery(
-    leadCountInput('consultation', organizationId, now)
-  );
-  const needsAction = trpc.leads.list.useQuery(leadCountInput('needsAction', organizationId, now));
+  // The figures of the room: the two boards of figures, and the report made of them
+  const period = { organizationId, dateRange: MARKETING_RANGE };
+  const funnel = trpc.analytics.getConversionFunnel.useQuery(period);
+  const cost = trpc.analytics.getAcquisitionCost.useQuery(period);
+  const funnelState = figureState(funnel);
+  const costState = figureState(cost);
 
-  const forbidden = list.error?.data?.code === 'FORBIDDEN';
-  const items: BoardLead[] = list.data?.items ?? [];
-  const total = list.data?.total ?? 0;
-  const pages = leadBoardPages(total);
   const guide = roomGuide(status);
   const roleTitle = tOffice(`roles.${role}.title`);
 
-  const choose = (next: LeadBoardView) => {
-    setView(next);
+  const choose = (next: MarketingChoice) => {
+    setChoice(next);
     setPage(1);
-    setPagedView(null);
-  };
-  const turn = (delta: 1 | -1) => {
-    setPagedView(view);
-    setPage((current) => Math.max(1, Math.min(pages, current + delta)));
+    setTurned(false);
   };
 
-  const openFile = (lead: BoardLead) => {
-    lastOpened.current = lead.id;
-    setOpen(lead);
-  };
   const fileOpen = open !== null;
   useEffect(() => {
     onFileOpenChange(fileOpen);
     return () => onFileOpenChange(false);
   }, [fileOpen, onFileOpenChange]);
-  // Closing the file gives the focus back to the row it was opened from
-  useEffect(() => {
-    if (open || !lastOpened.current) return;
-    boardRef.current?.querySelector<HTMLElement>(`[data-lead-id="${lastOpened.current}"]`)?.focus();
-    lastOpened.current = null;
-  }, [open]);
 
-  // The room's keys: numbers choose the view, the arrows move over the rows and the pages.
-  // Enter opens the focused row by itself (the rows are buttons). While a file is open, the keys
-  // are the file's, and Esc closes it instead of leaving the room.
-  const onRoomKey: RoomKeys = (event) => {
+  // The room's keys: numbers choose the board; the other keys are the board's (the lead board
+  // moves over its rows and pages). While a file is open, the keys are the file's, and Esc closes
+  // it instead of leaving the room.
+  useRoomKeys(keysRef, (event) => {
     // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
     if (isImeKey(event)) return false;
     if (open) {
@@ -156,46 +130,17 @@ export function OfficeRoomLeads({
       }
       return fileKeys.current?.(event) ?? false;
     }
-    const chosen = leadBoardViewOfKey(event.key);
+    const chosen = marketingChoiceOfKey(event.key);
     if (chosen) {
       event.preventDefault();
+      // The board that holds the focus may leave the wall: the focus goes back to the report,
+      // where it sits when the room opens, instead of falling out of the room
+      if (document.activeElement?.closest('section')) reportRef.current?.focus();
       choose(chosen);
       return true;
     }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      const rows = Array.from(
-        boardRef.current?.querySelectorAll<HTMLElement>('[data-lead-row]') ?? []
-      );
-      const current = rows.indexOf(document.activeElement as HTMLElement);
-      const target = rows[nextRow(current, event.key === 'ArrowDown' ? 1 : -1, rows.length)];
-      if (target) {
-        event.preventDefault();
-        target.focus();
-      }
-      return true;
-    }
-    if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
-      event.preventDefault();
-      turn(event.key === 'ArrowRight' ? 1 : -1);
-      return true;
-    }
-    return false;
-  };
-  // The office calls the handler of the latest render
-  const latestKeys = useRef(onRoomKey);
-  latestKeys.current = onRoomKey;
-  useEffect(() => {
-    keysRef.current = (event) => latestKeys.current(event);
-    return () => {
-      keysRef.current = null;
-    };
-  }, [keysRef]);
-
-  const counts = [newThisWeek.data, consultation.data, needsAction.data];
-  const countsReady = counts.every((data) => data !== undefined);
-  const countsFailed = newThisWeek.isError || consultation.isError || needsAction.isError;
-  const from = total === 0 ? 0 : (page - 1) * LEAD_BOARD_PAGE_SIZE + 1;
-  const to = Math.min(total, page * LEAD_BOARD_PAGE_SIZE);
+    return boardKeys.current?.(event) ?? false;
+  });
 
   const header = (
     <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
@@ -220,221 +165,129 @@ export function OfficeRoomLeads({
     );
   }
 
+  const days = MARKETING_RANGE_DAYS;
+  const boardName = isLeadBoardView(choice)
+    ? t('leads.board')
+    : tRoom(choice === 'sources' ? 'sources.board' : 'funnel.board');
+  const report = funnel.data && cost.data ? marketingReport(funnel.data, cost.data) : null;
+  const sourceLabel = (source: string) =>
+    source === UNSET_SOURCE
+      ? tRoom('sources.unset')
+      : tInflow.has(source)
+        ? tInflow(source)
+        : source;
+  const forbidden = [funnelState, costState].includes('forbidden');
+  const failed = [funnelState, costState].some(
+    (state) => state === 'forbidden' || state === 'error'
+  );
+
   return (
     <div className={ROOM_FRAME}>
       {/* Whose room this is, the room's figures, and what the president asks for */}
-      <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
+      <div
+        className={cn(
+          PANEL,
+          'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:max-h-full lg:w-[26rem] lg:overflow-y-auto'
+        )}
+      >
         {header}
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
-        <div tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
+        <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
           {guideLine}
           <p className="text-base leading-relaxed font-medium" aria-live="polite">
-            {forbidden || countsFailed
-              ? tLeads('reportUnavailable')
-              : countsReady
-                ? tLeads('report', {
-                    newThisWeek: newThisWeek.data?.total ?? 0,
-                    consultation: consultation.data?.total ?? 0,
-                    needsAction: needsAction.data?.total ?? 0,
-                  })
-                : tLeads('reportLoading')}
+            {forbidden
+              ? tRoom('forbidden')
+              : failed
+                ? tRoom('reportUnavailable')
+                : !report
+                  ? tRoom('reportLoading')
+                  : report.leads === 0
+                    ? tRoom('reportNone', { days })
+                    : report.topSource
+                      ? tRoom('reportWithTop', {
+                          days,
+                          leads: report.leads,
+                          mql: report.mql,
+                          deals: report.deals,
+                          source: sourceLabel(report.topSource.source),
+                          count: report.topSource.count,
+                          withoutSource: report.withoutSource,
+                        })
+                      : tRoom('report', {
+                          days,
+                          leads: report.leads,
+                          mql: report.mql,
+                          deals: report.deals,
+                          withoutSource: report.withoutSource,
+                        })}
           </p>
         </div>
         <h3 className={CAP}>{tImmersive('talk.you')}</h3>
         <ul className="space-y-2">
-          {LEAD_BOARD_VIEWS.map((option, index) => (
+          {MARKETING_FIGURE_BOARDS.map((option) => (
             <li key={option}>
               <RoomChoiceButton
-                keyCap={String(index + 1)}
-                main={option === view}
-                pressed={option === view}
+                keyCap={marketingChoiceKey(option)}
+                main={option === choice}
+                pressed={option === choice}
                 onClick={() => choose(option)}
               >
-                {tLeads(`ask.${option}`)}
+                {tRoom(`ask.${option}`)}
               </RoomChoiceButton>
             </li>
           ))}
         </ul>
+        {/* The views of the lead board: one request, said once, with what to show under it */}
+        {/* biome-ignore lint/a11y/useSemanticElements: a named group of choices, not a form's fieldset */}
+        <div role="group" aria-labelledby={leadsAskId} className="space-y-2">
+          <p id={leadsAskId} className="pt-1 text-sm text-[#d8d2c4]">
+            {tRoom('ask.leads')}
+          </p>
+          <ul className="grid grid-cols-2 gap-2">
+            {LEAD_BOARD_VIEWS.map((option) => (
+              <li key={option}>
+                <RoomChoiceButton
+                  keyCap={marketingChoiceKey(option)}
+                  main={option === choice}
+                  pressed={option === choice}
+                  onClick={() => choose(option)}
+                >
+                  {tRoom(`leadViews.${option}`)}
+                </RoomChoiceButton>
+              </li>
+            ))}
+          </ul>
+        </div>
+        {/* Which board is on the wall, said from the panel that stays: the boards are made anew
+            at each change, and a live region that arrives with its words is not read out */}
+        <output className="sr-only">{tRoom('onWall', { board: boardName })}</output>
       </div>
 
       {/* The wall board of the room */}
-      <section
-        ref={boardRef}
-        aria-label={tLeads('board')}
-        aria-busy={list.isFetching}
-        className={ROOM_BOARD}
-      >
-        <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
-          <div className="flex items-baseline gap-4">
-            <h2 className="text-xl font-bold">{tLeads('board')}</h2>
-            {/* Read out when the view changes: the board answers the choice on the left */}
-            <output className="block text-sm text-[#d8d2c4]">
-              {tLeads(`views.${view}`)}
-              {list.data && !turning && `・${tLeads('count', { count: total })}`}
-            </output>
-          </div>
-          <p className="flex items-center gap-2 text-xs text-[#d8d2c4]">
-            <span className={KEY}>↑</span>
-            <span className={KEY}>↓</span>
-            {tLeads('keys.rows')}
-            <span className={cn(KEY, 'ml-2')}>Enter</span>
-            {tLeads('keys.open')}
-          </p>
-        </header>
-
-        {forbidden ? (
-          <p className="m-auto max-w-md px-6 text-center text-base leading-relaxed">
-            {tLeads('forbidden')}
-          </p>
-        ) : list.isError ? (
-          <p className="m-auto max-w-md px-6 text-center text-base leading-relaxed">
-            {tLeads('error')}
-          </p>
-        ) : !list.data ? (
-          <output className="m-auto flex items-center gap-3 text-sm text-[#d8d2c4]">
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-            {tLeads('loading')}
-          </output>
-        ) : items.length === 0 ? (
-          <p className="m-auto max-w-md px-6 text-center text-base leading-relaxed">
-            {tLeads('empty')}
-          </p>
-        ) : (
-          <div className={cn('min-h-0 flex-1 overflow-y-auto', turning && 'opacity-60')}>
-            <div
-              aria-hidden="true"
-              className={cn(
-                ROW_GRID,
-                'min-h-9 border-b border-[#f5f1e8]/15 text-xs text-[#bdb7a9]'
-              )}
-            >
-              <span>{tLeads('columns.lead')}</span>
-              <span>{tLeads('columns.mql')}</span>
-              <span>{tLeads('columns.status')}</span>
-              <span className="hidden md:block">{tLeads('columns.assignee')}</span>
-              <span className="hidden md:block">{tLeads('columns.created')}</span>
-            </div>
-            <ul>
-              {items.map((lead) => {
-                const marks = MQL_MARKS[lead.mqlLevel ?? ''] ?? 0;
-                return (
-                  <li key={lead.id}>
-                    <button
-                      type="button"
-                      data-lead-row=""
-                      data-lead-id={lead.id}
-                      onClick={() => openFile(lead)}
-                      className={cn(
-                        ROW_GRID,
-                        'min-h-[3.5rem] w-full border-b border-[#f5f1e8]/10 text-left text-sm hover:bg-[#f5f1e8]/5 focus-visible:bg-[#e9cf9a]/15 focus-visible:shadow-[inset_3px_0_0_#e9cf9a]',
-                        FOCUS
-                      )}
-                    >
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate font-bold">
-                          {lead.company || tLeads('noCompany')}
-                        </span>
-                        <span className="truncate text-[#d8d2c4]">
-                          {lead.name || tLead('nameNotSet')}
-                        </span>
-                      </span>
-                      <span className="flex items-center gap-2">
-                        <span aria-hidden="true" className="flex gap-1">
-                          {[0, 1].map((mark) => (
-                            <span
-                              key={mark}
-                              className={cn(
-                                'h-2.5 w-2.5 rotate-45 border border-[#e9cf9a]',
-                                mark < marks && 'bg-[#e9cf9a]'
-                              )}
-                            />
-                          ))}
-                        </span>
-                        <span className="text-xs">
-                          {lead.mqlLevel ? tLevels(lead.mqlLevel) : tLeads('noLevel')}
-                        </span>
-                      </span>
-                      <span>
-                        <span
-                          style={{
-                            color: LEAD_STATUS_COLORS[lead.status],
-                            borderColor: 'currentColor',
-                          }}
-                          className="inline-flex rounded-full border px-2.5 py-0.5 text-xs font-bold"
-                        >
-                          {lead.status in LEAD_STATUS_COLORS
-                            ? tStatus(lead.status as 'new')
-                            : lead.status}
-                        </span>
-                      </span>
-                      <span className="hidden truncate md:block">
-                        {lead.assignee?.name ?? tLeads('unassigned')}
-                      </span>
-                      <span className="hidden tabular-nums md:block">
-                        {format.dateTime(new Date(lead.createdAt), {
-                          year: 'numeric',
-                          month: '2-digit',
-                          day: '2-digit',
-                        })}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#f5f1e8]/15 px-5 py-3 text-sm text-[#d8d2c4]">
-          <p>
-            {list.data && !turning && total > 0 && tLeads('range', { total, from, to })}
-            <span className="ml-3 text-xs">{tLeads('openHint')}</span>
-          </p>
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/${locale}${leadListHref(leadBoardFilters(view, now), DEFAULT_LEAD_SORT)}`}
-              onClick={onOpenLead}
-              className={cn('mr-2 underline underline-offset-4 hover:text-white', FOCUS)}
-            >
-              {tLeads('openList')}
-            </Link>
-            <button
-              type="button"
-              onClick={() => turn(-1)}
-              aria-disabled={page <= 1}
-              className={cn(PAGE_BUTTON, FOCUS)}
-            >
-              <span aria-hidden="true" className={KEY}>
-                ←
-              </span>
-              {tLeads('prev')}
-            </button>
-            <span className="tabular-nums" aria-live="polite">
-              {tLeads('page', { page, pages })}
-            </span>
-            <button
-              type="button"
-              onClick={() => turn(1)}
-              aria-disabled={page >= pages}
-              className={cn(PAGE_BUTTON, FOCUS)}
-            >
-              {tLeads('next')}
-              <span aria-hidden="true" className={KEY}>
-                →
-              </span>
-            </button>
-          </div>
-        </footer>
-      </section>
+      {isLeadBoardView(choice) ? (
+        <OfficeBoardLeads
+          organizationId={organizationId}
+          view={choice}
+          page={page}
+          keepRows={turned}
+          now={now}
+          keysRef={boardKeys}
+          focusLeadRef={lastOpened}
+          onTurn={(next) => {
+            setTurned(true);
+            setPage(next);
+          }}
+          onOpen={(lead) => {
+            lastOpened.current = lead.id;
+            setOpen(lead);
+          }}
+          onLeave={onOpenLead}
+        />
+      ) : choice === 'sources' ? (
+        <OfficeBoardSources state={costState} cost={cost.data} onLeave={onOpenLead} />
+      ) : (
+        <OfficeBoardProgress state={funnelState} funnel={funnel.data} onLeave={onOpenLead} />
+      )}
     </div>
   );
 }
-
-/** The columns of the board: lead, MQL level, status, and from a tablet on, assignee and day */
-const ROW_GRID =
-  'grid grid-cols-[minmax(0,1.6fr)_9.5rem_7rem] items-center gap-4 px-5 md:grid-cols-[minmax(0,1.6fr)_9.5rem_7rem_minmax(0,0.8fr)_6.5rem]';
-
-// A page button at the end of the board stays focusable (aria-disabled): a disabled button
-// would drop the focus, and the keys of the room with it
-const PAGE_BUTTON =
-  'inline-flex min-h-11 items-center gap-1 border border-[#f5f1e8]/35 px-3 text-sm font-bold text-[#f5f1e8] hover:bg-[#f5f1e8]/10 aria-disabled:cursor-not-allowed aria-disabled:border-[#f5f1e8]/15 aria-disabled:text-[#f5f1e8]/40 aria-disabled:hover:bg-transparent';

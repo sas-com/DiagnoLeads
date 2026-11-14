@@ -2,8 +2,8 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
 /**
  * The rooms of the full-screen office that hold work (#1127, decision
  * 2026-11-13-office-is-the-base): the business screens live inside the office. The marketing room
- * is the first: its wall board is the lead list. The reception (back office) hands over what is
- * due, one at a time (#1133).
+ * is the first: its wall shows the lead list and the figures of the marketer (office-marketing.ts,
+ * #1200). The reception (back office) hands over what is due, one at a time (#1133).
  *
  * Pure functions only.
  */
@@ -70,25 +70,8 @@ export const LEAD_BOARD_VIEWS = [
 ] as const satisfies readonly (LeadListPreset | 'all')[];
 export type LeadBoardView = (typeof LEAD_BOARD_VIEWS)[number];
 
-/** The view the board opens on: what nobody has started on yet */
-export const LEAD_BOARD_FIRST_VIEW: LeadBoardView = 'needsAction';
-
-/** The views whose totals the room reports */
-export const LEAD_REPORT_VIEWS = [
-  'newThisWeek',
-  'consultation',
-  'needsAction',
-] as const satisfies readonly LeadBoardView[];
-export type LeadReportView = (typeof LEAD_REPORT_VIEWS)[number];
-
 /** Rows of the board per page: what fits on the wall without scrolling */
 export const LEAD_BOARD_PAGE_SIZE = 8;
-
-/** The view a number key chooses (1 is the first), if any */
-export function leadBoardViewOfKey(key: string): LeadBoardView | null {
-  if (!/^[1-9]$/.test(key)) return null;
-  return LEAD_BOARD_VIEWS[Number(key) - 1] ?? null;
-}
 
 /** The filters of a view, the same as the lead list's preset of that name */
 export function leadBoardFilters(view: LeadBoardView, now: Date): LeadListFilters {
@@ -107,15 +90,6 @@ export function leadBoardInput(
     organizationId,
     LEAD_BOARD_PAGE_SIZE
   );
-}
-
-/** Input of `leads.list` that only asks how many leads a view holds */
-export function leadCountInput(
-  view: LeadBoardView,
-  organizationId: string,
-  now: Date
-): ListLeadsInput {
-  return { ...leadBoardInput(view, 1, organizationId, now), limit: 1 };
 }
 
 /** Pages of the board for a total; an empty board still has its first page */
