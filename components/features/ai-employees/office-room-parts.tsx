@@ -6,10 +6,9 @@ import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { type MutableRefObject, type ReactNode, useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { FOCUS, KEY } from './office-hud';
 import { ROLE_ACCENTS } from './office-robot';
-import type { RoomKeys } from './office-room-contract';
 import { RobotPortrait } from './office-scene-svg';
 
 /** Whose room this is: the AI employee of the room (or its vacant seat) with its status */
@@ -115,21 +114,6 @@ export function RoomChoiceButton({
 /** The line that says who holds the room, over the room's report */
 export function RoomGuideLine({ children }: { children: ReactNode }) {
   return <p className="text-sm leading-relaxed text-[#d8d2c4]">{children}</p>;
-}
-
-/**
- * Hands the keys of a room, or of a board of a room, to whoever calls them (the office calls the
- * room, the room calls its board). The handler of the latest render is the one that is called.
- */
-export function useRoomKeys(keysRef: MutableRefObject<RoomKeys | null>, handler: RoomKeys) {
-  const latest = useRef(handler);
-  latest.current = handler;
-  useEffect(() => {
-    keysRef.current = (event) => latest.current(event);
-    return () => {
-      keysRef.current = null;
-    };
-  }, [keysRef]);
 }
 
 /** What a board says instead of its rows: nothing to show, no permission, or reading failed */

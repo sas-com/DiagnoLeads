@@ -25,14 +25,9 @@ import {
   marketingChoiceOfKey,
   marketingReport,
 } from './office-marketing';
-import {
-  ROOM_FRAME,
-  RoomChoiceButton,
-  RoomGuideHeader,
-  RoomGuideLine,
-  useRoomKeys,
-} from './office-room-parts';
+import { ROOM_FRAME, RoomChoiceButton, RoomGuideHeader, RoomGuideLine } from './office-room-parts';
 import { LEAD_BOARD_VIEWS, roomGuide } from './office-rooms';
+import { useRoomKeys } from './use-room-keys';
 
 export type { RoomKeys };
 

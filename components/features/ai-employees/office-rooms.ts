@@ -2,8 +2,8 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
 /**
  * The rooms of the full-screen office that hold work (#1127, decision
  * 2026-11-13-office-is-the-base): the business screens live inside the office. The marketing room
- * is the first: its wall shows the lead list and the figures of the marketer (office-marketing.ts,
- * #1200). The reception (back office) hands over what is due, one at a time (#1133).
+ * is the first: its wall board is the lead list. The reception (back office) hands over what is
+ * due, one at a time (#1133).
  *
  * Pure functions only.
  */

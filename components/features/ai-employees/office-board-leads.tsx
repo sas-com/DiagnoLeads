@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef } from 'react';
 import { FOCUS, KEY } from './office-hud';
 import { type BoardLead, LEAD_STATUS_COLORS, type RoomKeys } from './office-lead-file';
-import { ROOM_BOARD, RoomBoardLoading, RoomBoardMessage, useRoomKeys } from './office-room-parts';
+import { ROOM_BOARD, RoomBoardLoading, RoomBoardMessage } from './office-room-parts';
 import {
   LEAD_BOARD_PAGE_SIZE,
   type LeadBoardView,
@@ -17,6 +17,7 @@ import {
   leadBoardPages,
   nextRow,
 } from './office-rooms';
+import { useRoomKeys } from './use-room-keys';
 
 /** How many of the two marks an MQL level fills (対象外 and no diagnosis fill none) */
 const MQL_MARKS: Record<string, number> = { interest: 2, fit: 1 };
