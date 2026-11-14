@@ -547,6 +547,12 @@
         },
         "loading": "Loading the 3D floor.",
         "failed": "The 3D floor could not be shown. The office is back in 2D."
+      },
+      "walkingTo": "On the way to {room}",
+      "feelings": {
+        "proud": "Got the work done",
+        "happy": "Glad",
+        "attentive": "Looking at you"
       }
     },
     "enterOffice": "Enter the office (full screen)",
