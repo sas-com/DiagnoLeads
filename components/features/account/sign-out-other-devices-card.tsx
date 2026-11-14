@@ -68,7 +68,7 @@ export function SignOutOtherDevicesCard() {
           className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2"
         >
           <MonitorSmartphone
-            className="h-5 w-5 text-violet-600 dark:text-violet-400"
+            className="h-5 w-5 text-brand-500 dark:text-brand-400"
             aria-hidden="true"
           />
           {t('title')}

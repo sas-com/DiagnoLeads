@@ -45,16 +45,14 @@ export function LeadRecentActivity({
           {t('recent')}
         </h2>
         {allHref ? (
-          <Link href={allHref} className="text-sm text-blue-600 hover:underline dark:text-blue-400">
+          <Link
+            href={allHref}
+            className="text-sm text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
+          >
             {t('showAll')}
           </Link>
         ) : onShowAll ? (
-          <Button
-            variant="link"
-            size="sm"
-            className="h-auto px-0 text-blue-600 dark:text-blue-400"
-            onClick={onShowAll}
-          >
+          <Button variant="link" size="sm" className="h-auto px-0" onClick={onShowAll}>
             {t('showAll')}
           </Button>
         ) : null}

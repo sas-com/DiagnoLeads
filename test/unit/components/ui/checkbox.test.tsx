@@ -114,13 +114,13 @@ describe('Checkbox styling', () => {
     render(<Checkbox />);
     const checkbox = screen.getByRole('checkbox');
     expect(checkbox).toHaveClass('focus-visible:ring-1');
-    expect(checkbox).toHaveClass('focus-visible:ring-blue-500');
+    expect(checkbox).toHaveClass('focus-visible:ring-brand-500');
   });
 
   it('should have checked state styles', () => {
     render(<Checkbox />);
     const checkbox = screen.getByRole('checkbox');
-    expect(checkbox.className).toContain('data-[state=checked]:bg-blue-600');
+    expect(checkbox.className).toContain('data-[state=checked]:bg-brand-500');
   });
 
   it('should have shadow', () => {

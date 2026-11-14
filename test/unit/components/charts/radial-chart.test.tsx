@@ -86,10 +86,10 @@ describe('RadialChart', () => {
   it('follows the dark class on <html>', async () => {
     setDarkMode(true);
     render(<RadialChart value={50} />);
-    expect(radialOf(lastChart().options)?.track?.background).toBe('#374151');
+    expect(radialOf(lastChart().options)?.track?.background).toBe('#232c44');
 
     act(() => setDarkMode(false));
-    await waitFor(() => expect(radialOf(lastChart().options)?.track?.background).toBe('#e5e7eb'));
+    await waitFor(() => expect(radialOf(lastChart().options)?.track?.background).toBe('#e9e4da'));
   });
 });
 
@@ -159,10 +159,10 @@ describe('MultiRadialChart', () => {
   it('follows the dark class on <html>', async () => {
     setDarkMode(true);
     render(<MultiRadialChart data={data} />);
-    expect(radialOf(lastChart().options)?.track?.background).toBe('#374151');
-    expect(lastChart().options.legend?.labels?.colors).toBe('#9ca3af');
+    expect(radialOf(lastChart().options)?.track?.background).toBe('#232c44');
+    expect(lastChart().options.legend?.labels?.colors).toBe('#bdb7a9');
 
     act(() => setDarkMode(false));
-    await waitFor(() => expect(lastChart().options.legend?.labels?.colors).toBe('#6b7280'));
+    await waitFor(() => expect(lastChart().options.legend?.labels?.colors).toBe('#6b7180'));
   });
 });

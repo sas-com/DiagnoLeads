@@ -15,7 +15,7 @@ const toggleVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900 data-[state=on]:bg-brand-500 data-[state=on]:text-white dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-50 dark:data-[state=on]:bg-brand-600 dark:data-[state=on]:text-white',
+          'bg-transparent text-gray-600 hover:bg-gray-100 hover:text-gray-900 data-[state=on]:bg-brand-500 data-[state=on]:text-white dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-gray-50 dark:data-[state=on]:bg-brand-400 dark:data-[state=on]:text-gray-900',
         outline:
           'border border-gray-300 bg-transparent text-gray-700 hover:bg-gray-100 data-[state=on]:bg-gray-100 data-[state=on]:text-gray-900 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:data-[state=on]:bg-gray-800 dark:data-[state=on]:text-gray-50',
       },

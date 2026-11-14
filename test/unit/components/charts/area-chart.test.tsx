@@ -50,7 +50,7 @@ describe('AreaChart', () => {
     expect(options.legend).toMatchObject({ show: true, position: 'bottom' });
     expect(options.grid).toMatchObject({ show: true, yaxis: { lines: { show: true } } });
     expect(options.chart?.animations?.enabled).toBe(true);
-    expect(options.chart?.foreColor).toBe('#6b7280');
+    expect(options.chart?.foreColor).toBe('#6b7180');
     expect(options.markers?.strokeColors).toBe('#fff');
     expect(options.tooltip?.theme).toBe('light');
     expect(yAxisOf(options)).not.toHaveProperty('min');
@@ -85,10 +85,10 @@ describe('AreaChart', () => {
     render(<AreaChart data={rows} index="date" categories={['leads']} />);
 
     const { options } = lastChart();
-    expect(options.chart?.foreColor).toBe('#d1d5db');
-    expect(options.grid?.borderColor).toBe('#374151');
-    expect(options.legend?.labels?.colors).toBe('#e5e7eb');
-    expect(options.markers?.strokeColors).toBe('#1f2937');
+    expect(options.chart?.foreColor).toBe('#d8d2c4');
+    expect(options.grid?.borderColor).toBe('#232c44');
+    expect(options.legend?.labels?.colors).toBe('#ebe6da');
+    expect(options.markers?.strokeColors).toBe('#101522');
     expect(options.tooltip?.theme).toBe('dark');
 
     act(() => setDarkMode(false));

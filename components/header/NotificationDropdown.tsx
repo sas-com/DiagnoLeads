@@ -127,7 +127,7 @@ export default function NotificationDropdown() {
               <button
                 type="button"
                 onClick={handleMarkAllAsRead}
-                className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400 flex items-center gap-1 font-medium"
+                className="text-xs text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 flex items-center gap-1 font-medium"
                 disabled={markAllAsRead.isPending}
               >
                 <CheckCheck className="w-4 h-4" />
@@ -179,7 +179,7 @@ export default function NotificationDropdown() {
                       key={notification.id}
                       className={cn(
                         'relative flex gap-3 p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer',
-                        !notification.read && 'bg-blue-50/50 dark:bg-blue-900/10'
+                        !notification.read && 'bg-brand-50 dark:bg-brand-400/[0.08]'
                       )}
                       onClick={() => !notification.read && handleMarkAsRead(notification.id)}
                     >
@@ -229,7 +229,7 @@ export default function NotificationDropdown() {
                             e.stopPropagation();
                             handleMarkAsRead(notification.id);
                           }}
-                          className="relative z-10 flex-shrink-0 p-1 text-gray-400 hover:text-blue-500 dark:text-gray-500 dark:hover:text-blue-400"
+                          className="relative z-10 flex-shrink-0 p-1 text-gray-400 hover:text-brand-500 dark:text-gray-300 dark:hover:text-brand-400"
                           title={t('markAsRead')}
                         >
                           <Check className="w-4 h-4" />
@@ -246,7 +246,7 @@ export default function NotificationDropdown() {
           <div className="p-3 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
             <Link
               href={`/${locale}/settings#notifications`}
-              className="block w-full text-center text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400 font-medium py-1"
+              className="block w-full text-center text-sm text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300 font-medium py-1"
               onClick={() => setIsOpen(false)}
             >
               {t('viewSettings')}

@@ -43,8 +43,8 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         ),
         day_range_end: 'day-range-end',
         day_selected:
-          'bg-brand-500 text-white hover:bg-brand-600 hover:text-white focus:bg-brand-600 focus:text-white dark:bg-brand-600',
-        day_today: 'border border-brand-500 font-semibold',
+          'bg-brand-500 text-white hover:bg-brand-600 hover:text-white focus:bg-brand-600 focus:text-white dark:bg-brand-400 dark:text-gray-900 dark:hover:bg-brand-300 dark:hover:text-gray-900 dark:focus:bg-brand-300 dark:focus:text-gray-900',
+        day_today: 'border border-brand-500 font-semibold dark:border-brand-400',
         day_outside: 'day-outside text-gray-400 opacity-60 dark:text-gray-500',
         day_disabled: 'text-gray-400 opacity-50',
         day_range_middle: 'aria-selected:bg-gray-100 aria-selected:text-gray-900',

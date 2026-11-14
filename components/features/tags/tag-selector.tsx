@@ -102,7 +102,7 @@ export function TagSelector({
                   <button
                     type="button"
                     onClick={handleCreateTag}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-sm text-brand-500 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-gray-800"
                   >
                     <Plus className="h-4 w-4" />
                     {t('createTag', { name: search })}

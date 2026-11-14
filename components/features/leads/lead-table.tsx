@@ -862,7 +862,7 @@ export function LeadTable({
                   <TableRow
                     key={row.id}
                     onClick={() => onLeadClick?.(row.original)}
-                    className="cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors"
+                    className="cursor-pointer hover:bg-brand-50 dark:hover:bg-gray-800 transition-colors"
                   >
                     {row.getVisibleCells().map((cell) => (
                       // One line per row: the table scrolls sideways in its card instead (Refs #108)

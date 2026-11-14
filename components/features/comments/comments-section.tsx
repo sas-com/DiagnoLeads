@@ -455,7 +455,10 @@ export function CommentsSection({ organizationId, leadId }: CommentsSectionProps
                 deleteComment.mutate({ organizationId, id: deleting.id });
               }}
               disabled={deleteComment.isPending}
-              className={cn(TAP_TARGET, 'bg-red-600 hover:bg-red-700')}
+              className={cn(
+                TAP_TARGET,
+                'bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700'
+              )}
             >
               {deleteComment.isPending && (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />

@@ -107,7 +107,17 @@
     "agencyLinks": "営業代行リンク",
     "fieldGlossary": "項目辞書",
     "profile": "プロフィール",
-    "logout": "ログアウト"
+    "logout": "ログアウト",
+    "floorGuide": "フロア案内",
+    "rooms": {
+      "president": "社長室",
+      "desk": "社長のデスク",
+      "marketing": "マーケティング室",
+      "sales": "営業フロア",
+      "reception": "総務・受付"
+    },
+    "day": "昼",
+    "night": "夜"
   },
   "metadata": {
     "root": {

@@ -83,7 +83,7 @@ export function LeadHandoffSheet({ leadId }: { leadId: string }) {
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <Link
           href={`/${locale}/leads/${leadId}`}
-          className="inline-flex min-h-9 items-center gap-1 text-sm text-blue-700 hover:underline dark:text-blue-400"
+          className="inline-flex min-h-9 items-center gap-1 text-sm text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
           {t('backToLead')}

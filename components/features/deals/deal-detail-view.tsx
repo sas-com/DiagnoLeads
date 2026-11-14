@@ -495,7 +495,7 @@ export function DealDetailView({ dealId }: { dealId: string }) {
               <AlertDialogAction
                 // aria-disabled, not disabled: the focus stays on the button while it deletes
                 aria-disabled={deleting}
-                className="min-h-11 bg-red-700 text-white hover:bg-red-800 md:min-h-10 dark:bg-red-700 dark:hover:bg-red-800"
+                className="min-h-11 bg-red-700 text-white hover:bg-red-800 md:min-h-10 dark:bg-red-700 dark:text-white dark:hover:bg-red-800"
                 onClick={(event) => {
                   // Stays open, saying it is deleting, until the deletion is done
                   event.preventDefault();

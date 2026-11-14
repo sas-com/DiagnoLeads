@@ -201,7 +201,7 @@ function StageColumn({
       onDrop={onDrop}
       className={cn(
         'flex w-72 shrink-0 flex-col rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/40',
-        highlighted && 'border-brand-500 bg-brand-50 dark:bg-brand-500/10'
+        highlighted && 'border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-400/[0.14]'
       )}
     >
       <header className="border-b border-gray-200 px-3 py-2.5 dark:border-gray-800">

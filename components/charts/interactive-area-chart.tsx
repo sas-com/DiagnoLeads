@@ -36,7 +36,8 @@ const COLORS = {
   cyan: '#06b6d4',
   pink: '#ec4899',
   rose: '#f43f5e',
-  brand: '#465fff',
+  // Brass: 3:1 or more on white and on the night panels (#1120)
+  brand: '#a8842f',
 };
 
 interface InteractiveAreaChartProps {
@@ -86,11 +87,11 @@ export function InteractiveAreaChart({
     data: data.map((item) => Number(item[category]) || 0),
   }));
 
-  const textColor = isDark ? '#d1d5db' : '#6b7280';
-  const gridColor = isDark ? '#374151' : '#e5e7eb';
-  const legendColor = isDark ? '#e5e7eb' : '#374151';
-  const tooltipBg = isDark ? '#1f2937' : '#ffffff';
-  const tooltipBorder = isDark ? '#374151' : '#e5e7eb';
+  const textColor = isDark ? '#d8d2c4' : '#6b7180';
+  const gridColor = isDark ? '#232c44' : '#e9e4da';
+  const legendColor = isDark ? '#ebe6da' : '#3e4556';
+  const tooltipBg = isDark ? '#232c44' : '#ffffff';
+  const tooltipBorder = isDark ? '#6f7890' : '#e9e4da';
 
   const options: ApexOptions = {
     colors: colors.map((c) => COLORS[c] || COLORS.blue),
@@ -167,7 +168,7 @@ export function InteractiveAreaChart({
       style: {
         fontSize: '16px',
         fontWeight: 600,
-        color: isDark ? '#f3f4f6' : '#111827',
+        color: isDark ? '#f5f1e8' : '#1b2130',
       },
     },
     subtitle: {
@@ -196,7 +197,7 @@ export function InteractiveAreaChart({
     },
     markers: {
       size: 0,
-      strokeColors: isDark ? '#1f2937' : '#fff',
+      strokeColors: isDark ? '#101522' : '#fff',
       strokeWidth: 2,
       hover: {
         size: 6,
@@ -356,8 +357,8 @@ export function BrushChart({
   const xAxisCategories = data.map((item) => String(item[index]));
   const seriesData = data.map((item) => Number(item[category]) || 0);
 
-  const textColor = isDark ? '#d1d5db' : '#6b7280';
-  const gridColor = isDark ? '#374151' : '#e5e7eb';
+  const textColor = isDark ? '#d8d2c4' : '#6b7180';
+  const gridColor = isDark ? '#232c44' : '#e9e4da';
 
   const mainOptions: ApexOptions = {
     colors: [COLORS[color]],

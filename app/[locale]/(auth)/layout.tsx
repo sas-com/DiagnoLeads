@@ -37,12 +37,16 @@ export default async function AuthLayout({
     <NextIntlClientProvider>
       {/* Same theme as the app (the OS setting, or the choice made with the toggle) */}
       <ThemeProvider>
-        {/* dl-admin: the DADS colors and focus of the admin site (app/globals.css, #548) */}
-        <div className="dl-admin min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 dark:bg-gray-900">
+        {/* dl-admin: the colors of the AI office and the focus of the admin site (app/globals.css, #1120) */}
+        <div className="dl-admin min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 dark:bg-gray-950">
           <div className="max-w-md w-full space-y-8">
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{t('subtitle')}</p>
+              <h1 className="text-4xl font-bold tracking-wide text-gray-900 dark:text-gray-100">
+                {t('title')}
+              </h1>
+              {/* The brass line of the office, under the name on the door */}
+              <span aria-hidden="true" className="mx-auto mt-4 block h-0.5 w-16 bg-brand-400" />
+              <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">{t('subtitle')}</p>
             </div>
             {children}
           </div>

@@ -108,7 +108,7 @@ export function LeadDiagnosisCard({
         <Link
           href={answersHref(submissionId)}
           aria-label={label}
-          className="inline-flex min-h-9 items-center gap-1 text-sm text-blue-600 hover:underline dark:text-blue-400"
+          className="inline-flex min-h-9 items-center gap-1 text-sm text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
         >
           {t('showAnswers')}
           <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -120,7 +120,7 @@ export function LeadDiagnosisCard({
         <Button
           variant="link"
           size="sm"
-          className="h-auto min-h-9 px-0 text-blue-600 dark:text-blue-400"
+          className="h-auto min-h-9 px-0 text-brand-500 underline underline-offset-2 dark:text-brand-400"
           aria-label={label}
           onClick={() => onShowAnswers(submissionId)}
         >

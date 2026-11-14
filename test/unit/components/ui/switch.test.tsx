@@ -70,7 +70,7 @@ describe('Switch styling', () => {
   it('should have checked background color', () => {
     render(<Switch checked />);
     const switchEl = screen.getByRole('switch');
-    expect(switchEl).toHaveClass('bg-blue-600');
+    expect(switchEl).toHaveClass('bg-brand-500');
   });
 
   it('should have focus ring styles', () => {

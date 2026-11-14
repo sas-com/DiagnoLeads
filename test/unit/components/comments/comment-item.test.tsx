@@ -231,7 +231,7 @@ describe('CommentItem', () => {
     const field = screen.getByRole('textbox', { name: 'コメントを編集' });
     await waitFor(() => expect(field).toHaveFocus());
     // The shared text area of the screens
-    expect(field).toHaveClass('focus-visible:ring-teal-500');
+    expect(field).toHaveClass('focus-visible:ring-brand-500');
     await user.keyboard('（確認中）');
     expect(field).toHaveValue('先方は来月に決裁（確認中）');
 

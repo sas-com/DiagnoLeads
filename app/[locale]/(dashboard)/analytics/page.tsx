@@ -278,8 +278,8 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div className="flex items-start gap-4">
-          <div className="h-14 w-14 bg-gradient-to-br from-blue-100 to-violet-100 dark:from-blue-900/30 dark:to-violet-900/30 rounded-xl flex items-center justify-center">
-            <BarChart3 className="h-7 w-7 text-blue-600 dark:text-blue-400" />
+          <div className="h-14 w-14 border border-brand-200 bg-brand-50 dark:border-gray-700 dark:bg-gray-800 rounded-xl flex items-center justify-center">
+            <BarChart3 className="h-7 w-7 text-brand-500 dark:text-brand-400" />
           </div>
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
@@ -292,7 +292,7 @@ export default function AnalyticsPage() {
           {/* Visitors of the public pages (#755) */}
           <Link
             href={`/${locale}/analytics/site`}
-            className="text-sm font-medium text-brand-700 underline-offset-4 hover:underline dark:text-brand-300"
+            className="text-sm font-medium text-brand-700 underline underline-offset-4 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200"
           >
             {t('siteVisits')}
           </Link>
@@ -353,7 +353,7 @@ export default function AnalyticsPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         {/* Total Leads */}
-        <Card className="p-6" decoration="top" decorationColor="blue">
+        <Card className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Text>{t('stats.totalLeads')}</Text>
@@ -363,14 +363,14 @@ export default function AnalyticsPage() {
                 <Metric className="mt-2">{format.number(overview?.totalLeads || 0)}</Metric>
               )}
             </div>
-            <div className="p-3 bg-blue-50 rounded-xl">
-              <Users className="h-6 w-6 text-blue-600" />
+            <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+              <Users className="h-6 w-6 text-brand-500 dark:text-brand-400" />
             </div>
           </div>
         </Card>
 
         {/* New Leads */}
-        <Card className="p-6" decoration="top" decorationColor="cyan">
+        <Card className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Text>{t('stats.newLeadsThisMonth')}</Text>
@@ -380,14 +380,14 @@ export default function AnalyticsPage() {
                 <Metric className="mt-2">{format.number(overview?.newLeadsThisMonth || 0)}</Metric>
               )}
             </div>
-            <div className="p-3 bg-cyan-50 rounded-xl">
-              <TrendingUp className="h-6 w-6 text-cyan-600" />
+            <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+              <TrendingUp className="h-6 w-6 text-brand-500 dark:text-brand-400" />
             </div>
           </div>
         </Card>
 
         {/* Conversion Rate */}
-        <Card className="p-6" decoration="top" decorationColor="violet">
+        <Card className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Text>{t('stats.conversionRate')}</Text>
@@ -397,8 +397,8 @@ export default function AnalyticsPage() {
                 <Metric className="mt-2">{(overview?.conversionRate || 0).toFixed(1)}%</Metric>
               )}
             </div>
-            <div className="p-3 bg-violet-50 rounded-xl">
-              <Target className="h-6 w-6 text-violet-600" />
+            <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+              <Target className="h-6 w-6 text-brand-500 dark:text-brand-400" />
             </div>
           </div>
           <div className="mt-4">
@@ -407,7 +407,7 @@ export default function AnalyticsPage() {
         </Card>
 
         {/* MQL (interested): the sign of how promising leads are (#447, #605) */}
-        <Card className="p-6" decoration="top" decorationColor="emerald">
+        <Card className="p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <Text>{t('stats.mqlInterest')}</Text>
@@ -417,8 +417,8 @@ export default function AnalyticsPage() {
                 <Metric className="mt-2">{format.number(overview?.mqlLevels.interest || 0)}</Metric>
               )}
             </div>
-            <div className="p-3 bg-emerald-50 rounded-xl">
-              <BadgeCheck className="h-6 w-6 text-emerald-600" />
+            <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+              <BadgeCheck className="h-6 w-6 text-brand-500 dark:text-brand-400" />
             </div>
           </div>
           <div className="mt-4">

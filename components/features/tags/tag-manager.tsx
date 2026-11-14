@@ -171,7 +171,7 @@ export function TagManager({ organizationId, trigger }: TagManagerProps) {
                     onClick={() => setNewTagColor(color)}
                     className={`w-8 h-8 rounded-full transition-transform ${
                       newTagColor === color
-                        ? 'ring-2 ring-offset-2 ring-blue-500 scale-110'
+                        ? 'ring-2 ring-offset-2 ring-brand-500 scale-110 dark:ring-brand-400 dark:ring-offset-gray-900'
                         : 'hover:scale-105'
                     }`}
                     style={{ backgroundColor: color }}

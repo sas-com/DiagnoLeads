@@ -70,7 +70,7 @@ export function LeadCard({ lead, href, onOpen, organizationId, canEdit, onLost }
   return (
     <li
       aria-label={label}
-      className="relative px-4 py-4 transition-colors hover:bg-blue-50/60 dark:hover:bg-gray-700/50"
+      className="relative px-4 py-4 transition-colors hover:bg-brand-50 dark:hover:bg-gray-700/50"
       data-testid="lead-card"
     >
       <div className="flex items-start justify-between gap-3">

@@ -161,13 +161,13 @@ export default function SettingsPage() {
         </div>
 
         {/* Profile Card */}
-        <Card decoration="top" decorationColor="blue">
+        <Card>
           <div className="p-6">
             {/* Profile Header */}
             <div className="flex items-start justify-between pb-6">
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 bg-gradient-to-br from-blue-100 to-violet-100 dark:from-blue-900/30 dark:to-violet-900/30 rounded-xl flex items-center justify-center">
-                  <User className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                <div className="h-16 w-16 border border-brand-200 bg-brand-50 dark:border-gray-700 dark:bg-gray-800 rounded-xl flex items-center justify-center">
+                  <User className="h-8 w-8 text-brand-500 dark:text-brand-400" />
                 </div>
                 <div>
                   <Title>{user?.name || 'User'}</Title>
@@ -190,7 +190,7 @@ export default function SettingsPage() {
 
             <div className="space-y-6 pt-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <User className="h-5 w-5 text-brand-500 dark:text-brand-400" />
                 {t('profileSection')}
               </h2>
 
@@ -231,8 +231,8 @@ export default function SettingsPage() {
               {/* Account Info */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
-                    <Shield className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <div className="p-2 bg-brand-50 dark:bg-gray-800 rounded-lg">
+                    <Shield className="h-4 w-4 text-brand-500 dark:text-brand-400" />
                   </div>
                   <div>
                     <Text className="text-xs">{t('emailVerified')}</Text>
@@ -250,8 +250,8 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <div className="p-2 bg-brand-50 dark:bg-gray-800 rounded-lg">
+                    <Calendar className="h-4 w-4 text-brand-500 dark:text-brand-400" />
                   </div>
                   <div>
                     <Text className="text-xs">{t('createdAt')}</Text>
@@ -280,10 +280,10 @@ export default function SettingsPage() {
         </Card>
 
         {/* Password Card */}
-        <Card decoration="top" decorationColor="violet">
+        <Card>
           <div className="p-6 space-y-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-              <Key className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+              <Key className="h-5 w-5 text-brand-500 dark:text-brand-400" />
               {t('passwordSection')}
             </h2>
 

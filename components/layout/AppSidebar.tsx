@@ -18,15 +18,32 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import OfficeClock from './OfficeClock';
 import SidebarWidget from './SidebarWidget';
 
 type NavItem = {
   name: string;
   nameKey: string;
   icon: React.ReactNode;
+  /** The room of the office the screen belongs to (#1120): shown beside the name */
+  room?: string;
   path?: string;
   subItems?: { name: string; nameKey: string; path: string }[];
 };
+
+/**
+ * The room of the office a screen belongs to, under its name in the menu (#1120): on a line of
+ * its own, so that neither the name nor the room is cut short
+ */
+function RoomName({ room }: { room: string }) {
+  return (
+    <>
+      {/* A pause for screen readers between the name and the room */}
+      <span className="sr-only">、</span>
+      <span className="text-sm font-normal leading-5 text-gray-300">{room}</span>
+    </>
+  );
+}
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
@@ -48,42 +65,49 @@ const AppSidebar: React.FC = () => {
         icon: <RiDashboardLine className="w-5 h-5" />,
         name: t('dashboard'),
         nameKey: 'dashboard',
+        room: t('rooms.president'),
         path: `/${locale}/dashboard`,
       },
       {
         icon: <RiCalendarTodoLine className="w-5 h-5" />,
         name: t('today'),
         nameKey: 'today',
+        room: t('rooms.desk'),
         path: `/${locale}/today`,
       },
       {
         icon: <RiUserLine className="w-5 h-5" />,
         name: t('leads'),
         nameKey: 'leads',
+        room: t('rooms.marketing'),
         path: `/${locale}/leads`,
       },
       {
         icon: <RiBriefcase4Line className="w-5 h-5" />,
         name: t('deals'),
         nameKey: 'deals',
+        room: t('rooms.sales'),
         path: `/${locale}/deals`,
       },
       {
         icon: <RiLineChartLine className="w-5 h-5" />,
         name: t('forecast'),
         nameKey: 'forecast',
+        room: t('rooms.sales'),
         path: `/${locale}/forecast`,
       },
       {
         icon: <RiUserSearchLine className="w-5 h-5" />,
         name: t('prospects'),
         nameKey: 'prospects',
+        room: t('rooms.sales'),
         path: `/${locale}/prospects`,
       },
       {
         icon: <RiBarChartLine className="w-5 h-5" />,
         name: t('analytics'),
         nameKey: 'analytics',
+        room: t('rooms.president'),
         path: `/${locale}/analytics`,
       },
       {
@@ -102,6 +126,7 @@ const AppSidebar: React.FC = () => {
         icon: <RiSettings4Line className="w-5 h-5" />,
         name: t('settings'),
         nameKey: 'settings',
+        room: t('rooms.reception'),
         subItems: [
           {
             name: t('organization'),
@@ -187,13 +212,16 @@ const AppSidebar: React.FC = () => {
                 {nav.icon}
               </span>
               {(isExpanded || isHovered || isMobileOpen) && (
-                <span className="menu-item-text">{nav.name}</span>
+                <span className="flex min-w-0 flex-col text-left">
+                  <span className="menu-item-text">{nav.name}</span>
+                  {nav.room && <RoomName room={nav.room} />}
+                </span>
               )}
               {(isExpanded || isHovered || isMobileOpen) && (
                 <span
                   className={`ml-auto transition-transform duration-200 ${
                     openSubmenu?.type === menuType && openSubmenu?.index === index
-                      ? 'rotate-180 text-brand-500'
+                      ? 'rotate-180'
                       : ''
                   }`}
                 >
@@ -214,7 +242,10 @@ const AppSidebar: React.FC = () => {
                   {nav.icon}
                 </span>
                 {(isExpanded || isHovered || isMobileOpen) && (
-                  <span className="menu-item-text">{nav.name}</span>
+                  <span className="flex min-w-0 flex-col">
+                    <span className="menu-item-text">{nav.name}</span>
+                    {nav.room && <RoomName room={nav.room} />}
+                  </span>
                 )}
               </Link>
             )
@@ -297,8 +328,10 @@ const AppSidebar: React.FC = () => {
   };
 
   return (
+    // The menu is the frame of the building: navy by day and by night (.dark turns on the dark
+    // styles of everything inside, .office-night gives them the night colors; app/globals.css)
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200
+      className={`dark office-night fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-gray-900 border-gray-800 border-t-[3px] border-t-brand-400 text-gray-50 h-[calc(100dvh-4rem)] lg:h-dvh transition-all duration-300 ease-in-out z-50 border-r
         ${isExpanded || isMobileOpen ? 'w-[290px]' : isHovered ? 'w-[290px]' : 'w-[90px]'}
         ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:translate-x-0`}
@@ -315,7 +348,7 @@ const AppSidebar: React.FC = () => {
           <LogoMark size="md" />
         )}
       </div>
-      <div className="flex flex-col overflow-y-auto pt-6 lg:pt-0 duration-300 ease-linear no-scrollbar">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-6 lg:pt-0 duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
@@ -324,7 +357,7 @@ const AppSidebar: React.FC = () => {
                   !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start'
                 }`}
               >
-                {isExpanded || isHovered || isMobileOpen ? t('menu') : <HorizontalDots />}
+                {isExpanded || isHovered || isMobileOpen ? t('floorGuide') : <HorizontalDots />}
               </h2>
               {renderMenuItems(navItems, 'main')}
             </div>
@@ -343,6 +376,7 @@ const AppSidebar: React.FC = () => {
         </nav>
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}
       </div>
+      {isExpanded || isHovered || isMobileOpen ? <OfficeClock /> : null}
     </aside>
   );
 };

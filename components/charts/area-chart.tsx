@@ -37,11 +37,17 @@ const COLORS = {
   cyan: '#06b6d4',
   pink: '#ec4899',
   rose: '#f43f5e',
-  brand: '#465fff',
+  // Brass: 3:1 or more on white and on the night panels (#1120)
+  brand: '#a8842f',
   /** Project brand (teal, --color-brand-500 outside the admin site) */
   teal: '#14b8a6',
-  /** DADS key colour of the admin site: Green-900 (--color-primitive-green-900, #423) */
-  key: '#115a36',
+  /** Key colour of the admin site: brass, 3:1 or more on white (the night shade is below, #1120) */
+  key: '#a8842f',
+};
+
+/** Colors that need another shade on the night panels */
+const DARK_COLORS: Partial<Record<keyof typeof COLORS, string>> = {
+  key: '#e9cf9a',
 };
 
 interface AreaChartProps {
@@ -84,12 +90,12 @@ export function AreaChart({
     data: data.map((item) => Number(item[category]) || 0),
   }));
 
-  const textColor = isDark ? '#d1d5db' : '#6b7280';
-  const gridColor = isDark ? '#374151' : '#e5e7eb';
-  const legendColor = isDark ? '#e5e7eb' : '#374151';
+  const textColor = isDark ? '#d8d2c4' : '#6b7180';
+  const gridColor = isDark ? '#232c44' : '#e9e4da';
+  const legendColor = isDark ? '#ebe6da' : '#3e4556';
 
   const options: ApexOptions = {
-    colors: colors.map((c) => COLORS[c] || COLORS.blue),
+    colors: colors.map((c) => (isDark && DARK_COLORS[c]) || COLORS[c] || COLORS.blue),
     chart: {
       // The screen's own font (DADS: Noto Sans JP), not a font of the chart library's choice
       fontFamily: 'inherit',
@@ -124,7 +130,7 @@ export function AreaChart({
     },
     markers: {
       size: 0,
-      strokeColors: isDark ? '#1f2937' : '#fff',
+      strokeColors: isDark ? '#101522' : '#fff',
       strokeWidth: 2,
       hover: {
         size: 6,

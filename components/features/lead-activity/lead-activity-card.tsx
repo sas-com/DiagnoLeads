@@ -277,7 +277,7 @@ export function ActivityItem({
         {(event.kind === 'hearing_recorded' || event.kind === 'hearing_updated') && (
           <Link
             href={`/${locale}/leads/${leadId}/hearings/${event.hearingId}`}
-            className="text-sm text-blue-600 hover:underline"
+            className="text-sm text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
           >
             {t('openHearing')}
           </Link>
@@ -404,7 +404,7 @@ function DiagnosisDetails({
       <Button
         size="sm"
         variant="ghost"
-        className="h-auto px-0 text-blue-600"
+        className="h-auto px-0 text-brand-500 underline underline-offset-2 dark:text-brand-400"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >

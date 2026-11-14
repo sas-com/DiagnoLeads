@@ -10,15 +10,17 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-brand-500 text-white hover:bg-brand-600 dark:bg-brand-600 dark:hover:bg-brand-500',
+          // Navy by day, brass with navy text by night (#1120)
+          'bg-brand-500 text-white hover:bg-brand-600 dark:bg-brand-400 dark:text-gray-900 dark:hover:bg-brand-300',
         destructive: 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500',
         outline:
           'border border-gray-300 bg-white text-gray-900 hover:bg-gray-100 hover:text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-100',
         secondary:
-          'bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-600',
+          'bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-100 dark:hover:bg-gray-800',
         ghost:
           'hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-700 dark:hover:text-gray-100',
-        link: 'text-brand-500 underline-offset-4 hover:underline dark:text-brand-400',
+        // Always underlined: by day the navy of a link is close to the ink of the text (#1120)
+        link: 'text-brand-500 underline underline-offset-4 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300',
       },
       size: {
         default: 'h-10 px-4 py-2',

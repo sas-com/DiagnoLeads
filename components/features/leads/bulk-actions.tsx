@@ -127,9 +127,9 @@ export function BulkActions({
 
   return (
     <>
-      <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
-        <CheckCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-        <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
+      <div className="flex items-center gap-2 bg-brand-50 dark:bg-brand-400/[0.14] p-3 rounded-lg border border-brand-200 dark:border-brand-400">
+        <CheckCircle className="h-4 w-4 text-brand-500 dark:text-brand-400" />
+        <span className="text-sm font-medium text-brand-500 dark:text-brand-400">
           {t('selected', { count: selectedLeads.length })}
         </span>
 
@@ -243,7 +243,7 @@ export function BulkActions({
             <AlertDialogAction
               onClick={handleDelete}
               disabled={bulkDelete.isPending}
-              className="bg-red-600 hover:bg-red-700"
+              className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700"
             >
               {bulkDelete.isPending ? t('deleting') : tCommon('delete')}
             </AlertDialogAction>

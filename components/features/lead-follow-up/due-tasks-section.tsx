@@ -31,7 +31,7 @@ export function DueTasksSection({ organizationId }: { organizationId: string }) 
   };
 
   return (
-    <Card className="p-4 shadow-none sm:p-6 dark:border-gray-800">
+    <Card className="p-4 shadow-none sm:p-6">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-2 sm:mb-3">
         <div className="min-w-0">
           {/* Focusable by script (not by Tab): where the focus goes when the list empties */}

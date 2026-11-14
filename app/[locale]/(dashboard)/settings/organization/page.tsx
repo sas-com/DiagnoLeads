@@ -172,13 +172,13 @@ export default function OrganizationSettingsPage() {
         )}
 
         {/* Organization Profile Card */}
-        <Card decoration="top" decorationColor="blue">
+        <Card>
           <form onSubmit={handleSubmit} className="p-6">
             {/* Organization Header */}
             <div className="flex items-start justify-between pb-6">
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 bg-gradient-to-br from-blue-100 to-violet-100 rounded-xl flex items-center justify-center">
-                  <Building2 className="h-8 w-8 text-blue-600" />
+                <div className="h-16 w-16 border border-brand-200 bg-brand-50 dark:border-gray-700 dark:bg-gray-800 rounded-xl flex items-center justify-center">
+                  <Building2 className="h-8 w-8 text-brand-500 dark:text-brand-400" />
                 </div>
                 <div>
                   <Title>{currentOrgData?.name || ''}</Title>

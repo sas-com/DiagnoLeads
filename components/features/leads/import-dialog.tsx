@@ -213,7 +213,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
               <div
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                   isDragging
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    ? 'border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-400/[0.14]'
                     : 'border-gray-300 dark:border-gray-600'
                 }`}
                 onDrop={handleDrop}
@@ -245,7 +245,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
                 <Button
                   variant="link"
                   onClick={downloadTemplate}
-                  className="text-blue-600 dark:text-blue-400"
+                  className="text-brand-500 underline underline-offset-2 hover:text-brand-600 dark:text-brand-400 dark:hover:text-brand-300"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   {t('downloadTemplate')}
@@ -336,7 +336,7 @@ export function ImportDialog({ open, onOpenChange, organizationId, onSuccess }: 
 
           {step === 'importing' && (
             <div className="flex flex-col items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-500 dark:border-brand-400" />
               <p className="mt-4 text-gray-600 dark:text-gray-300">{t('importing')}</p>
             </div>
           )}

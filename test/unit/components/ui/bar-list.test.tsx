@@ -99,7 +99,7 @@ describe('BarList bar widths', () => {
     ];
     render(<BarList data={data} />);
     
-    const bars = document.querySelectorAll('.bg-blue-500');
+    const bars = document.querySelectorAll('.bg-brand-500');
     expect(bars.length).toBe(3);
     
     // First bar should be 100%
@@ -114,7 +114,7 @@ describe('BarList bar widths', () => {
     const data = [{ name: 'Only', value: 500 }];
     render(<BarList data={data} />);
     
-    const bar = document.querySelector('.bg-blue-500');
+    const bar = document.querySelector('.bg-brand-500');
     expect(bar).toHaveStyle({ width: '100%' });
   });
 
@@ -125,7 +125,7 @@ describe('BarList bar widths', () => {
     ];
     render(<BarList data={data} />);
     
-    const bars = document.querySelectorAll('.bg-blue-500');
+    const bars = document.querySelectorAll('.bg-brand-500');
     expect(bars[0]).toHaveStyle({ width: '0%' });
   });
 });
@@ -135,7 +135,7 @@ describe('BarList animation', () => {
     const data = [{ name: 'Test', value: 100 }];
     render(<BarList data={data} />);
     
-    const bar = document.querySelector('.bg-blue-500');
+    const bar = document.querySelector('.bg-brand-500');
     expect(bar).toHaveClass('transition-all');
     expect(bar).toHaveClass('duration-500');
   });
@@ -144,7 +144,7 @@ describe('BarList animation', () => {
     const data = [{ name: 'Test', value: 100 }];
     render(<BarList data={data} showAnimation={false} />);
     
-    const bar = document.querySelector('.bg-blue-500');
+    const bar = document.querySelector('.bg-brand-500');
     expect(bar).not.toHaveClass('transition-all');
   });
 });
@@ -169,8 +169,8 @@ describe('BarList styling', () => {
     expect(document.querySelector('.bg-gray-100')).toBeInTheDocument();
   });
 
-  it('should have blue bar fill', () => {
+  it('should fill the bar with the theme color', () => {
     render(<BarList data={data} />);
-    expect(document.querySelector('.bg-blue-500')).toBeInTheDocument();
+    expect(document.querySelector('.bg-brand-500')).toBeInTheDocument();
   });
 });

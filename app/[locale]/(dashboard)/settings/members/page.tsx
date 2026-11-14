@@ -321,47 +321,47 @@ export default function MembersPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card decoration="top" decorationColor="blue" className="p-6">
+          <Card className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('totalMembers')}</Text>
                 <Metric className="mt-2">{total}</Metric>
               </div>
-              <div className="p-3 bg-blue-50 rounded-xl">
-                <Users className="h-6 w-6 text-blue-600" />
+              <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+                <Users className="h-6 w-6 text-brand-500 dark:text-brand-400" />
               </div>
             </div>
           </Card>
-          <Card decoration="top" decorationColor="violet" className="p-6">
+          <Card className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('roleOwner')}</Text>
                 <Metric className="mt-2">{ownerCount}</Metric>
               </div>
-              <div className="p-3 bg-violet-50 rounded-xl">
-                <Crown className="h-6 w-6 text-violet-600" />
+              <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+                <Crown className="h-6 w-6 text-brand-500 dark:text-brand-400" />
               </div>
             </div>
           </Card>
-          <Card decoration="top" decorationColor="blue" className="p-6">
+          <Card className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('roleAdmin')}</Text>
                 <Metric className="mt-2">{adminCount}</Metric>
               </div>
-              <div className="p-3 bg-blue-50 rounded-xl">
-                <Shield className="h-6 w-6 text-blue-600" />
+              <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+                <Shield className="h-6 w-6 text-brand-500 dark:text-brand-400" />
               </div>
             </div>
           </Card>
-          <Card decoration="top" decorationColor="emerald" className="p-6">
+          <Card className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <Text>{t('roleMember')}</Text>
                 <Metric className="mt-2">{memberCount}</Metric>
               </div>
-              <div className="p-3 bg-emerald-50 rounded-xl">
-                <UserIcon className="h-6 w-6 text-emerald-600" />
+              <div className="p-3 bg-brand-50 dark:bg-gray-800 rounded-xl">
+                <UserIcon className="h-6 w-6 text-brand-500 dark:text-brand-400" />
               </div>
             </div>
           </Card>
@@ -372,8 +372,8 @@ export default function MembersPage() {
           <div className="p-6 bg-gray-50 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Users className="h-5 w-5 text-blue-600" />
+                <div className="h-10 w-10 bg-brand-50 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                  <Users className="h-5 w-5 text-brand-500 dark:text-brand-400" />
                 </div>
                 <div>
                   <Title>{t('listTitle')}</Title>
@@ -481,8 +481,8 @@ export default function MembersPage() {
           <div className="overflow-x-auto">
             {members.length === 0 ? (
               <div className="p-12 text-center">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-50 to-violet-50 flex items-center justify-center mx-auto mb-4">
-                  <Users className="h-10 w-10 text-blue-400" />
+                <div className="w-20 h-20 rounded-full border border-brand-200 bg-brand-50 dark:border-gray-700 dark:bg-gray-800 flex items-center justify-center mx-auto mb-4">
+                  <Users className="h-10 w-10 text-brand-400" />
                 </div>
                 <Title>{t('noMembers')}</Title>
                 <Text className="mt-2 mb-6">{t('noMembersDescription')}</Text>
@@ -514,16 +514,16 @@ export default function MembersPage() {
                       <TableRow key={member.id}>
                         <TableCell>
                           <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-gradient-to-br from-blue-100 to-violet-100 rounded-full flex items-center justify-center">
-                              <UserIcon className="h-5 w-5 text-blue-600" />
+                            <div className="h-10 w-10 border border-brand-200 bg-brand-50 dark:border-gray-700 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                              <UserIcon className="h-5 w-5 text-brand-500 dark:text-brand-400" />
                             </div>
                             <div>
-                              <p className="font-semibold text-gray-900">
+                              <p className="font-semibold text-gray-900 dark:text-gray-50">
                                 {(Array.isArray(member.user)
                                   ? member.user[0]?.name
                                   : member.user?.name) || 'Unknown User'}
                               </p>
-                              <p className="text-sm text-gray-500">
+                              <p className="text-sm text-gray-500 dark:text-gray-300">
                                 {(Array.isArray(member.user)
                                   ? member.user[0]?.email
                                   : member.user?.email) || 'No email'}
@@ -652,7 +652,7 @@ export default function MembersPage() {
               <AlertDialogCancel>{t('cancel')}</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleRemoveMember}
-                className="bg-red-600 hover:bg-red-700"
+                className="bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:text-white dark:hover:bg-red-700"
               >
                 {t('removeButton')}
               </AlertDialogAction>

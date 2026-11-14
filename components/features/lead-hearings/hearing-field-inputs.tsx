@@ -381,7 +381,7 @@ function Chip({ selected, readOnly, onClick, ariaLabel, children }: ChipProps) {
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
         'disabled:cursor-not-allowed disabled:opacity-60',
         selected
-          ? 'border-blue-600 bg-blue-600 font-medium text-white'
+          ? 'border-brand-500 bg-brand-500 font-medium text-white dark:border-brand-400 dark:bg-brand-400 dark:text-gray-900'
           : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800'
       )}
     >
