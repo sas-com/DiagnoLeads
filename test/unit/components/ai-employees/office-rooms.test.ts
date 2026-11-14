@@ -45,6 +45,14 @@ describe('the rooms', () => {
     expect(ROOM_ROLES.backoffice).toBe('back_office');
   });
 
+  it('hold the sales floor under the key of the floor guide (#1171)', () => {
+    expect(ROOM_ROLES.sales).toBe('sales');
+    expect(roomOfKey('3')).toBe('sales');
+    // The keys the first rooms were given stay theirs
+    expect(roomOfKey('2')).toBe('marketing');
+    expect(roomOfKey('5')).toBe('backoffice');
+  });
+
   it('are not entered by the keys of the camera or by other keys', () => {
     for (const key of ['0', '+', '-', 'e', 'E', 'Enter', '9']) expect(roomOfKey(key)).toBeNull();
   });
@@ -66,10 +74,10 @@ describe('the places of the floor guide (#1162)', () => {
 
   it('open a fixed page of the normal view when their room is not built yet', () => {
     const doors = FLOOR_PLACES.filter((place) => !isOfficeRoom(place));
-    expect(doors).toEqual(['desk', 'sales']);
+    // The sales floor (#1171) and the engineering room (#1194) are rooms now: only the desk is a door
+    expect(doors).toEqual(['desk']);
     expect(DOOR_PAGES).toEqual({
       desk: '/today',
-      sales: '/deals',
     });
     // A door is not a room: its key does not enter one
     for (const door of doors) expect(roomOfKey(PLACE_KEYS[door])).toBeNull();
