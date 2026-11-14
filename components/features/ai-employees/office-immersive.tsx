@@ -182,7 +182,6 @@ export function OfficeImmersive({
     shown3dView.current = null;
   };
   const toggle3d = () => {
-    if (!OFFICE_3D_TRIAL) return;
     if (threeD) leave3d(false);
     else {
       setThreeDFailed(false);
@@ -348,7 +347,7 @@ export function OfficeImmersive({
       } else if (event.key === '0') {
         event.preventDefault();
         resetView();
-      } else if (OFFICE_3D_TRIAL && event.key.toUpperCase() === OFFICE_3D_KEY) {
+      } else if (event.key.toUpperCase() === OFFICE_3D_KEY) {
         event.preventDefault();
         toggle3d();
       } else if ((event.key === 'c' || event.key === 'C') && canCustomize) {
@@ -833,7 +832,7 @@ export function OfficeImmersive({
                 />
               )}
               {/* While the 3D floor loads the 2D one stays; if it cannot be shown, the office says so */}
-              {OFFICE_3D_TRIAL && ((threeD && !threeDReady) || threeDFailed) && (
+              {((threeD && !threeDReady) || threeDFailed) && (
                 <output
                   className={cn(
                     PANEL,
@@ -888,12 +887,10 @@ export function OfficeImmersive({
                     <ZoomOut className="h-6 w-6" aria-hidden="true" />
                     {t('actions.zoomOut')}
                   </HudButton>
-                  {OFFICE_3D_TRIAL && (
-                    <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
-                      <Box className="h-6 w-6" aria-hidden="true" />
-                      {t(threeD ? 'trial3d.off' : 'trial3d.on')}
-                    </HudButton>
-                  )}
+                  <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
+                    <Box className="h-6 w-6" aria-hidden="true" />
+                    {t(threeD ? 'trial3d.off' : 'trial3d.on')}
+                  </HudButton>
                   <HudButton onClick={resetView} hotkey="0">
                     <ScanSearch className="h-6 w-6" aria-hidden="true" />
                     {t('actions.resetView')}
@@ -907,6 +904,12 @@ export function OfficeImmersive({
                     {t('actions.clockOut')}
                   </HudButton>
                 </div>
+                {/* How fast this device draws the 3D floor, to measure real devices (#1157) */}
+                {threeD && threeDReady && fps !== null && (
+                  <p className="absolute top-full mt-1 text-xs text-[#d8d2c4] tabular-nums [text-shadow:0_1px_6px_rgba(4,8,18,0.9)]">
+                    {t('trial3d.fps', { fps })}
+                  </p>
+                )}
               </div>
 
               {/* The one in front of the president */}
