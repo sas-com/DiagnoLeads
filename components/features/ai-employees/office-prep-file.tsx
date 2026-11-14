@@ -143,13 +143,23 @@ export function OfficePrepFile({
    * somebody may have changed on the lead's page since it was read: it reads the card again and
    * works from that. What is left is the moment between this read and the save.
    */
-  const readNow = () => utils.leadPrep.get.fetch(scope, { staleTime: 0 });
+  // Not tried again: while it runs, Esc and the way back are closed
+  const readNow = () => utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false });
+  // The file can be left while the card is read (a link at the foot): then nothing is saved
+  const shown = useRef(true);
+  useEffect(() => {
+    shown.current = true;
+    return () => {
+      shown.current = false;
+    };
+  }, []);
 
   const answer = async (action: PrepFileAction) => {
     if (!prepActionOpen(action, state)) return;
     setChecking(true);
     try {
       const fresh = await readNow();
+      if (!shown.current) return;
       const now = prepCardFields(fresh.card);
       if (action === 'draft') {
         // Only the fields that are empty right now are filled

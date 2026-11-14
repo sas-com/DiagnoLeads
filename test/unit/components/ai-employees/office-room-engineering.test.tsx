@@ -604,7 +604,7 @@ describe('the engineering room', () => {
       // The undo read the card first, saw the change and put nothing back
       expect(mocks.fetches.at(-1)).toEqual({
         input: { organizationId: ORG_ID, leadId: '00000000-0000-4000-8000-000000000101' },
-        options: { staleTime: 0 },
+        options: { staleTime: 0, retry: false },
       });
       expect(mocks.saves).toHaveLength(1);
       expect(
