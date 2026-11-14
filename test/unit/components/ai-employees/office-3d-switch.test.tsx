@@ -6,7 +6,7 @@
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { useEffect } from 'react';
@@ -16,21 +16,45 @@ const mocks = vi.hoisted(() => ({
   breaks: false,
   draws: true,
   statuses: [] as string[],
+  vacant: [] as string[],
+  walks: null as null | ((role: string, walking: boolean) => void),
 }));
 
 vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => ({
   default: function Canvas3DStub({
     employees,
+    vacant,
     onReady,
+    onView,
+    onWalking,
   }: {
     employees: readonly { status: string }[];
+    vacant?: readonly string[];
     onReady?: () => void;
+    onView?: (view: unknown, places: unknown) => void;
+    onWalking?: (role: string, walking: boolean) => void;
   }) {
     if (mocks.breaks) throw new Error('no WebGL context');
     mocks.statuses = employees.map((employee) => employee.status);
+    mocks.vacant = [...(vacant ?? [])];
+    mocks.walks = onWalking ?? null;
     useEffect(() => {
-      if (mocks.draws) onReady?.();
-    }, [onReady]);
+      if (!mocks.draws) return;
+      onReady?.();
+      // A frame: the real canvas tells where the camera looks, and the tags are placed
+      const frame = window.setTimeout(() =>
+        onView?.(
+          {
+            target: { x: 12, y: 8 },
+            pxPerUnit: 40,
+            pan: { x: 0, y: 0 },
+            size: { w: 1440, h: 900 },
+          },
+          {}
+        )
+      );
+      return () => window.clearTimeout(frame);
+    }, [onReady, onView]);
     return <div data-testid="floor-3d" />;
   },
 }));
@@ -126,6 +150,44 @@ describe('the switch to the 3D floor', () => {
       within(office).getByRole('region', { name: 'AIセールスのカスタマイズ' })
     ).toBeInTheDocument();
     errors.mockRestore();
+  });
+
+  it('keeps the name tags pressable on the 3D floor, for hired employees and vacant seats (#1147)', async () => {
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await within(office).findByText('3D の検証');
+    expect(mocks.vacant).toEqual(['marketer', 'engineer', 'back_office']);
+    // Two of each: the 2D tag (hidden with its floor) and the 3D tag. The 3D ones are placed
+    const tag = async (name: RegExp) => {
+      const tags = await within(office).findAllByRole('button', { name, hidden: true });
+      const placed = tags.find((button) => button.style.visibility === 'visible');
+      if (!placed) throw new Error(`no placed tag for ${name}`);
+      return placed;
+    };
+    await vi.waitFor(async () => expect(await tag(/マーケター 空席/)).toBeTruthy());
+    await user.click(await tag(/マーケター 空席/));
+    expect(
+      within(within(office).getByRole('heading', { name: '目の前の社員' }).parentElement as HTMLElement)
+        .getByText('マーケター')
+    ).toBeInTheDocument();
+    // A second press on the chosen one talks to it
+    await user.click(await tag(/マーケター 空席/));
+    expect(within(office).getByText('社長（あなた）')).toBeInTheDocument();
+  });
+
+  it('says in the staff list where an employee is, and that it is on its way while it walks (#1147)', async () => {
+    const { user, office } = await enterOffice();
+    const staff = within(office).getByRole('heading', { name: '社員名簿' })
+      .parentElement as HTMLElement;
+    // The room is named on the 2D floor too
+    expect(within(staff).getByText('研修室')).toBeInTheDocument();
+    await user.keyboard('v');
+    await within(office).findByText('3D の検証');
+    act(() => mocks.walks?.('sales', true));
+    expect(within(staff).getByText('研修室へ移動中')).toBeInTheDocument();
+    act(() => mocks.walks?.('sales', false));
+    expect(within(staff).getByText('研修室')).toBeInTheDocument();
+    expect(within(staff).queryByText(/移動中/)).not.toBeInTheDocument();
   });
 
   it('forgets what the trial panel pretended when the trial ends', async () => {

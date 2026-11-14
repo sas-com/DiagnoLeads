@@ -41,7 +41,8 @@ import {
   Office3DBoundary,
   Office3DTrialPanel,
 } from './office-3d/office-3d-trial';
-import type { OfficeEvent } from './office-3d/office-emotion';
+import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
+import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
 import { officeFits } from './office-app';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
@@ -75,6 +76,7 @@ import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from 
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
+import { StatusDot, WorldTagButton } from './office-world-tag';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 
@@ -83,6 +85,9 @@ type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
  * the rest of the app does not carry it
  */
 const OfficeCanvas3D = dynamic(() => import('./office-3d/office-canvas-3d'), { ssr: false });
+
+/** The emotions the office also says in words: the ones an event gives, over the status */
+const SAID_FEELINGS = ['proud', 'happy', 'attentive'] as const;
 
 /** How far the office can be dragged past the edge of the screen */
 const PAN_MARGIN = { x: 320, y: 200 };
@@ -155,6 +160,13 @@ export function OfficeImmersive({
   const [trialStatus, setTrialStatus] = useState<Partial<Record<AiEmployeeRole, DeskStatus>>>({});
   const [trialEvent, setTrialEvent] = useState<Partial<Record<AiEmployeeRole, OfficeEvent>>>({});
   const [fps, setFps] = useState<number | null>(null);
+  // The 3D floor: the name tags over it, and who is on the way to another room right now
+  const tags3d = useRef<Office3DTagsHandle>(null);
+  const shown3dView = useRef<Shown3D | null>(null);
+  const [walking, setWalking] = useState<Partial<Record<AiEmployeeRole, boolean>>>({});
+  const onWalking = useCallback((role: AiEmployeeRole, on: boolean) => {
+    setWalking((current) => (current[role] === on ? current : { ...current, [role]: on }));
+  }, []);
   // The 2D floor stays until the 3D one drew its first frame, and comes back if it cannot be shown
   const [threeDReady, setThreeDReady] = useState(false);
   const [threeDFailed, setThreeDFailed] = useState(false);
@@ -166,6 +178,8 @@ export function OfficeImmersive({
     setTrialStatus({});
     setTrialEvent({});
     setFps(null);
+    setWalking({});
+    shown3dView.current = null;
   };
   const toggle3d = () => {
     if (!OFFICE_3D_TRIAL) return;
@@ -176,9 +190,14 @@ export function OfficeImmersive({
     }
   };
   const [reducedMotion, setReducedMotion] = useState(false);
+  // Followed while the office is open: someone may switch the setting on to stop the motion
   useEffect(() => {
     const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    setReducedMotion(query?.matches ?? false);
+    if (!query) return;
+    const read = () => setReducedMotion(query.matches);
+    read();
+    query.addEventListener?.('change', read);
+    return () => query.removeEventListener?.('change', read);
   }, []);
 
   const statuses = statusByRole(employees);
@@ -432,8 +451,24 @@ export function OfficeImmersive({
 
   const time = format.dateTime(now, { hour: '2-digit', minute: '2-digit' });
   const show3d = threeD && stage === 'world';
+  // What the 3D floor shows: the real statuses, with what the trial panel pretends on top
+  const shown3d = Object.fromEntries(
+    AI_EMPLOYEE_ROLES.map((role) => [
+      role,
+      statuses[role] === 'vacant' ? 'vacant' : (trialStatus[role] ?? statuses[role]),
+    ])
+  ) as Record<AiEmployeeRole, DeskStatus>;
+  const names3d = Object.fromEntries(employees.map((employee) => [employee.role, employee.name]));
+  // What an employee feels beyond its status: only after something happened to it, never made up
+  const feeling = (role: AiEmployeeRole): (typeof SAID_FEELINGS)[number] | null => {
+    const status = shown3d[role];
+    const event = trialEvent[role];
+    if (status === 'vacant' || !event || walking[role]) return null;
+    const emotion = emotionOf(status, event);
+    return SAID_FEELINGS.find((said) => said === emotion) ?? null;
+  };
   const floor3d = employees.map((employee) => {
-    const status = trialStatus[employee.role] ?? statuses[employee.role];
+    const status = shown3d[employee.role];
     return {
       role: employee.role,
       name: employee.name,
@@ -529,15 +564,34 @@ export function OfficeImmersive({
             <Office3DBoundary onError={() => leave3d(true)}>
               <OfficeCanvas3D
                 employees={floor3d}
+                vacant={AI_EMPLOYEE_ROLES.filter((role) => statuses[role] === 'vacant')}
                 events={trialEvent}
                 night={night}
                 zoom={zoom}
+                pan={pan}
                 focus={selectedEmployee ? selected : null}
                 reducedMotion={reducedMotion}
                 onFps={setFps}
                 onReady={() => setThreeDReady(true)}
+                onView={(view, places) => {
+                  shown3dView.current = { view, places };
+                  tags3d.current?.place(view, places);
+                }}
+                onWalking={onWalking}
               />
             </Office3DBoundary>
+          )}
+          {/* The 3D floor is a picture: its name tags are the same buttons as on the 2D floor */}
+          {show3d && threeDReady && (
+            <Office3DTags
+              ref={tags3d}
+              lastShown={shown3dView}
+              statuses={shown3d}
+              names={names3d}
+              selected={selected}
+              onChoose={setSelected}
+              onTalk={talkTo}
+            />
           )}
           {/* Seen through a camera */}
           <div
@@ -688,6 +742,21 @@ export function OfficeImmersive({
                             <span className="block truncate text-xs text-[#d8d2c4]">
                               {t(`relaySteps.${role}`)}
                             </span>
+                            {/* Where it is, in words: the floor is a picture. On the 3D floor it
+                                also says when the employee walks, and what it feels after
+                                something really happened */}
+                            {status !== 'vacant' && (
+                              <span className="block truncate text-xs text-[#d8d2c4]">
+                                {show3d && walking[role]
+                                  ? t('walkingTo', {
+                                      room: tOffice(`rooms.${areaOf(role, shown3d[role])}`),
+                                    })
+                                  : tOffice(
+                                      `rooms.${areaOf(role, show3d ? shown3d[role] : status)}`
+                                    )}
+                                {show3d && feeling(role) && `・${t(`feelings.${feeling(role)}`)}`}
+                              </span>
+                            )}
                           </span>
                         </button>
                       </li>
@@ -1076,17 +1145,6 @@ export function OfficeImmersive({
   );
 }
 
-/** The coloured light of a status, next to its words */
-function StatusDot({ status }: { status: DeskStatus }) {
-  return (
-    <span
-      aria-hidden="true"
-      style={{ backgroundColor: STATUS_LIGHT[status] }}
-      className="mr-0.5 inline-block h-2.5 w-2.5 rounded-full align-baseline"
-    />
-  );
-}
-
 /** A square action of the bar at the bottom, with its key */
 function HudButton({
   onClick,
@@ -1138,34 +1196,23 @@ function WorldTag({
   onChoose: () => void;
   onTalk: () => void;
 }) {
-  const tOffice = useTranslations('aiOffice');
   const spot = spotOf(role, status);
   const [x, y] = project(spot.x, spot.y);
   return (
-    <button
-      type="button"
-      onClick={chosen ? onTalk : onChoose}
-      aria-current={chosen ? 'true' : undefined}
+    <WorldTagButton
+      role={role}
+      status={status}
+      name={name}
+      chosen={chosen}
+      onChoose={onChoose}
+      onTalk={onTalk}
       style={{
         left: `${(x / SCENE_WIDTH) * 100}%`,
         top: `${((y + 10) / SCENE_HEIGHT) * 100}%`,
         transform: `translate(-50%, 0) scale(${1 / scale})`,
         transformOrigin: 'top center',
       }}
-      className={cn(
-        'absolute inline-flex min-h-11 items-center gap-2 rounded border bg-[rgba(10,14,24,0.86)] px-3 py-1 text-sm font-bold whitespace-nowrap text-[#f5f1e8] hover:bg-[rgba(36,44,64,0.95)]',
-        chosen ? 'border-2 border-[#e9cf9a]' : 'border-[#f5f1e8]/40',
-        FOCUS
-      )}
-    >
-      <StatusDot status={status} />
-      {name ?? tOffice(`roles.${role}.title`)}{' '}
-      <span className="font-normal text-[#d8d2c4]">{tOffice(`status.${status}`)}</span>
-      <span className="sr-only">
-        {' '}
-        {tOffice(`roles.${role}.title`)}・{tOffice(`rooms.${areaOf(role, status)}`)}
-      </span>
-    </button>
+    />
   );
 }
 

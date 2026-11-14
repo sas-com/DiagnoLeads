@@ -125,6 +125,7 @@ export function Robot3D({
   emotion,
   tone,
   walking,
+  still = false,
 }: {
   role: AiEmployeeRole;
   status: Exclude<DeskStatus, 'vacant'>;
@@ -132,6 +133,8 @@ export function Robot3D({
   emotion: Emotion;
   tone: AiTone;
   walking: boolean;
+  /** Less motion: the pose of the emotion is kept, but nothing hovers, sways or waves */
+  still?: boolean;
 }) {
   const body = useRef<Group>(null);
   const head = useRef<Group>(null);
@@ -148,7 +151,8 @@ export function Robot3D({
   const eyes = off ? 'closed' : expression.eyes;
 
   useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
+    // Time stands still for people who ask for less motion: every swing below rests at zero
+    const t = still ? 0 : clock.elapsedTime;
     const bob = 0.035 * expression.bob * gesture;
     if (body.current) {
       // Hovering, a little faster and higher with a lively emotion
@@ -163,6 +167,7 @@ export function Robot3D({
     }
     const swing = walking ? Math.sin(t * 7) * 0.55 * gesture : 0;
     // A wave: the near arm goes up and waves
+    // (with less motion the arm stays raised, without waving)
     const wave = emotion === 'happy' || emotion === 'proud' ? -2.2 + Math.sin(t * 9) * 0.35 : 0;
     if (leftArm.current) leftArm.current.rotation.x = swing;
     if (rightArm.current) {

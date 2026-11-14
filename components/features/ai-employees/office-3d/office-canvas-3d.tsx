@@ -4,8 +4,8 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { AiTone, RobotLook } from '@/lib/features/ai-employees/types/profile';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CanvasTexture, type Group, type OrthographicCamera, SRGBColorSpace } from 'three';
+import { useEffect, useRef, useState } from 'react';
+import type { Group, OrthographicCamera } from 'three';
 import {
   AREA_RECTS,
   CHARGING_PADS,
@@ -20,7 +20,19 @@ import {
 } from '../office-map-layout';
 import { type OfficeEvent, emotionOf } from './office-emotion';
 import { pointAlong, routeBetween, routeLength } from './office-nav';
+import {
+  CAMERA_OFFSET,
+  FLOOR_MIDDLE,
+  type ScreenPoint,
+  type View3D,
+  cameraPosition,
+  easeTarget,
+  pxPerUnit,
+  viewTarget,
+} from './office-view-3d';
 import { Robot3D } from './robot-3d';
+
+const NO_PAN: ScreenPoint = { x: 0, y: 0 };
 
 /** How fast a robot walks, in floor units a second */
 export const WALK_SPEED = 3.2;
@@ -108,30 +120,31 @@ function Floor({ night }: { night: boolean }) {
   );
 }
 
-/** The name of an employee over its head, drawn once into a texture */
-function NameTag({ name }: { name: string }) {
-  const texture = useMemo(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 96;
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.fillStyle = 'rgba(10,14,24,0.86)';
-      context.fillRect(0, 0, 512, 96);
-      context.fillStyle = '#f5f1e8';
-      context.font = 'bold 44px sans-serif';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.fillText(name, 256, 50, 480);
-    }
-    const map = new CanvasTexture(canvas);
-    map.colorSpace = SRGBColorSpace;
-    return map;
-  }, [name]);
+/** Where every employee stands right now, by role: read each frame by the name tags */
+export type Places3D = Partial<Record<AiEmployeeRole, FloorPoint>>;
+
+/**
+ * A seat nobody was hired for yet: a faint figure on the seat, so the floor shows who is missing
+ * like the 2D office does. Its name tag (a DOM button) hires.
+ */
+function VacantSeat({ role, night }: { role: AiEmployeeRole; night: boolean }) {
+  const spot = spotOf(role, 'vacant');
+  const color = night ? '#aab4c8' : '#8a93a6';
   return (
-    <sprite position={[0, 2.85, 0]} scale={[2.2, 0.41, 1]}>
-      <spriteMaterial map={texture} depthTest={false} />
-    </sprite>
+    <group position={[spot.x, 0, spot.y]}>
+      <mesh position={[0, 0.95, 0]}>
+        <capsuleGeometry args={[0.38, 0.75, 6, 16]} />
+        <meshStandardMaterial color={color} transparent opacity={0.22} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 1.95, 0]}>
+        <sphereGeometry args={[0.42, 20, 16]} />
+        <meshStandardMaterial color={color} transparent opacity={0.22} depthWrite={false} />
+      </mesh>
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.62, 0.72, 40]} />
+        <meshBasicMaterial color={color} transparent opacity={0.6} />
+      </mesh>
+    </group>
   );
 }
 
@@ -145,13 +158,17 @@ function Walker({
   event,
   still,
   onMove,
+  onWalking,
 }: {
   employee: Office3DEmployee;
   event: OfficeEvent | null;
   still: boolean;
   /** Told where the employee is, each time it moves */
   onMove: (role: AiEmployeeRole, at: FloorPoint) => void;
+  /** Told when the employee sets off and when it arrives */
+  onWalking?: (role: AiEmployeeRole, walking: boolean) => void;
 }) {
+  const invalidate = useThree((state) => state.invalidate);
   const group = useRef<Group>(null);
   const spot = spotOf(employee.role, employee.status);
   const restHeading = spot.facing === 'left' ? 0 : Math.PI / 2;
@@ -174,8 +191,16 @@ function Walker({
       onMove(employee.role, here.current);
       group.current.position.set(spot.x, 0, spot.y);
       group.current.rotation.y = restHeading;
+      // With less motion the canvas only draws when something changed: this did
+      invalidate();
     }
   }, [spot.x, spot.y, still]);
+
+  // The office says in words that the employee is on its way (the canvas is decoration)
+  const role = employee.role;
+  useEffect(() => {
+    onWalking?.(role, walking);
+  }, [onWalking, role, walking]);
 
   useFrame((_, delta) => {
     const state = walk.current;
@@ -199,43 +224,67 @@ function Walker({
         tone={employee.tone}
         emotion={emotionOf(employee.status, walking ? null : event)}
         walking={walking}
+        still={still}
       />
-      <NameTag name={employee.name} />
     </group>
   );
 }
 
 /**
- * The camera looks down at the same angle as the 2D office. Zoomed out it keeps the whole floor
- * in view; zoomed in it follows the chosen employee, also while it walks.
+ * The camera looks down at the same angle as the 2D office. Zoomed out it rests on the middle of
+ * the floor; zoomed in it follows the chosen employee, also while it walks; and it can be dragged.
+ * Each frame it tells where it looks (`onView`), so that the name tags over the canvas follow it.
  */
 function CameraRig({
   zoom,
-  world,
+  pan,
+  still,
   follow,
+  places,
+  onView,
 }: {
   zoom: number;
-  world: React.RefObject<Group | null>;
+  pan: ScreenPoint;
+  /** Less motion: the camera jumps instead of gliding */
+  still: boolean;
   /** Where the followed employee is, or null to rest on the middle of the floor */
   follow: () => FloorPoint | null;
+  places: React.RefObject<Places3D>;
+  onView?: (view: View3D, places: Places3D) => void;
 }) {
   const camera = useThree((state) => state.camera) as OrthographicCamera;
   const size = useThree((state) => state.size);
+  const invalidate = useThree((state) => state.invalidate);
+  const looking = useRef<FloorPoint>(FLOOR_MIDDLE);
+
+  // The angle is set once; from then on the camera only slides
   useEffect(() => {
-    // The floor seen from this angle is about 29 units wide and 19 high, walls included
-    camera.zoom = Math.min(size.width / 29, size.height / 19) * zoom;
+    camera.position.set(CAMERA_OFFSET, CAMERA_OFFSET, CAMERA_OFFSET);
     camera.lookAt(0, 0, 0);
-    camera.updateProjectionMatrix();
-  }, [camera, size.width, size.height, zoom]);
+  }, [camera]);
+
+  // With less motion the canvas only draws when something changed: a new zoom, pan or size did
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the values are the reason to draw again
+  useEffect(() => {
+    invalidate();
+  }, [invalidate, zoom, pan.x, pan.y, size.width, size.height, still]);
+
   useFrame((_, delta) => {
-    if (!world.current) return;
-    // The world slides under the camera, so that what is followed comes to the middle
-    const at = zoom > 1.05 ? follow() : null;
-    const x = -(at?.x ?? FLOOR_WIDTH / 2);
-    const z = -(at?.y ?? FLOOR_DEPTH / 2);
-    const ease = Math.min(1, delta * 4);
-    world.current.position.x += (x - world.current.position.x) * ease;
-    world.current.position.z += (z - world.current.position.z) * ease;
+    const to = viewTarget(zoom, follow());
+    looking.current = still ? to : easeTarget(looking.current, to, delta * 4);
+    const view: View3D = {
+      target: looking.current,
+      pxPerUnit: pxPerUnit({ w: size.width, h: size.height }, zoom),
+      pan,
+      size: { w: size.width, h: size.height },
+    };
+    const [x, y, z] = cameraPosition(view);
+    camera.position.set(x, y, z);
+    if (camera.zoom !== view.pxPerUnit) {
+      camera.zoom = view.pxPerUnit;
+      camera.updateProjectionMatrix();
+    }
+    onView?.(view, places.current ?? {});
   });
   return null;
 }
@@ -267,34 +316,45 @@ function FrameCounter({
 }
 
 /**
- * The office floor in 3D (#1135, spike): the same layout, employees and looks as the 2D office,
- * with robots that walk between the rooms and show how they feel. Decoration only: everything it
- * shows is also in the panels around it, so it is hidden from assistive technology.
+ * The office floor in 3D (#1135, #1147): the same layout, employees and looks as the 2D office,
+ * with robots that walk between the rooms and show how they feel. Decoration only: it is hidden
+ * from assistive technology and takes no pointer, so the floor under it is still dragged, and
+ * everything it shows is also said by the panels and the name tags (DOM) around it.
  */
 export default function OfficeCanvas3D({
   employees,
+  vacant = [],
   events,
   night,
   zoom = 1,
+  pan = NO_PAN,
   focus = null,
   reducedMotion = false,
   onFps,
   onReady,
+  onView,
+  onWalking,
 }: {
   employees: readonly Office3DEmployee[];
+  /** The roles nobody was hired for: their seats show a faint figure */
+  vacant?: readonly AiEmployeeRole[];
   /** What just happened to an employee, by role */
   events: Partial<Record<AiEmployeeRole, OfficeEvent>>;
   night: boolean;
   zoom?: number;
+  /** How far the floor was dragged, in screen pixels */
+  pan?: ScreenPoint;
   /** The employee the camera follows when it is zoomed in */
   focus?: AiEmployeeRole | null;
   reducedMotion?: boolean;
   onFps?: (fps: number) => void;
   /** Told once, when the first frame was drawn */
   onReady?: () => void;
+  /** Told each frame where the camera looks and where the employees are */
+  onView?: (view: View3D, places: Places3D) => void;
+  onWalking?: (role: AiEmployeeRole, walking: boolean) => void;
 }) {
-  const world = useRef<Group>(null);
-  const places = useRef<Partial<Record<AiEmployeeRole, FloorPoint>>>({});
+  const places = useRef<Places3D>({});
   const onMove = (role: AiEmployeeRole, at: FloorPoint) => {
     places.current[role] = at;
   };
@@ -303,14 +363,23 @@ export default function OfficeCanvas3D({
       orthographic
       shadows
       dpr={[1, 2]}
-      camera={{ position: [30, 30, 30], near: 0.1, far: 200 }}
+      // Nothing moves by itself for people who ask for less motion: draw only on a change
+      frameloop={reducedMotion ? 'demand' : 'always'}
+      camera={{ position: [CAMERA_OFFSET, CAMERA_OFFSET, CAMERA_OFFSET], near: 0.1, far: 200 }}
       aria-hidden="true"
       className="absolute inset-0"
+      // The canvas is a picture: the pointer goes through it to the floor under it (dragging) and
+      // to the name tags over it. The library sets `pointer-events: auto` inline, so a class
+      // cannot switch it off
+      style={{ pointerEvents: 'none' }}
     >
       <CameraRig
         zoom={zoom}
-        world={world}
+        pan={pan}
+        still={reducedMotion}
         follow={() => (focus ? (places.current[focus] ?? null) : null)}
+        places={places}
+        onView={onView}
       />
       <FrameCounter onFps={onFps} onReady={onReady} />
       <ambientLight intensity={night ? 0.55 : 1.1} />
@@ -325,8 +394,11 @@ export default function OfficeCanvas3D({
         shadow-camera-bottom={-20}
       />
       {/* The middle of the floor sits at the origin, where the camera looks */}
-      <group ref={world} position={[-FLOOR_WIDTH / 2, 0, -FLOOR_DEPTH / 2]}>
+      <group position={[-FLOOR_WIDTH / 2, 0, -FLOOR_DEPTH / 2]}>
         <Floor night={night} />
+        {vacant.map((role) => (
+          <VacantSeat key={role} role={role} night={night} />
+        ))}
         {employees.map((employee) => (
           <Walker
             key={employee.role}
@@ -334,6 +406,7 @@ export default function OfficeCanvas3D({
             event={events[employee.role] ?? null}
             still={reducedMotion}
             onMove={onMove}
+            onWalking={onWalking}
           />
         ))}
       </group>
