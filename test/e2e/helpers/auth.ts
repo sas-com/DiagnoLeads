@@ -48,7 +48,8 @@ export const TEST_USERS = {
  * A client address of its own (sent as X-Forwarded-For) for a test, as each person has in
  * production. The proxy (lib/middleware/rate-limit.ts) and better-auth count sign-ins, sign-ups
  * and session reads per address, and every test runs on the same machine: on one shared address,
- * tests would use up each other's allowance (5 session reads a minute, #519) and fail at random.
+ * tests would use up each other's allowance (5 sign-ins and 3 sign-ups a minute in the proxy, 3 of
+ * each per 10 seconds in better-auth) and fail at random.
  */
 export function uniqueClientAddress(): string {
   return `10.${randomInt(256)}.${randomInt(256)}.${randomInt(256)}`;
