@@ -41,4 +41,10 @@ export interface OfficeRoomProps {
   onLeaveOffice: () => void;
   /** Told when something opens or closes inside the room: while open, Esc closes it, not the room */
   onFileOpenChange: (open: boolean) => void;
+  /**
+   * Told while an answer given in the room is being saved, and when it no longer is: the office
+   * keeps the room open meanwhile, since leaving would carry the answer out with nobody told what
+   * came of it (#1205). A room that never tells is never held.
+   */
+  onBusyChange: (busy: boolean) => void;
 }
