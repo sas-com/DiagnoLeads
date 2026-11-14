@@ -14,7 +14,11 @@ import {
   type OpenDealStage,
 } from '@/lib/features/deals/types/pipeline';
 import type { BoardInput } from '@/lib/features/deals/types/schemas';
-import { PREP_CHALLENGES, type PrepCardFields } from '@/lib/features/lead-prep/types/schemas';
+import {
+  PREP_CHALLENGES,
+  type PrepCardFields,
+  prepCardFieldsSchema,
+} from '@/lib/features/lead-prep/types/schemas';
 
 /** The deals of the room: surveys of the current system */
 export const SURVEY_BOARD_KINDS = ['survey'] as const satisfies readonly DealKind[];
@@ -167,6 +171,15 @@ export function prepCardFields(card: PrepCardFields | null | undefined): PrepCar
     hypotheses: { ...card?.hypotheses },
     firstQuestions: [...(card?.firstQuestions ?? [])],
   };
+}
+
+/**
+ * A card as the server stores it: the input check of `leadPrep.save` trims every text and drops
+ * what is empty. A draft is compared with the card read back, so it is put in that form first:
+ * otherwise a question cut at its limit with a space at its end would never match (#1221).
+ */
+export function savedPrepCard(card: PrepCardFields): PrepCardFields {
+  return prepCardFieldsSchema.parse(card);
 }
 
 /** Whether two cards say the same: a draft that fills nothing is not worth saving */
