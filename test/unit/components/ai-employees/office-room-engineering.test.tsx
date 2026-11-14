@@ -676,6 +676,16 @@ describe('the engineering room', () => {
       expect(mocks.saves).toHaveLength(0);
     });
 
+    it('starts one read and one save when the key arrives twice at once', async () => {
+      const { office } = await openFile();
+      // Two key presses before the file is drawn again
+      fireEvent.keyDown(office, { key: '3' });
+      fireEvent.keyDown(office, { key: '3' });
+      await within(office).findByText(/下書きを入れて保存しました/);
+      expect(mocks.fetches).toHaveLength(1);
+      expect(mocks.saves).toHaveLength(1);
+    });
+
     it('saves nothing when the card cannot be read again', async () => {
       mocks.failFetch = true;
       const { user, office } = await openFile();

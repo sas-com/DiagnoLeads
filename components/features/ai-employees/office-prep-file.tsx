@@ -154,8 +154,12 @@ export function OfficePrepFile({
     };
   }, []);
 
+  const inFlight = useRef(false);
   const answer = async (action: PrepFileAction) => {
-    if (!prepActionOpen(action, state)) return;
+    // The ref closes the door at once: a key that arrives twice before the file is drawn again
+    // must not start a second read and save
+    if (inFlight.current || !prepActionOpen(action, state)) return;
+    inFlight.current = true;
     setChecking(true);
     try {
       const fresh = await readNow();
@@ -202,6 +206,7 @@ export function OfficePrepFile({
         kept?.kind === 'drafted' ? { ...kept, undoFailed: action === 'undo' } : { kind: 'failed' }
       );
     } finally {
+      inFlight.current = false;
       setChecking(false);
     }
   };
