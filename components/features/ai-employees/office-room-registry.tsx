@@ -2,9 +2,9 @@
 
 import type { ComponentType } from 'react';
 import type { OfficeRoomProps } from './office-room-contract';
-import { OfficeRoomDue } from './office-room-due';
 import { OfficeRoomEngineering } from './office-room-engineering';
 import { OfficeRoomLeads } from './office-room-leads';
+import { OfficeRoomReception } from './office-room-reception';
 import { OfficeRoomSales } from './office-room-sales';
 import type { OfficeRoom } from './office-rooms';
 
@@ -43,9 +43,9 @@ export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomPro
         onFileOpenChange={onFileOpenChange}
       />
     ),
-  backoffice: ({ organizationId, guide, keysRef, onLeaveOffice }) =>
+  backoffice: ({ organizationId, guide, keysRef, onLeaveOffice, onFileOpenChange }) =>
     guide && (
-      <OfficeRoomDue
+      <OfficeRoomReception
         organizationId={organizationId}
         role={guide.role}
         status={guide.status}
@@ -53,6 +53,7 @@ export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomPro
         look={guide.look}
         keysRef={keysRef}
         onOpenNormal={onLeaveOffice}
+        onFileOpenChange={onFileOpenChange}
       />
     ),
 };
