@@ -6,7 +6,7 @@ title: "外のサイトが始めた要求では、出社の画面を自分で開
 status: active
 superseded_by: []
 issues: [1175, 1169, 1170, 1153]
-paths: ["proxy.ts", "lib/middleware/office-entry.ts", "lib/routes/home.ts", "components/features/ai-employees/office-screen.tsx", "components/features/ai-employees/office-immersive.tsx"]
+paths: ["proxy.ts", "lib/middleware/office-entry.ts", "lib/routes/home.ts", "components/features/ai-employees/office-screen.tsx", "components/features/ai-employees/office-immersive.tsx", "components/features/ai-employees/office-talk-staff.tsx"]
 ---
 
 ### [Security] 外のサイトが始めた要求では、出社の画面を自分で開かせない（アドレスの印をプロキシで外す。取り消せない操作の確認は、キーだけでは通さない）（#1175）
@@ -15,6 +15,13 @@ paths: ["proxy.ts", "lib/middleware/office-entry.ts", "lib/routes/home.ts", "com
 - **決定**（オーナーの判断。2026-11-14、こちらの推奨に「進めてください」）:
   - **a**：このサイト自身（`Sec-Fetch-Site: same-origin`）と利用者本人（`none`）が始めた要求のほかは、オフィスのページに印が付いていたら、プロキシで印を外したアドレスへ送り直す（`lib/middleware/office-entry.ts`）。オフィスは通常の表示で開く。`cross-site` に加えて `same-site` も外す（独自ドメインを付けたあと、兄弟のサブドメインから開かせない。印を正しく付ける経路は、同じオリジンのリンクとアプリの起動だけ）
   - **b**：取り消せない操作（解雇）の確認は、数字のキーの続け打ちでは通せない形にする（ボタンのクリックか、名前の入力）。#1170 で実装する
+    - **実装した**（#1170、2026-11-14）：会話の「解雇する」（鍵4）は欄を開くだけで、その AI社員の名前を入力するまで実行のボタンを閉じる（`components/features/ai-employees/office-talk-staff.tsx` の `namesTheEmployee`）。欄が開いている間、数字のキーは選択肢に届かない。Esc で閉じると、入力は残らない
+    - **これで守れること**：数字・Enter・Space の続け打ちや押しすぎでは、解雇にならない（手元のブラウザで確かめた。`E` → `4` → 数字・Enter・Space・Tab の列で、要求は出なかった）
+    - **守れないこと**（`security-specialist` のレビューの指摘 S1・S2。コードから組み立てた筋道で、打鍵は試していない）：名前の入力は「キーだけでは通せない形」ではない。出社の画面に届く打鍵を、名前を知っている・変えられる相手が決められるなら、キーだけで解雇に届く
+      - 名前を知らなくても：`2`（名前を変える）→ Tab を3回（フォーカスが一周して入力が全選択になる）→ 1文字 → Enter → Enter → `E` → `4` → 同じ1文字 → Enter
+      - 既定の名前のまま：英語の既定の名前は英字と空白だけで、公開リポジトリから分かる。`E` → `4` → 既定の名前 → Enter（日本語の既定の名前はカタカナを含み、変換が要る）
+      - 名前が数字だけの AI社員：その数字と Enter
+    - **受け入れた理由**：a のあと、外から出社の画面に届くのは「残る経路」だけで、利用者が十数打鍵を、切り替わった画面に指示どおり打ち続ける必要がある。消えるのは AI社員1人の行（名前・状態・見た目と話し方の設定）で、作業記録は残り、採用し直せる。塞ぐなら、最後の実行にポインターの操作を求める（キーによる押下を無視する）。そうすると、キーだけで操作する人は通常の表示で解雇することになる。**オーナーに確かめる**（#1170 の PR の本文に書いた。決まるまでは今の形）
 - **却下案**: 印で開いたときは、最初のポインター操作か一定の時間までキーを無視する（打ち続ける相手には効きにくい）
 - **ルール**:
   - 出社の画面を自分で開く印を足すときは、同じキー（`source`）に載せる。プロキシは値を見ずにキーごと外すので、新しい印も守られる。別のキーにするなら、`office-entry.ts` も直す

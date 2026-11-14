@@ -78,14 +78,18 @@ export function firstRoleToVisit(
   return AI_EMPLOYEE_ROLES.find((role) => statuses[role] !== 'vacant') ?? AI_EMPLOYEE_ROLES[0];
 }
 
-/** What the president can answer in a conversation; 'leave' is always last */
-export type TalkChoice = 'hire' | 'pause' | 'resume' | 'leave';
+/**
+ * What the president can answer in a conversation; 'leave' is always last. With an employee
+ * that was hired, the staff matters are there too (#1170): its work log for everyone, a new name
+ * and the dismissal for who manages the AI employees. The dismissal comes last of them, next
+ * to leaving: it only opens the question, and is carried out once the name was typed.
+ */
+export type TalkChoice = 'hire' | 'pause' | 'resume' | 'rename' | 'log' | 'dismiss' | 'leave';
 
 export function talkChoices(status: DeskStatus, canManage: boolean): TalkChoice[] {
-  if (!canManage) return ['leave'];
-  if (status === 'vacant') return ['hire', 'leave'];
-  if (status === 'paused') return ['resume', 'leave'];
-  return ['pause', 'leave'];
+  if (status === 'vacant') return canManage ? ['hire', 'leave'] : ['leave'];
+  if (!canManage) return ['log', 'leave'];
+  return [status === 'paused' ? 'resume' : 'pause', 'rename', 'log', 'dismiss', 'leave'];
 }
 
 /**

@@ -223,10 +223,36 @@
           "pause": "Rest for a while",
           "resume": "Come back",
           "leave": "Later",
-          "back": "Back to the office"
+          "back": "Back to the office",
+          "rename": "Change the name",
+          "log": "Show me the work log",
+          "dismiss": "Dismiss this employee"
         },
         "resumedTraining": "{name}, back to training. I will start working once my work is ready.",
-        "trainingFirst": " Until its work is ready, a new hire stays in training."
+        "trainingFirst": " Until its work is ready, a new hire stays in training.",
+        "staff": {
+          "back": "Back to the choices",
+          "failed": "That did not work. Please wait a moment and try again.",
+          "rename": {
+            "title": "Change the name",
+            "label": "New display name",
+            "save": "Use this name",
+            "done": "My name was {from} and is {name} now. I look forward to working with you."
+          },
+          "log": {
+            "title": "Work log",
+            "processed": "{count} processed",
+            "more": "Showing the latest {count}. More (up to {limit}) are in the desk details of the normal view.",
+            "failedDetail": "The result of a failed run is in the desk details of the normal view."
+          },
+          "dismiss": {
+            "title": "Dismiss this employee",
+            "label": "To confirm, type the name of this AI employee, \"{name}\"",
+            "confirm": "Dismiss {name}",
+            "done": "{name} was dismissed. The desk is vacant again.",
+            "mismatch": "The name does not match."
+          }
+        }
       },
       "floorGuide": "Floor guide",
       "room": {

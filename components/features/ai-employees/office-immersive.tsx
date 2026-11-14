@@ -76,6 +76,7 @@ import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from 
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
+import { OfficeTalkStaff, type StaffMatter } from './office-talk-staff';
 import { StatusDot, WorldTagButton } from './office-world-tag';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
@@ -148,13 +149,21 @@ export function OfficeImmersive({
   const rootRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [stage, setStage] = useState<Stage>(startOn);
+  // The staff matter open in the conversation: a new name, the work log, the dismissal (#1170)
+  const [staff, setStaff] = useState<StaffMatter | null>(null);
+  // While a staff matter is being saved there is no way back: it is not given up with Esc
+  const [staffBusy, setStaffBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [size, setSize] = useState({ w: 1280, h: 800 });
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   // What the AI employee said to the last answer, and whether the answer was carried out
-  const [outcome, setOutcome] = useState<{ text: string; ok: boolean } | null>(null);
+  // `typed`: carried out in a staff matter, with Enter. The report keeps the focus, so that Enter
+  // pressed once more does not walk out of the conversation before the answer was read
+  const [outcome, setOutcome] = useState<{ text: string; ok: boolean; typed?: boolean } | null>(
+    null
+  );
   const [dragging, setDragging] = useState(false);
   // The room the president is in (stage 'room'), and what its keys do
   const [room, setRoom] = useState<OfficeRoom>(OFFICE_ROOMS[0]);
@@ -236,11 +245,14 @@ export function OfficeImmersive({
   // conversation the report of the AI employee (never a choice, so that Enter pressed once too
   // often cannot hire or pause), then the one way back once the answer was carried out
   const answered = outcome?.ok === true;
+  // The staff matter that is open. None once its employee is gone (dismissed by someone else while
+  // it was open): the keys, the focus and the panel all follow this one value
+  const matter = byRole.has(selected) ? staff : null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: refocus when the stage or the outcome changes
   useEffect(() => {
     if (!mounted) return;
     rootRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
-  }, [mounted, stage, answered]);
+  }, [mounted, stage, answered, matter]);
 
   const refresh = () => utils.aiEmployees.office.invalidate({ organizationId });
   // What the chosen AI employee says, in its own tone (#1134)
@@ -291,6 +303,8 @@ export function OfficeImmersive({
   const talkTo = (role: AiEmployeeRole) => {
     setSelected(role);
     setOutcome(null);
+    setStaff(null);
+    setStaffBusy(false);
     setStage('talk');
   };
 
@@ -304,7 +318,11 @@ export function OfficeImmersive({
   const choices: TalkChoice[] = answered ? ['leave'] : talkChoices(selectedStatus, canManage);
   const busy = hire.isPending || update.isPending;
   const stepBack = () => {
-    if (stage === 'talk' || stage === 'room' || stage === 'studio') setStage('world');
+    // A staff matter (a new name, the work log, the dismissal) closes first, back to the choices.
+    // Not while it is being saved: stepping back would look like giving it up, and it is not
+    if (stage === 'talk' && matter) {
+      if (!staffBusy) setStaff(null);
+    } else if (stage === 'talk' || stage === 'room' || stage === 'studio') setStage('world');
     else if (stage === 'world') setStage('title');
     else leave();
   };
@@ -314,7 +332,14 @@ export function OfficeImmersive({
       setStage('world');
       return;
     }
+    if (choice === 'rename' || choice === 'log' || choice === 'dismiss') {
+      // Opens the matter: nothing is carried out by the number itself (#1170)
+      if (selectedEmployee) setStaff(choice);
+      return;
+    }
     if (choice === 'hire') {
+      // A matter left open for an employee who is gone does not open again for the new one
+      setStaff(null);
       hire.mutate({
         organizationId,
         role: selected,
@@ -369,7 +394,8 @@ export function OfficeImmersive({
       }
       return;
     }
-    if (stage === 'talk' && /^[1-9]$/.test(event.key)) {
+    // While a staff matter is open the numbers belong to what is typed there
+    if (stage === 'talk' && !matter && /^[1-9]$/.test(event.key)) {
       const choice = choices[Number(event.key) - 1];
       if (choice) {
         event.preventDefault();
@@ -1101,7 +1127,7 @@ export function OfficeImmersive({
                   <p
                     // The report takes the focus when the conversation opens: it is read out, and
                     // Enter does nothing here
-                    data-autofocus={answered ? undefined : ''}
+                    data-autofocus={matter || (answered && !outcome?.typed) ? undefined : ''}
                     tabIndex={-1}
                     aria-live="polite"
                     className={cn(
@@ -1135,33 +1161,53 @@ export function OfficeImmersive({
                   )}
                 </div>
                 {/* On a panel of its own: by day the floor behind the choices is bright */}
-                <div className="flex w-full shrink-0 flex-col gap-2 border-t-2 border-[#e9cf9a] bg-[rgba(10,14,24,0.92)] p-3 lg:w-80">
-                  <h2 className={CAP}>{t('talk.you')}</h2>
-                  {choices.map((choice, index) => (
-                    <button
-                      // By position: the button under the focus stays when the choices change
-                      // biome-ignore lint/suspicious/noArrayIndexKey: the choices are a short fixed list
-                      key={index}
-                      type="button"
-                      data-autofocus={answered && index === 0 ? '' : undefined}
-                      // Not disabled: a disabled button would drop the focus out of the conversation
-                      aria-disabled={busy}
-                      onClick={() => answer(choice)}
-                      className={cn(
-                        'flex min-h-12 w-full items-center gap-3 border px-4 text-left text-base font-bold aria-disabled:opacity-60',
-                        index === 0
-                          ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130] hover:bg-[#f3dfb4]'
-                          : 'border-[#f5f1e8]/45 bg-[#101726] hover:border-[#e9cf9a] hover:bg-[#1c2540]',
-                        FOCUS
-                      )}
-                    >
-                      <span className={cn(KEY, index === 0 && 'border-[#1b2130]/60')}>
-                        {index + 1}
-                      </span>
-                      {choice === 'hire' && <UserPlus className="h-5 w-5" aria-hidden="true" />}
-                      {answered ? t('talk.choices.back') : t(`talk.choices.${choice}`)}
-                    </button>
-                  ))}
+                <div className="flex max-h-[calc(100dvh-10rem)] w-full shrink-0 flex-col gap-2 overflow-y-auto border-t-2 border-[#e9cf9a] bg-[rgba(10,14,24,0.92)] p-3 lg:w-80">
+                  {matter && selectedEmployee && (
+                    <OfficeTalkStaff
+                      // A fresh form for each matter and employee: nothing typed carries over
+                      key={`${matter}-${selectedEmployee.id}`}
+                      matter={matter}
+                      organizationId={organizationId}
+                      employee={selectedEmployee}
+                      onBusyChange={setStaffBusy}
+                      onDone={(text) => {
+                        setStaff(null);
+                        setStaffBusy(false);
+                        setOutcome({ text, ok: true, typed: true });
+                        void refresh();
+                      }}
+                      onBack={() => setStaff(null)}
+                    />
+                  )}
+                  {!matter && <h2 className={CAP}>{t('talk.you')}</h2>}
+                  {!matter &&
+                    choices.map((choice, index) => (
+                      <button
+                        // By position: the button under the focus stays when the choices change
+                        // biome-ignore lint/suspicious/noArrayIndexKey: the choices are a short fixed list
+                        key={index}
+                        type="button"
+                        data-autofocus={answered && !outcome?.typed && index === 0 ? '' : undefined}
+                        // Not disabled: a disabled button would drop the focus out of the conversation
+                        aria-disabled={busy}
+                        onClick={() => answer(choice)}
+                        className={cn(
+                          'flex min-h-12 w-full items-center gap-3 border px-4 text-left text-base font-bold aria-disabled:opacity-60',
+                          index === 0
+                            ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130] hover:bg-[#f3dfb4]'
+                            : 'border-[#f5f1e8]/45 bg-[#101726] hover:border-[#e9cf9a] hover:bg-[#1c2540]',
+                          // The one that cannot be taken back reads apart from the others
+                          choice === 'dismiss' && 'mt-2 text-[#fca5a5]',
+                          FOCUS
+                        )}
+                      >
+                        <span className={cn(KEY, index === 0 && 'border-[#1b2130]/60')}>
+                          {index + 1}
+                        </span>
+                        {choice === 'hire' && <UserPlus className="h-5 w-5" aria-hidden="true" />}
+                        {answered ? t('talk.choices.back') : t(`talk.choices.${choice}`)}
+                      </button>
+                    ))}
                 </div>
               </div>
             </>
