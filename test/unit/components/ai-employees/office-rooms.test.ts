@@ -1,11 +1,12 @@
 /** The rooms of the full-screen office that hold work (#1127): pure helpers */
 import {
-  LEAD_BOARD_FIRST_VIEW,
   LEAD_BOARD_PAGE_SIZE,
   LEAD_BOARD_VIEWS,
-  LEAD_REPORT_VIEWS,
   OFFICE_ROOMS,
+  DOOR_PAGES,
   DUE_KEYS,
+  FLOOR_PLACES,
+  PLACE_KEYS,
   FILE_KEYS,
   daysOverdue,
   dueActionOfKey,
@@ -18,10 +19,10 @@ import {
   leadBoardFilters,
   leadBoardInput,
   leadBoardPages,
-  leadBoardViewOfKey,
-  leadCountInput,
   nextRow,
   roomGuide,
+  isOfficeRoom,
+  placeOfKey,
   roomOfKey,
 } from '@/components/features/ai-employees/office-rooms';
 import { AI_EMPLOYEE_ROLES } from '@/lib/features/ai-employees/types/roles';
@@ -49,6 +50,36 @@ describe('the rooms', () => {
   });
 });
 
+describe('the places of the floor guide (#1162)', () => {
+  it('are the five places of the work, on the keys 1 to 5 in that order', () => {
+    expect(FLOOR_PLACES).toEqual(['desk', 'marketing', 'sales', 'engineering', 'backoffice']);
+    expect(FLOOR_PLACES.map((place) => PLACE_KEYS[place])).toEqual(['1', '2', '3', '4', '5']);
+    for (const place of FLOOR_PLACES) expect(placeOfKey(PLACE_KEYS[place])).toBe(place);
+  });
+
+  it('keep the keys of the rooms that are built', () => {
+    for (const room of OFFICE_ROOMS) {
+      expect(isOfficeRoom(room)).toBe(true);
+      expect(PLACE_KEYS[room]).toBe(ROOM_KEYS[room]);
+    }
+  });
+
+  it('open a fixed page of the normal view when their room is not built yet', () => {
+    const doors = FLOOR_PLACES.filter((place) => !isOfficeRoom(place));
+    expect(doors).toEqual(['desk', 'sales']);
+    expect(DOOR_PAGES).toEqual({
+      desk: '/today',
+      sales: '/deals',
+    });
+    // A door is not a room: its key does not enter one
+    for (const door of doors) expect(roomOfKey(PLACE_KEYS[door])).toBeNull();
+  });
+
+  it('are not opened by the keys of the camera or by other keys', () => {
+    for (const key of ['0', '+', '-', 'e', 'E', 'Enter', '6', '9']) expect(placeOfKey(key)).toBeNull();
+  });
+});
+
 describe('roomGuide', () => {
   it('lets only an AI employee that works or waits for work hold the room', () => {
     expect(roomGuide('working')).toBe('employee');
@@ -64,20 +95,6 @@ describe('roomGuide', () => {
 });
 
 describe('the lead board', () => {
-  it('opens on what nobody has started on, and reports views it can show', () => {
-    expect(LEAD_BOARD_VIEWS).toContain(LEAD_BOARD_FIRST_VIEW);
-    for (const view of LEAD_REPORT_VIEWS) expect(LEAD_BOARD_VIEWS).toContain(view);
-  });
-
-  it('chooses a view with its number key', () => {
-    LEAD_BOARD_VIEWS.forEach((view, index) => {
-      expect(leadBoardViewOfKey(String(index + 1))).toBe(view);
-    });
-    expect(leadBoardViewOfKey(String(LEAD_BOARD_VIEWS.length + 1))).toBeNull();
-    expect(leadBoardViewOfKey('0')).toBeNull();
-    expect(leadBoardViewOfKey('a')).toBeNull();
-  });
-
   it('filters like the preset of the same name in the lead list, and not at all for "all"', () => {
     expect(leadBoardFilters('needsAction', NOW)).toEqual(presetFilters('needsAction', NOW));
     expect(leadBoardFilters('newThisWeek', NOW).createdFrom).toBe('2026-11-09');
@@ -103,17 +120,7 @@ describe('the lead board', () => {
     // Every view is an input the API accepts
     for (const view of LEAD_BOARD_VIEWS) {
       expect(listLeadsSchema.safeParse(leadBoardInput(view, 1, ORG_ID, NOW)).success).toBe(true);
-      expect(listLeadsSchema.safeParse(leadCountInput(view, ORG_ID, NOW)).success).toBe(true);
     }
-  });
-
-  it('asks for a single row when only the total is needed', () => {
-    expect(leadCountInput('consultation', ORG_ID, NOW)).toMatchObject({
-      organizationId: ORG_ID,
-      consultationRequested: true,
-      limit: 1,
-      offset: 0,
-    });
   });
 
   it('has at least one page', () => {
