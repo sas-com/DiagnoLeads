@@ -450,6 +450,123 @@
           "undoFailed": "It could not be undone and is still marked as done. Please try again.",
           "reportNext": "Here is number {index} of {total}."
         },
+        "deals": {
+          "board": "Deal board",
+          "report": "There are {open} open deals, {amount} in total. {thisWeek} have to move this week, and {noNextAction} have no next action.",
+          "reportNone": "There are no open deals.",
+          "reportLoading": "Reading the figures of the board.",
+          "reportUnavailable": "The figures of the board could not be read.",
+          "ask": {
+            "thisWeek": "Show me what has to move this week",
+            "noNextAction": "Show me those without a next action",
+            "mine": "Show me my own",
+            "all": "Show me everything"
+          },
+          "views": {
+            "thisWeek": "To move this week (next action due or expected close by Sunday)",
+            "noNextAction": "No next action",
+            "mine": "My deals",
+            "all": "All"
+          },
+          "empty": {
+            "thisWeek": "No deal has to move this week.",
+            "noNextAction": "Every open deal has a next action.",
+            "mine": "You have no open deals.",
+            "all": "There are no open deals."
+          },
+          "count": "{count, plural, one {# deal} other {# deals}}",
+          "stages": {
+            "all": "Deals and amounts by stage (all open deals)",
+            "mine": "Deals and amounts by stage (all of my deals)"
+          },
+          "keys": {
+            "rows": "Choose a row",
+            "open": "Open"
+          },
+          "columns": {
+            "deal": "Deal / company",
+            "stage": "Stage",
+            "nextAction": "Next action",
+            "amount": "Amount (excl. tax)",
+            "owner": "Owner"
+          },
+          "noLead": "No company name",
+          "noAmount": "No amount yet",
+          "unassigned": "Unassigned",
+          "noNextAction": "Not set",
+          "late": "Overdue",
+          "loading": "Loading",
+          "error": "The deals could not be read. Please open the room again later.",
+          "forbidden": "You do not have permission to see deals. Please ask an administrator.",
+          "range": "{from}–{to} of {total}",
+          "openHint": "Opening a row opens the deal file inside this room.",
+          "prev": "Previous",
+          "next": "Next",
+          "page": "{page} / {pages}",
+          "truncated": "There are many deals, so the board lists the first {limit}. The counts and amounts by stage include all of them.",
+          "normalPages": "Pages of the normal view",
+          "open": {
+            "deals": "Open the deals in the normal view",
+            "forecast": "Open the sales forecast",
+            "prospects": "Open the customer search"
+          },
+          "reportTruncated": "There are {open} open deals, {amount} in total. There are too many to list them all on the board, so please check in the deals of the normal view how many have to move this week and how many have no next action.",
+          "closesOn": "Expected close {date}",
+          "closeLate": "Past the expected close"
+        },
+        "dealFile": {
+          "label": "Deal file of \"{name}\"",
+          "title": "Deal file",
+          "standing": "This deal is in the \"{stage}\" stage (probability {probability}%). ",
+          "next": "Its next action is \"{title}\", due {date}.",
+          "noNext": "It has no next action.",
+          "moved": "Moved to \"{stage}\" (probability {probability}%). You can undo this if it was a mistake.",
+          "movedHandedOff": "Moved to \"{stage}\" (probability {probability}%). The handoff sheet was sent to the technical team, so this move cannot be undone.",
+          "done": "Marked the next action \"{title}\" as done. You can undo this if it was a mistake.",
+          "added": "Set the next action \"{title}\", due {date}. To change it, use the deal in the normal view.",
+          "undone": "Undone.",
+          "undoFailed": "The undo did not go through. The change still stands. Please try again.",
+          "failed": "Sorry, that did not work. Please try again later.",
+          "readOnly": "You do not have permission to change deals.",
+          "choices": {
+            "advance": "Move on to \"{stage}\"",
+            "advanceEnd": "Move on (a win is recorded on the deal's page)",
+            "back": "Move back to \"{stage}\"",
+            "backStart": "Move back a stage",
+            "done": "Mark the next action as done",
+            "add": "Set a next action",
+            "undo": "Undo that",
+            "close": "Back to the board"
+          },
+          "sql": {
+            "title": "SQL decision",
+            "notQualified": "Not qualified: lose the deal on its page",
+            "back": "Leave it and go back to the choices"
+          },
+          "add": {
+            "title": "Set a next action",
+            "what": "What to do next (required)",
+            "due": "Due (required)",
+            "save": "Set it",
+            "back": "Leave it and go back to the choices",
+            "missing": "Please enter what to do next and a due date."
+          },
+          "stages": "Stages of the deal",
+          "here": "Here now",
+          "deal": "Deal",
+          "nextAction": "Next action",
+          "nextActionMissing": "Not set",
+          "dueOn": "Due {date}",
+          "late": "Overdue",
+          "takeaway": "Takeaway",
+          "notSet": "Not set",
+          "noLead": "No company name",
+          "unassigned": "Unassigned",
+          "openDetail": "Open the deal in the normal view",
+          "detailHint": "Winning and losing, changes to the amount or the expected close date, and contact records are made on the deal's page in the normal view.",
+          "closeLate": "Past the expected close",
+          "noAmount": "No amount yet"
+        },
         "reception": {
           "board": "General affairs counter",
           "back": "Back to the counter",
