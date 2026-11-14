@@ -31,19 +31,58 @@ export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
 };
 
 /**
- * The key that enters each room from the floor. The numbers follow the floor guide of the design
- * (1 the president's desk, 2 marketing, 3 sales, 4 engineering, 5 reception): a room keeps its
- * number when the others open.
+ * Every place of the floor guide, in the order of its keys (#1162, Epic #1161): all the work of
+ * the system is reached from the floor. A place whose room is not built yet is a door: entering it
+ * opens its page of the normal view, until the room takes its place.
  */
-export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
+export const FLOOR_PLACES = ['desk', 'marketing', 'sales', 'engineering', 'backoffice'] as const;
+export type FloorPlace = (typeof FLOOR_PLACES)[number];
+export type FloorDoor = Exclude<FloorPlace, OfficeRoom>;
+
+/**
+ * The key of each place. The numbers follow the floor guide of the design (1 the president's
+ * desk, 2 marketing, 3 sales, 4 engineering, 5 reception): a place keeps its number when its room
+ * opens.
+ */
+export const PLACE_KEYS: Readonly<Record<FloorPlace, string>> = {
+  desk: '1',
   marketing: '2',
   sales: '3',
+  engineering: '4',
   backoffice: '5',
 };
 
-/** The room a key of the floor enters, if any */
+/** The key that enters each room from the floor */
+export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
+  marketing: PLACE_KEYS.marketing,
+  sales: PLACE_KEYS.sales,
+  backoffice: PLACE_KEYS.backoffice,
+};
+
+/**
+ * The page of the normal view a door opens (without the language). Fixed paths of this app:
+ * never built from what someone typed.
+ */
+export const DOOR_PAGES: Readonly<Record<FloorDoor, string>> = {
+  // The president's day: what is planned and what is left to do
+  desk: '/today',
+  // Surveys of the current system: the engineers' share of the deals
+  engineering: '/deals?kind=survey',
+};
+
+export function isOfficeRoom(place: FloorPlace): place is OfficeRoom {
+  return (OFFICE_ROOMS as readonly string[]).includes(place);
+}
+
+/** The place a key of the floor enters, if any */
+export function placeOfKey(key: string): FloorPlace | null {
+  return FLOOR_PLACES.find((place) => PLACE_KEYS[place] === key) ?? null;
+}
+
+/** The room a key of the floor enters, if any (a door is not a room) */
 export function roomOfKey(key: string): OfficeRoom | null {
-  return OFFICE_ROOMS.find((room) => ROOM_KEYS[room] === key) ?? null;
+  const place = placeOfKey(key);
+  return place && isOfficeRoom(place) ? place : null;
 }
 
 /** How the room's AI employee stands to what the room reports */

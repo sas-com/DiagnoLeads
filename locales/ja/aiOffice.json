@@ -27,6 +27,7 @@
       }
     },
     "rooms": {
+      "desk": "社長のデスク",
       "sales": "営業フロア",
       "training": "研修室",
       "lounge": "ラウンジ",
@@ -257,8 +258,10 @@
       "room": {
         "back": "フロアへ戻る",
         "work": {
+          "desk": "今日の予定",
           "marketing": "リード管理",
           "sales": "商談",
+          "engineering": "現行調査",
           "backoffice": "今日の期限"
         },
         "guide": {
@@ -501,7 +504,8 @@
           "detailHint": "受注・失注、金額や受注予定日の変更、連絡の記録は、通常の表示の商談のページで行います。",
           "closeLate": "予定日を過ぎています",
           "noAmount": "金額未定"
-        }
+        },
+        "door": "ページを開く"
       },
       "tones": {
         "brisk": {

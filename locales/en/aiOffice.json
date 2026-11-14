@@ -27,6 +27,7 @@
       }
     },
     "rooms": {
+      "desk": "President's desk",
       "sales": "Sales floor",
       "training": "Training room",
       "lounge": "Lounge",
@@ -257,8 +258,10 @@
       "room": {
         "back": "Back to the floor",
         "work": {
+          "desk": "Today",
           "marketing": "Leads",
           "sales": "Deals",
+          "engineering": "Surveys",
           "backoffice": "Due today"
         },
         "guide": {
@@ -501,7 +504,8 @@
           "detailHint": "Winning and losing, changes to the amount or the expected close date, and contact records are made on the deal's page in the normal view.",
           "closeLate": "Past the expected close",
           "noAmount": "No amount yet"
-        }
+        },
+        "door": "opens a page"
       },
       "tones": {
         "brisk": {
