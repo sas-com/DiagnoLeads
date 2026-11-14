@@ -1,41 +1,61 @@
 'use client';
 
-import { DEFAULT_LEAD_SORT, leadListHref } from '@/lib/features/leads/list-query';
+import {
+  DEFAULT_LEAD_SORT,
+  type LeadListFilters,
+  leadListHref,
+} from '@/lib/features/leads/list-query';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef } from 'react';
 import { FOCUS, KEY } from './office-hud';
-import { type BoardLead, LEAD_STATUS_COLORS, type RoomKeys } from './office-lead-file';
+import { type BoardLead, LEAD_STATUS_COLORS } from './office-lead-file';
+import { leadBoardInputFor } from './office-marketing';
+import type { RoomKeyEvent, RoomKeys } from './office-room-contract';
 import { ROOM_BOARD, RoomBoardLoading, RoomBoardMessage } from './office-room-parts';
-import {
-  LEAD_BOARD_PAGE_SIZE,
-  type LeadBoardView,
-  leadBoardFilters,
-  leadBoardInput,
-  leadBoardPages,
-  nextRow,
-} from './office-rooms';
+import { LEAD_BOARD_PAGE_SIZE, leadBoardPages, nextRow } from './office-rooms';
 import { useRoomKeys } from './use-room-keys';
+
+/**
+ * Moves the focus over the rows of a board with the up and down arrows: from no row, down goes to
+ * the first and up to the last; at either end the focus stays. The key is used either way.
+ */
+export function focusNextRow(
+  board: HTMLElement | null,
+  selector: string,
+  event: RoomKeyEvent
+): boolean {
+  const rows = Array.from(board?.querySelectorAll<HTMLElement>(selector) ?? []);
+  const current = rows.indexOf(document.activeElement as HTMLElement);
+  const target = rows[nextRow(current, event.key === 'ArrowDown' ? 1 : -1, rows.length)];
+  if (target) {
+    event.preventDefault();
+    target.focus();
+  }
+  return true;
+}
 
 /** How many of the two marks an MQL level fills (対象外 and no diagnosis fill none) */
 const MQL_MARKS: Record<string, number> = { interest: 2, fit: 1 };
 
 /**
- * The lead board of the marketing room (#1127): a view of the lead list on the room's wall.
+ * The lead board of the marketing room (#1127): a part of the lead list on the room's wall.
  *
  * The board reads `leads.list` (the API scopes it to the organization and checks the permission).
- * The room chooses the view and keeps the page (the board gives way to a customer file and comes
- * back); the board moves over the rows with the arrow keys, turns the pages, and hands the row
- * that is opened to the room.
+ * The room chooses what the board shows (a view of the list, or the prospects of one source,
+ * #1202) and keeps the page (the board gives way to a customer file and comes back); the board
+ * moves over the rows with the arrow keys, turns the pages, and hands the row that is opened to
+ * the room.
  */
 export function OfficeBoardLeads({
   organizationId,
-  view,
+  filters,
+  label,
   page,
   keepRows,
-  now,
+  back,
   keysRef,
   focusLeadRef,
   onTurn,
@@ -43,12 +63,15 @@ export function OfficeBoardLeads({
   onLeave,
 }: {
   organizationId: string;
-  view: LeadBoardView;
+  /** What the board shows: filters of the lead list, fixed while the room is open */
+  filters: LeadListFilters;
+  /** The name of what the board shows, said next to its title */
+  label: string;
   page: number;
-  /** A page of this view was turned: the rows before stay until the next ones arrive */
+  /** A page of these filters was turned: the rows before stay until the next ones arrive */
   keepRows: boolean;
-  /** "This week" is fixed when the room opens, so the queries keep their keys */
-  now: Date;
+  /** The board was opened from another one: the way back to it (the room's Esc does the same) */
+  back?: { label: string; onBack: () => void };
   /** Filled with the board's key handler while the board is shown */
   keysRef: MutableRefObject<RoomKeys | null>;
   /** The lead whose row takes the focus when the board comes back from its file */
@@ -68,7 +91,7 @@ export function OfficeBoardLeads({
 
   // Turning a page keeps the rows of the page before until the next ones arrive; another view
   // never shows the rows or the count of the one before under its own name
-  const list = trpc.leads.list.useQuery(leadBoardInput(view, page, organizationId, now), {
+  const list = trpc.leads.list.useQuery(leadBoardInputFor(filters, page, organizationId), {
     placeholderData: (previous) => (keepRows ? previous : undefined),
   });
   const turning = list.isPlaceholderData === true;
@@ -94,16 +117,7 @@ export function OfficeBoardLeads({
   // by itself (the rows are buttons).
   useRoomKeys(keysRef, (event) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      const rows = Array.from(
-        boardRef.current?.querySelectorAll<HTMLElement>('[data-lead-row]') ?? []
-      );
-      const current = rows.indexOf(document.activeElement as HTMLElement);
-      const target = rows[nextRow(current, event.key === 'ArrowDown' ? 1 : -1, rows.length)];
-      if (target) {
-        event.preventDefault();
-        target.focus();
-      }
-      return true;
+      return focusNextRow(boardRef.current, '[data-lead-row]', event);
     }
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
       event.preventDefault();
@@ -125,10 +139,25 @@ export function OfficeBoardLeads({
           <h2 className="text-xl font-bold">{t('board')}</h2>
           {/* Read out when the view changes: the board answers the choice on the left */}
           <output className="block text-sm text-[#d8d2c4]">
-            {t(`views.${view}`)}
+            {label}
             {list.data && !turning && `・${t('count', { count: total })}`}
           </output>
         </div>
+        {back && (
+          <button
+            type="button"
+            onClick={back.onBack}
+            className={cn(
+              'inline-flex min-h-11 items-center gap-2 text-sm font-bold hover:text-white',
+              FOCUS
+            )}
+          >
+            <span aria-hidden="true" className={KEY}>
+              Esc
+            </span>
+            {back.label}
+          </button>
+        )}
         <p className="flex items-center gap-2 text-xs text-[#d8d2c4]">
           <span className={KEY}>↑</span>
           <span className={KEY}>↓</span>
@@ -234,7 +263,7 @@ export function OfficeBoardLeads({
         </p>
         <div className="flex items-center gap-2">
           <Link
-            href={`/${locale}${leadListHref(leadBoardFilters(view, now), DEFAULT_LEAD_SORT)}`}
+            href={`/${locale}${leadListHref(filters, DEFAULT_LEAD_SORT)}`}
             onClick={onLeave}
             className={cn('mr-2 underline underline-offset-4 hover:text-white', FOCUS)}
           >

@@ -8,6 +8,11 @@ import {
   UNSET_SOURCE,
   figureState,
   isLeadBoardView,
+  leadBoardInputFor,
+  marketingPeriodFromDay,
+  openableSource,
+  qrCampaignRows,
+  sourceLeadFilters,
   marketingChoiceKey,
   marketingChoiceOfKey,
   marketingReport,
@@ -18,6 +23,10 @@ import {
 } from '@/components/features/ai-employees/office-marketing';
 import { LEAD_BOARD_VIEWS } from '@/components/features/ai-employees/office-rooms';
 import { UNSET_INFLOW_SOURCE } from '@/lib/features/analytics/lead-sources';
+import { analyticsPeriodStart } from '@/lib/features/analytics/period';
+import { jstDayStart } from '@/lib/features/leads/api/list-sql';
+import { INFLOW_SOURCES } from '@/lib/features/leads/types/pipeline';
+import { listLeadsSchema } from '@/lib/features/leads/types/schemas';
 import {
   type AcquisitionCostRow,
   type AcquisitionCostSummary,
@@ -95,7 +104,12 @@ const RETURNS: DealReturns = {
 
 describe('the choices of the marketing room', () => {
   it('are the boards of figures first, then the views of the lead board', () => {
-    expect(MARKETING_CHOICES).toEqual([...MARKETING_FIGURE_BOARDS, ...LEAD_BOARD_VIEWS]);
+    // The campaign board was added last (#1201): it is shown with the boards of figures, and
+    // its key is after the views of the lead board
+    expect(MARKETING_CHOICES).toEqual(['sources', 'funnel', ...LEAD_BOARD_VIEWS, 'campaigns']);
+    expect([...MARKETING_CHOICES].sort()).toEqual(
+      [...MARKETING_FIGURE_BOARDS, ...LEAD_BOARD_VIEWS].sort()
+    );
     expect(MARKETING_CHOICES).toContain(MARKETING_FIRST_CHOICE);
     expect(MARKETING_FIRST_CHOICE).toBe('sources');
   });
@@ -112,10 +126,11 @@ describe('the choices of the marketing room', () => {
     expect(marketingChoiceKey('funnel')).toBe('2');
     expect(marketingChoiceKey('needsAction')).toBe('3');
     expect(marketingChoiceKey('all')).toBe('7');
+    expect(marketingChoiceKey('campaigns')).toBe('8');
   });
 
   it('are not chosen by other keys', () => {
-    for (const key of ['0', '8', '9', 'a', 'Enter', 'ArrowDown', '']) {
+    for (const key of ['0', '9', 'a', 'Enter', 'ArrowDown', '']) {
       expect(marketingChoiceOfKey(key)).toBeNull();
     }
   });
@@ -223,5 +238,115 @@ describe('figureState', () => {
       figureState({ data: undefined, isError: true, error: { data: { code: 'INTERNAL' } } })
     ).toBe('error');
     expect(figureState({ data: undefined, isError: true, error: { data: null } })).toBe('error');
+  });
+});
+
+describe('the prospects of a source (#1202)', () => {
+  // Just before and just after midnight in Japan, and in the middle of a day
+  const MOMENTS = ['2026-11-14T14:59:59Z', '2026-11-14T15:00:00Z', '2026-11-13T03:00:00Z'];
+
+  it('starts the period at the instant the analytics API counts from', () => {
+    for (const moment of MOMENTS) {
+      const now = new Date(moment);
+      // The lead list turns the day into the start of that Japan day: the same instant
+      expect(jstDayStart(marketingPeriodFromDay(now))).toEqual(
+        analyticsPeriodStart(MARKETING_RANGE, now)
+      );
+    }
+    expect(marketingPeriodFromDay(new Date('2026-11-14T03:00:00Z'))).toBe('2026-10-16');
+  });
+
+  it('opens the sources the lead list can filter by, and no other row', () => {
+    for (const source of INFLOW_SOURCES) expect(openableSource(source)).toBe(source);
+    expect(openableSource(UNSET_SOURCE)).toBeNull();
+    expect(openableSource('a_source_of_long_ago')).toBeNull();
+    expect(openableSource('')).toBeNull();
+  });
+
+  it('filters the lead list by that source and that period only', () => {
+    const now = new Date('2026-11-14T03:00:00Z');
+    expect(sourceLeadFilters('seminar', now)).toEqual({
+      status: [],
+      dealPhase: [],
+      inflowSource: ['seminar'],
+      targetSystem: [],
+      createdFrom: '2026-10-16',
+    });
+  });
+
+  it('asks leads.list for a page the API accepts, newest first', () => {
+    const now = new Date('2026-11-14T03:00:00Z');
+    const input = leadBoardInputFor(sourceLeadFilters('advertising', now), 2, ORG_ID);
+    expect(input).toMatchObject({
+      organizationId: ORG_ID,
+      inflowSource: ['advertising'],
+      createdFromDay: '2026-10-16',
+      offset: 8,
+      limit: 8,
+      sortBy: 'createdAt',
+      sortOrder: 'desc',
+    });
+    expect(listLeadsSchema.safeParse(input).success).toBe(true);
+  });
+});
+
+describe('the QR campaigns of the campaign board (#1201)', () => {
+  const campaign = (id: string, over: Partial<Parameters<typeof qrCampaignRows>[0][number]> = {}) => ({
+    id,
+    name: `キャンペーン ${id}`,
+    scanCount: 40,
+    completionCount: 10,
+    isActive: true,
+    destination: { kind: 'ax_diagnosis' },
+    ...over,
+  });
+  const breakdown = (campaignId: string) => ({
+    campaignId,
+    existingLeadAnswers: 2,
+    interestedNewLeads: 4,
+    consultationNewLeads: 1,
+  });
+
+  it('keeps the order of the API, with the rate of new prospects over scans', () => {
+    const rows = qrCampaignRows([campaign('b'), campaign('a', { scanCount: 3, completionCount: 4 })], []);
+    expect(rows.map((row) => [row.id, row.scans, row.newLeads, row.newLeadRate])).toEqual([
+      ['b', 40, 10, 25],
+      // Answers from visits that are not counted as scans: more than 100%, as it is
+      ['a', 3, 4, 133],
+    ]);
+  });
+
+  it('has no rate without a scan', () => {
+    expect(qrCampaignRows([campaign('a', { scanCount: 0, completionCount: 0 })], [])[0].newLeadRate).toBeNull();
+  });
+
+  it('marks a campaign that takes no answers: stopped, or with nowhere to go', () => {
+    const rows = qrCampaignRows(
+      [
+        campaign('open'),
+        campaign('stopped', { isActive: false }),
+        campaign('expired', { destination: { kind: 'none' } }),
+      ],
+      []
+    );
+    expect(rows.map((row) => row.closed)).toEqual([false, true, true]);
+  });
+
+  it('adds the breakdown of the answers, zeros for a campaign no answer reached', () => {
+    const rows = qrCampaignRows([campaign('a'), campaign('b')], [breakdown('a')]);
+    expect(rows[0].breakdown).toEqual({
+      interestedNewLeads: 4,
+      consultationNewLeads: 1,
+      existingLeadAnswers: 2,
+    });
+    expect(rows[1].breakdown).toEqual({
+      interestedNewLeads: 0,
+      consultationNewLeads: 0,
+      existingLeadAnswers: 0,
+    });
+  });
+
+  it('leaves the breakdown out while it is not read, instead of showing zeros', () => {
+    expect(qrCampaignRows([campaign('a')], undefined)[0].breakdown).toBeNull();
   });
 });
