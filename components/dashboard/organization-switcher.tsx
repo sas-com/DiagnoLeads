@@ -89,7 +89,7 @@ export function OrganizationSwitcher() {
     // Clear all tRPC cache when switching organizations
     // This prevents data from previous organization from showing
     await utils.invalidate();
-    // Home, in the normal view: the organization is switched from the header, not on arrival
+    // Home: the full-screen office on its floor (#1169). Not the title: nobody just came in
     router.push(homeEntryPath(locale));
   };
 

@@ -22,7 +22,6 @@ export const ARRIVAL_VALUE = 'login';
 /** Where signing in leads when no page was asked for (without the language) */
 export const ARRIVAL_PATH = `${HOME_PATH}?${ARRIVAL_PARAM}=${ARRIVAL_VALUE}`;
 
-/** Home in a language: where the logo and "back home" lead, in the normal view */
 /**
  * Coming home (#1169): by the logo, by "back to home", or after choosing an organization. The
  * office opens full screen again, on the floor at once: the title greets only who comes in.
@@ -31,15 +30,17 @@ export const ARRIVAL_PATH = `${HOME_PATH}?${ARRIVAL_PARAM}=${ARRIVAL_VALUE}`;
 export const HOME_VALUE = 'home';
 export const HOME_ENTRY_PATH = `${HOME_PATH}?${ARRIVAL_PARAM}=${HOME_VALUE}`;
 
+/** The page of the office in a language, in the normal view (the side menu leads there) */
 export function homePath(locale: string): string {
   return `/${locale}${HOME_PATH}`;
 }
 
-/** Where someone who just came in is sent, in a language */
+/** Where the logo, "back to home" and a switch of organization lead, in a language */
 export function homeEntryPath(locale: string): string {
   return `/${locale}${HOME_ENTRY_PATH}`;
 }
 
+/** Where someone who just came in is sent, in a language */
 export function arrivalPath(locale: string): string {
   return `/${locale}${ARRIVAL_PATH}`;
 }
