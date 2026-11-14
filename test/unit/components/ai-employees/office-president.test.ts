@@ -71,8 +71,10 @@ describe('the president’s office', () => {
     const statuses = statusByRole([{ role: 'marketer', deskStatus: 'paused' }]);
     expect(presidentTasks(statuses, false)).toEqual([]);
     expect(firstRoleToVisit(statuses, false)).toBe('marketer');
+    // Without the right to manage: nothing to order. The work log of a hired employee is theirs
+    // to read; a vacant desk has none
     for (const status of DESK_STATUSES) {
-      expect(talkChoices(status, false)).toEqual(['leave']);
+      expect(talkChoices(status, false)).toEqual(status === 'vacant' ? ['leave'] : ['log', 'leave']);
     }
   });
 
@@ -87,9 +89,25 @@ describe('the president’s office', () => {
 
   it('answers a vacant desk by hiring, a paused employee by resuming, the others by pausing', () => {
     expect(talkChoices('vacant', true)).toEqual(['hire', 'leave']);
-    expect(talkChoices('paused', true)).toEqual(['resume', 'leave']);
+    // A hired employee: the order of the day first, then its staff matters (#1170)
+    expect(talkChoices('paused', true)).toEqual(['resume', 'rename', 'log', 'dismiss', 'leave']);
     for (const status of ['training', 'idle', 'working', 'attention'] as const) {
-      expect(talkChoices(status, true)).toEqual(['pause', 'leave']);
+      expect(talkChoices(status, true)).toEqual(['pause', 'rename', 'log', 'dismiss', 'leave']);
+    }
+  });
+
+  it('keeps leaving last, and the dismissal next to it, never on the first key', () => {
+    for (const status of DESK_STATUSES) {
+      for (const canManage of [true, false]) {
+        const choices = talkChoices(status, canManage);
+        expect(choices.at(-1)).toBe('leave');
+        expect(choices[0]).not.toBe('dismiss');
+        if (choices.includes('dismiss')) expect(choices.at(-2)).toBe('dismiss');
+        // Someone who cannot manage is never offered an order
+        if (!canManage) {
+          expect(choices.filter((c) => c !== 'log' && c !== 'leave')).toEqual([]);
+        }
+      }
     }
   });
 
