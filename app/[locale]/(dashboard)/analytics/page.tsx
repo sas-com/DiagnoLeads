@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { AreaChart, ChartLegend, DonutChart } from '@/components/charts';
+import { TeamReview, teamReviewDays } from '@/components/dashboard/team-review';
 import { LEAD_STATUS_COLORS } from '@/components/features/leads/lead-status-styles';
 import { Badge } from '@/components/ui/badge';
 import { BarList } from '@/components/ui/bar-list';
@@ -349,6 +350,11 @@ export default function AnalyticsPage() {
           </DropdownMenu>
         </div>
       </div>
+
+      {/* The team's figures to look back on, once the dashboard's (#1164) */}
+      {organizationId && (
+        <TeamReview organizationId={organizationId} days={teamReviewDays(dateRange)} />
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">

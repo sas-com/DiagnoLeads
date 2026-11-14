@@ -104,11 +104,25 @@ vi.mock('@/lib/trpc/client', () => {
         deleteContact: { useMutation: () => ({ mutate: vi.fn() }) },
       },
       leads: { myMeetings: query('myMeetings'), access: query('access') },
+      analytics: { getDashboard: query('getDashboard') },
       leadActivity: { myDay: query('myDay') },
       deals: { board: query('board'), forLead: query('forLead') },
     },
   };
 });
+// The team's inbox on top (#1164): its sections are tested with the dashboard's
+// (ax-dashboard-sections.test.tsx); here only where they stand and what they read
+vi.mock('@/components/dashboard/ax-dashboard-sections', () => ({
+  PendingSection: ({ state }: { state: string }) => (
+    <div data-testid="team-pending" data-state={state} />
+  ),
+  RecentSection: ({ state }: { state: string }) => (
+    <div data-testid="team-recent" data-state={state} />
+  ),
+}));
+vi.mock('@/components/features/help/onboarding-checklist', () => ({
+  OnboardingChecklist: () => <div data-testid="onboarding" />,
+}));
 vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: mocks.organizationId }),
 }));
@@ -418,6 +432,27 @@ describe('TodayScreen', () => {
     }
   });
 
+  it('puts what the team acts on above the member’s own day (#1164)', () => {
+    loadAll();
+    renderScreen();
+
+    const order = [
+      screen.getByTestId('onboarding'),
+      screen.getByTestId('team-pending'),
+      screen.getByTestId('team-recent'),
+      screen.getByRole('heading', { level: 2, name: /今日までの次の行動/ }),
+    ];
+    for (const [index, element] of order.slice(1).entries()) {
+      expect(
+        order[index].compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+    // The requests waiting for a reply and the newest leads, for the whole organization
+    expect(mocks.calls.getDashboard.at(-1)?.input).toEqual({ organizationId: ORG_ID, days: 30 });
+    expect(mocks.calls.getDashboard.at(-1)?.options.refetchOnWindowFocus).toBe(true);
+    expect(screen.getByTestId('team-pending')).toHaveAttribute('data-state', 'loading');
+  });
+
   it('says to choose an organization, and reads nothing, without one', () => {
     mocks.organizationId = null;
     renderScreen();
@@ -425,7 +460,7 @@ describe('TodayScreen', () => {
     expect(screen.getByRole('status')).toHaveTextContent(t.noOrganization);
     expect(screen.queryByRole('region')).not.toBeInTheDocument();
     expect(screen.queryByTestId('day-loading')).not.toBeInTheDocument();
-    for (const name of ['dueTasks', 'myMeetings', 'myDay', 'board', 'access']) {
+    for (const name of ['dueTasks', 'myMeetings', 'myDay', 'board', 'access', 'getDashboard']) {
       expect(mocks.calls[name].at(-1)?.options.enabled, name).toBe(false);
     }
   });

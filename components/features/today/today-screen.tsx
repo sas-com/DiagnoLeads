@@ -1,8 +1,15 @@
 'use client';
 
+import {
+  type CardState,
+  PendingSection,
+  RecentSection,
+} from '@/components/dashboard/ax-dashboard-sections';
+import { OnboardingChecklist } from '@/components/features/help/onboarding-checklist';
 import { useDueTasks } from '@/components/features/lead-follow-up/use-due-tasks';
 import { STUDIO_PAGE_CLASS, StudioPageHeader } from '@/components/studio';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { useLeadAccess } from '@/hooks/use-leads';
 import { useOrganization } from '@/hooks/use-organization';
 import { trpc } from '@/lib/trpc/client';
@@ -29,6 +36,11 @@ const TODAY_QUERY_OPTIONS = { staleTime: 30 * 1000, refetchOnWindowFocus: true }
  * record a contact from a next action's or a meeting's row without leaving the screen (#863),
  * as the dashboard's requests do; nothing until the server said so. Those who may change deals
  * add a next action from a deal's row that has none (#970).
+ *
+ * Above the member's own day comes what the whole team must act on, once the dashboard's (#1164,
+ * decision 2026-11-14-navigation-one-path): the first-day checklist until it is closed, the
+ * consultations waiting for a reply and the newest leads. The figures to look back on went to the
+ * analytics page.
  */
 export function TodayScreen() {
   const t = useTranslations('today');
@@ -48,6 +60,12 @@ export function TodayScreen() {
     options
   );
   const activities = trpc.leadActivity.myDay.useQuery({ organizationId }, options);
+  // The team's inbox: the period does not change the waiting requests and the newest leads
+  const team = trpc.analytics.getDashboard.useQuery({ organizationId, days: 30 }, options);
+  const teamState: CardState = team.data ? 'ready' : team.isError ? 'error' : 'loading';
+  const retryTeam = () => {
+    void team.refetch();
+  };
   const day = activities.data?.day ?? meetings.data?.today ?? due.data?.today ?? deals.data?.today;
   // The line keeps its place while the day comes, so the sections do not move
   const waitingForDay =
@@ -83,7 +101,16 @@ export function TodayScreen() {
           {t('noOrganization')}
         </p>
       ) : (
-        <>
+        <TooltipProvider delayDuration={200}>
+          <OnboardingChecklist organizationId={organizationId} />
+          <PendingSection
+            state={teamState}
+            data={team.data}
+            onRetry={retryTeam}
+            organizationId={organizationId}
+            canRecordContact={access.canEdit}
+          />
+          <RecentSection state={teamState} data={team.data} onRetry={retryTeam} />
           <TodayNextActions
             due={due}
             organizationId={organizationId}
@@ -96,7 +123,7 @@ export function TodayScreen() {
           />
           <TodayDeals query={deals} organizationId={organizationId} />
           <TodayActivities query={activities} />
-        </>
+        </TooltipProvider>
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useOrganization } from '@/hooks/use-organization';
+import { homePath } from '@/lib/routes/home';
 import { trpc } from '@/lib/trpc/client';
 import { useLocale, useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
@@ -144,7 +145,7 @@ export default function OrganizationSettingsPage() {
             </div>
             <Title>{t('notFound')}</Title>
             <Text className="mt-2 mb-6">{t('notFoundDescription')}</Text>
-            <Button onClick={() => router.push('/dashboard')}>{t('backToDashboard')}</Button>
+            <Button onClick={() => router.push(homePath(locale))}>{t('backToOffice')}</Button>
           </Card>
         </div>
       </div>

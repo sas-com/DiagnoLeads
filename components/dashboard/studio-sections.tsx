@@ -42,7 +42,8 @@ function useNumber() {
 
 /**
  * What needs attention now, as STUDIO's usage block: consultations waiting for a reply, next
- * actions due (the signed-in member's) and this week's meetings. Each figure opens its list.
+ * actions due (the signed-in member's, on 今日) and this week's meetings. Each figure opens its
+ * list.
  */
 export function StatusOverview({
   organizationId,
@@ -89,7 +90,7 @@ export function StatusOverview({
           label={t('status.due')}
           value={figure(due.data?.total, due.isLoading)}
           note={t('status.unit')}
-          href="#dashboard-today"
+          href={`/${locale}/today`}
         />
         <StudioStat
           label={t('status.meetings')}
@@ -108,8 +109,8 @@ type Metric = 'leads' | 'consultations';
 
 /**
  * The analytics panel: the figure of the period with its daily (or weekly) curve, the migration
- * sources as thin bars, and what changed against the previous period. One widget on the
- * dashboard: it is shown, hidden and moved as a whole.
+ * sources as thin bars, and what changed against the previous period. Part of the team's review
+ * on the analytics page (#1164), so it links nowhere else.
  */
 export function AnalyticsPanel({
   state,
@@ -158,15 +159,7 @@ export function AnalyticsPanel({
   );
 
   return (
-    <StudioSection
-      title={t('analytics.title')}
-      action={
-        <StudioLinkButton href={`/${locale}/analytics`}>
-          {t('analytics.toAnalytics')}
-        </StudioLinkButton>
-      }
-      data-testid="analytics-panel"
-    >
+    <StudioSection title={t('analytics.title')} data-testid="analytics-panel">
       <StudioPanel className="space-y-10">
         {state === 'error' ? (
           <CardError onRetry={onRetry} />
