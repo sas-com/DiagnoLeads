@@ -5,8 +5,8 @@ category: UI
 title: "AI社員オフィスの 3D を本実装に進める。全場面を 3D・ロボットはデザイナーの 3D モデル・本番の既定を 3D にする（Epic #1146）"
 status: active
 superseded_by: []
-issues: [1135, 1146, 1147, 1148, 1149, 1150, 1151, 1157]
-paths: ["components/features/ai-employees/office-3d/**", "components/features/ai-employees/office-immersive.tsx", "components/features/ai-employees/office-furniture.ts"]
+issues: [1135, 1146, 1147, 1148, 1149, 1150, 1151, 1157, 1177]
+paths: ["components/features/ai-employees/office-3d/**", "components/features/ai-employees/office-immersive.tsx", "components/features/ai-employees/office-furniture.ts", "components/features/ai-employees/office-floor-labels.tsx", "components/features/ai-employees/office-label-layout.ts"]
 ---
 
 ### [UI] AI社員オフィスの 3D を本実装に進める。全場面を 3D・ロボットはデザイナーの 3D モデル・本番の既定を 3D にする（Epic #1146）
@@ -44,4 +44,9 @@ paths: ["components/features/ai-employees/office-3d/**", "components/features/ai
   - 3D は、フロアだけでなく、会話・部屋・カスタマイズの場面の後ろにも出したままにする（タイトルの画面だけ 2D）。場面ごとのカメラ（どこを・どの近さで・画面のどこに）は純粋な関数 `stageView`（`office-view-3d.ts`）で決め、入れ物（`office-immersive.tsx`）は場面と対象の場所を渡すだけにする。画面のどこに置くかは 2D と同じ割合（会話とカスタマイズは左から 32%・上から 42%、部屋は左から 15%・上から 30%）
   - 場面が変わったときだけ、視点全体（見る場所・近さ・ずらし）を 0.9 秒かけて滑らせる。フロアでのドラッグと拡大は、今までどおりすぐ効かせる。「動きを減らす」設定では滑らせない
   - 名札（押せるボタン）はフロアの場面だけに出す。会話の相手は、こちらを向かせる（飾り。相手が誰かはパネルが伝える）
+- **ルール**（#1177 で足した。オーナーの指摘「文字が被ってみえない部分も修正してください」）:
+  - フロアの名札と部屋名は、2D でも 3D でも同じ DOM の層（`office-floor-labels.tsx`）に置く。2D の絵（SVG）の中に部屋名を描かない（HUD を避けられず、拡大で文字の大きさが変わる）
+  - 置き場所は純粋な関数（`office-label-layout.ts`）で決める。名札は、ほかの名札と重なるときに上下にだけ動かす（選んでいる名札は動かさない）。部屋名は、HUD のパネル・ロボット・名札・ほかの部屋名・画面の端を避け、候補の場所（部屋の奥の上 → 床の中央 → 手前）の近くに空きが無ければ出さない
+  - HUD の四角は、出社の画面の層の子要素を測って得る（画面を覆う子は床か幕なので除き、横幅いっぱいの子はその中身を使う）。パネルを足しても、印を付けなくてよい
+  - 名札の層は自分の重なりの順（`isolate`）を持つ。選んでいる名札はほかの名札より手前、パネルよりは奥
 - **まだ決まっていないこと**: モデルを誰が作るか・役割ごとに別のモデルにするか・カスタマイズの項目をモデルでどこまで選べるようにするか（#1151）、遅い端末で 2D に戻すしきい値（#1150）、社長のアバター、音

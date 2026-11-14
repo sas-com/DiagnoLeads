@@ -44,6 +44,7 @@ import {
 import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
 import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
 import { officeFits } from './office-app';
+import { OfficeTags2D } from './office-floor-labels';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
 import {
@@ -76,7 +77,7 @@ import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from 
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
-import { StatusDot, WorldTagButton } from './office-world-tag';
+import { StatusDot } from './office-world-tag';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 
@@ -551,23 +552,26 @@ export function OfficeImmersive({
                 statuses={statuses}
                 looks={looks}
                 night={stage === 'title' ? true : night}
-                labels={stage === 'world'}
+                // The names of the rooms are DOM over the floor, clear of the panels (#1177)
+                labels={false}
               />
-              {stage === 'world' &&
-                AI_EMPLOYEE_ROLES.map((role) => (
-                  <WorldTag
-                    key={role}
-                    role={role}
-                    status={statuses[role]}
-                    name={byRole.get(role)?.name ?? null}
-                    chosen={role === selected}
-                    scale={scale}
-                    onChoose={() => setSelected(role)}
-                    onTalk={() => talkTo(role)}
-                  />
-                ))}
             </div>
           </div>
+          {/* The name tags and the room names of the 2D floor, laid out clear of each other */}
+          {stage === 'world' && !(show3d && threeDReady) && (
+            <OfficeTags2D
+              statuses={statuses}
+              names={names3d}
+              selected={selected}
+              onChoose={setSelected}
+              onTalk={talkTo}
+              camera={camera}
+              scale={scale}
+              width={width}
+              size={size}
+              glide={!dragging && !reducedMotion}
+            />
+          )}
           {show3d && (
             <Office3DBoundary onError={() => leave3d(true)}>
               <OfficeCanvas3D
@@ -1185,7 +1189,7 @@ function HudButton({
       className={cn(
         // The cut corners are drawn on a layer behind the button: clipping the button itself would
         // clip its focus ring too
-        'relative isolate flex h-[5.25rem] w-[5.25rem] flex-col items-center justify-center gap-1.5 text-xs text-[#f5f1e8] before:absolute before:inset-0 before:-z-10 before:border before:border-[#e9cf9a]/55 before:bg-[rgba(10,14,24,0.86)] before:[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)] hover:before:bg-[rgba(36,44,64,0.95)]',
+        'relative isolate flex h-[5.25rem] w-[5.25rem] flex-col items-center justify-center gap-1.5 text-center text-xs leading-tight [word-break:auto-phrase] text-[#f5f1e8] before:absolute before:inset-0 before:-z-10 before:border before:border-[#e9cf9a]/55 before:bg-[rgba(10,14,24,0.86)] before:[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)] hover:before:bg-[rgba(36,44,64,0.95)]',
         FOCUS
       )}
     >
@@ -1194,45 +1198,6 @@ function HudButton({
         <span className={cn(KEY, 'absolute top-1 right-1 bg-[#0a0e18]/60')}>{hotkey}</span>
       )}
     </button>
-  );
-}
-
-/** The name over an AI employee in the office: choose it, or talk to the chosen one */
-function WorldTag({
-  role,
-  status,
-  name,
-  chosen,
-  scale,
-  onChoose,
-  onTalk,
-}: {
-  role: AiEmployeeRole;
-  status: DeskStatus;
-  name: string | null;
-  chosen: boolean;
-  /** The scale of the stage: the tag undoes it, so its text and its target keep their size */
-  scale: number;
-  onChoose: () => void;
-  onTalk: () => void;
-}) {
-  const spot = spotOf(role, status);
-  const [x, y] = project(spot.x, spot.y);
-  return (
-    <WorldTagButton
-      role={role}
-      status={status}
-      name={name}
-      chosen={chosen}
-      onChoose={onChoose}
-      onTalk={onTalk}
-      style={{
-        left: `${(x / SCENE_WIDTH) * 100}%`,
-        top: `${((y + 10) / SCENE_HEIGHT) * 100}%`,
-        transform: `translate(-50%, 0) scale(${1 / scale})`,
-        transformOrigin: 'top center',
-      }}
-    />
   );
 }
 

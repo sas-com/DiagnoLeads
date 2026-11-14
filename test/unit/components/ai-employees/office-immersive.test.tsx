@@ -175,6 +175,23 @@ describe('OfficeImmersive', () => {
     expect(office.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   });
 
+  it('names the rooms and tags the staff over the 2D floor, outside the drawing (#1177)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+
+    // One layer of DOM over the floor: it can step out from under the panels, the drawing cannot
+    const layer = office.querySelector('[data-office-labels]') as HTMLElement;
+    expect(within(layer).getAllByRole('button')).toHaveLength(4);
+    const tag = within(layer).getByRole('button', { name: /AIセールス 研修中/ });
+    expect(tag.style.visibility).toBe('visible');
+    const room = within(layer).getByText('研修室');
+    expect(room).toHaveAttribute('aria-hidden', 'true');
+    expect(room.closest('svg')).toBeNull();
+    // The drawing itself carries no names any more
+    expect(office.querySelector('svg text')).toBeNull();
+  });
+
   it('hires from a conversation with a vacant desk', async () => {
     const user = userEvent.setup();
     const { office } = renderOffice();
