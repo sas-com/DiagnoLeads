@@ -52,6 +52,14 @@ vi.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({ organizationId: ORG_ID }),
 }));
 vi.mock('sonner', () => ({ toast: mocks.toast }));
+// The mark in the address as the router reports it: a test can change it, to press the logo on
+// the page that is already open (the shared mock keeps one address for the whole file)
+const nav = vi.hoisted(() => ({ mark: null as string | null }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
+  usePathname: () => '/ja/office',
+  useSearchParams: () => ({ get: (key: string) => (key === 'source' ? nav.mark : null) }),
+}));
 vi.mock('@/lib/auth/client', () => ({
   authClient: { useSession: () => ({ data: { user: { name: '山田 太郎' } } }) },
 }));
@@ -290,6 +298,7 @@ describe('OfficeScreen', () => {
     afterEach(() => {
       Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
       window.history.replaceState(null, '', '/');
+      nav.mark = null;
     });
 
     it('opens the full-screen office on the floor, past the title, and drops the mark', async () => {
@@ -299,6 +308,52 @@ describe('OfficeScreen', () => {
       expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
       expect(within(office).queryByRole('button', { name: /^出社する/ })).not.toBeInTheDocument();
       expect(`${window.location.pathname}${window.location.search}`).toBe('/ja/office');
+    });
+
+    it('opens when the logo is pressed on the office page itself: only the mark changes', async () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+      window.history.replaceState(null, '', '/ja/office');
+      const view = renderScreen();
+      expect(
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+      ).not.toBeInTheDocument();
+      // The router moves to the same page with the mark, and tells the page
+      window.history.replaceState(null, '', '/ja/office?source=home');
+      nav.mark = 'home';
+      view.rerender(
+        <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+          <OfficeScreen />
+        </NextIntlClientProvider>
+      );
+      const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+      expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
+      expect(window.location.search).toBe('');
+    });
+
+    it('stays on the floor in a window of the installed app, once the mark is dropped (#1175)', async () => {
+      // The app's own start is looked at once, when the page opens: the page reading its
+      // address again (the mark went) must not take the office back to the title
+      const navigator = window.navigator as Navigator & { standalone?: boolean };
+      Object.defineProperty(navigator, 'standalone', { configurable: true, value: true });
+      try {
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+        window.history.replaceState(null, '', '/ja/office?source=home');
+        nav.mark = 'home';
+        const view = renderScreen();
+        const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+        expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
+        // The router reports the address without the mark
+        nav.mark = null;
+        view.rerender(
+          <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+            <OfficeScreen />
+          </NextIntlClientProvider>
+        );
+        expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
+        expect(within(office).queryByRole('button', { name: /^出社する/ })).not.toBeInTheDocument();
+      } finally {
+        Reflect.deleteProperty(navigator, 'standalone');
+      }
     });
 
     it('stays in the normal view on a narrow screen, and drops the mark there too', async () => {

@@ -89,6 +89,14 @@ describe('planTests', () => {
     });
   });
 
+  it('runs the test that reads the backup scripts (#1126)', () => {
+    expect(planTests([modified('scripts/prod-restore-to.sh')])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: ['test/unit/scripts/prod-backup-scripts.test.ts'],
+    });
+  });
+
   it('runs nothing for a removed test', () => {
     expect(planTests([{ path: 'test/unit/lib/old.test.ts', status: 'deleted' }])).toEqual({
       kind: 'selected',
