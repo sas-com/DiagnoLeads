@@ -18,7 +18,7 @@ paths: [".claude/settings.json", ".claude/agents/**"]
   - これまでの専門エージェントは、Fable のセッションでは Fable で動いていた。Opus に固定すると、メインが Sonnet のときは底上げ、メインが Fable のときは格下げになる。マージ前の必須のレビューである `security-specialist` は質を下げないよう Fable にし、ほかの6つは費用を取って Opus にする（セキュリティレビューの指摘）
 - **ルール**:
   - advisor はメインのモデル以上でなければ付かない。メインが Fable のとき付くのは Fable だけで、その場合は advisor の分だけ費用が増える。**費用が下がるのは、メインが Sonnet のセッションだけ**
-  - クラウドのセッションで、アプリで選んだモデルと設定の `model` のどちらが効くかは未確認（公式に記載が無い）。アプリの選択が勝つ見込みで、その場合 Fable を選ぶと、メインは Fable のまま Fable の advisor が上乗せされる。クラウドで費用を下げるには、アプリのモデル選択で Sonnet を選ぶのが確実
+  - クラウドのセッションでは、アプリ（か `create_session`）で選んだモデルが設定の `model` に勝つ（公式に記載は無く、下の実測による）。Fable を選ぶと、メインは Fable のまま Fable の advisor が上乗せされる。クラウドで費用を下げるには、アプリのモデル選択で Sonnet を選ぶ
   - 手元の CLI では、設定の `model` が各自の `/model` で保存した既定より優先される。そのセッションだけ変えるときは `/model <名前>`・`/advisor off` を使う
   - サブエージェントは親の advisor を引き継ぐ。Fable の advisor の利用分は、プランによって usage credits に課金される
   - 相談の回数を決める設定は無い。増やす・減らすときは指示に書く。CLAUDE.md に「いつ相談するか」の行は、呼ばれ方を見てから決める
@@ -27,9 +27,10 @@ paths: [".claude/settings.json", ".claude/agents/**"]
   - 設定あり：使われたモデルは Sonnet 5.5、`/advisor` の表示は Fable 5.2
   - 設定なし：使われたモデルは Fable 5.2、`/advisor` の表示は off
   - 設定ありで専門エージェントを呼ぶ：`security-specialist` は Fable 5.2、`architecture-specialist` は Opus 5.5 で動いた
-  - アプリで Fable を選んだクラウドのセッションの途中で設定を置いたとき：メインは Fable のまま、advisor がすぐ付いた（設定が入った状態で始まるセッションは、まだ見ていない）
+  - アプリで Fable を選んだクラウドのセッションの途中で設定を置いたとき：メインは Fable のまま、advisor がすぐ付いた
+  - 設定が入ったブランチから、モデルを Fable にして始めたクラウドのセッション：使われたモデルは Fable 5.2（設定の `sonnet` にはならなかった）
   - 公式：https://code.claude.com/docs/en/advisor ・ https://code.claude.com/docs/en/sub-agents ・ https://code.claude.com/docs/en/model-config ・ https://code.claude.com/docs/en/settings
-- **公式に記載が無いこと**: クラウドのセッションでの advisor の対応（上のとおり、付くことは観測した）、アプリのモデル選択と設定の `model` の優先順位。SNS の「3.4倍安い」「指示の行が無いと advisor が一度も呼ばれない」は公式に裏付けが無い
+- **公式に記載が無いこと**: クラウドのセッションでの advisor の対応と、アプリのモデル選択と設定の `model` の優先順位（どちらも上の実測で確かめた）。SNS の「3.4倍安い」「指示の行が無いと advisor が一度も呼ばれない」は公式に裏付けが無い
 - **却下案**:
   - `advisorModel` だけを置く（メインが Fable のままだと費用が増えるだけになる）
   - `CLAUDE_CODE_SUBAGENT_MODEL` で全サブエージェントを Haiku にする（調査の質が下がる。公式の優先順位は、呼び出し時の指定・frontmatter・この環境変数・親のモデルの順なので、専門エージェントには効かないが、ほかの調査が下がる）
