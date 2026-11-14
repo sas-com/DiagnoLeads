@@ -3,6 +3,7 @@
  * app, and the browser's offer to install it.
  */
 import { APP_LAUNCH_PARAM, APP_LAUNCH_VALUE } from '@/lib/routes/app-install';
+import { ARRIVAL_PARAM, ARRIVAL_VALUE } from '@/lib/routes/home';
 import { useCallback, useEffect, useState } from 'react';
 
 /** The display modes of a window without the browser around it */
@@ -28,6 +29,27 @@ export const OFFICE_MIN_WIDTH = 768;
 
 export function officeFits(width: number): boolean {
   return width >= OFFICE_MIN_WIDTH;
+}
+
+/**
+ * Whether the visitor just came in: signed in, or joined an organization (#1153). The office is
+ * the first screen then, and its full-screen view opens by itself, like for the app.
+ */
+export function justArrived(search: string): boolean {
+  return new URLSearchParams(search).get(ARRIVAL_PARAM) === ARRIVAL_VALUE;
+}
+
+/**
+ * The address without the mark of having just come in, or null when it carries none. The mark is
+ * dropped once the office read it: a reload, or going back to the page later, is not coming in
+ * again, and the office must not jump to full screen each time.
+ */
+export function withoutArrival(pathname: string, search: string, hash = ''): string | null {
+  if (!justArrived(search)) return null;
+  const rest = new URLSearchParams(search);
+  rest.delete(ARRIVAL_PARAM);
+  const query = rest.toString();
+  return `${pathname}${query ? `?${query}` : ''}${hash}`;
 }
 
 /** Whether this window belongs to the installed app (iOS reports it on the navigator) */

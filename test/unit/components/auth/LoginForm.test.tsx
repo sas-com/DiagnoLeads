@@ -121,7 +121,7 @@ describe('LoginForm', () => {
       expect(mockSignIn).toHaveBeenCalledWith({
         email: 'test@example.com',
         password: 'Password123',
-        callbackURL: '/dashboard',
+        callbackURL: '/office?source=login',
       });
     });
   });
@@ -137,7 +137,7 @@ describe('LoginForm', () => {
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalled();
-      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+      expect(mockPush).toHaveBeenCalledWith('/office?source=login');
     });
     // What the tab read before is another session's, dropped before the page opens (#1057)
     expect(mockClearQueries).toHaveBeenCalledTimes(1);

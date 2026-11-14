@@ -87,8 +87,24 @@ export async function login(page: Page, user: TestUser): Promise<void> {
   // Submit form
   await page.click('button[type="submit"]');
 
-  // Wait for navigation to dashboard
-  await page.waitForURL(/\/dashboard/);
+  // Signing in leads to the AI office (#1153). The office drops the mark of having just come in
+  // from the address once it read it, which is also when it opens its full-screen view
+  await page.waitForURL(
+    (url) => url.pathname.endsWith('/office') && !url.searchParams.has('source')
+  );
+}
+
+/**
+ * Leave the full-screen office that opens after signing in on a wide screen (#1153). It covers
+ * the admin shell (the header, the user menu), so a test that uses the shell right after signing
+ * in leaves it first, with Esc from its title, as a person would. A test that opens another page
+ * with `page.goto` does not need this.
+ */
+export async function leaveFullScreenOffice(page: Page): Promise<void> {
+  const office = page.getByRole('dialog');
+  await office.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await office.waitFor({ state: 'hidden' });
 }
 
 /**
@@ -127,6 +143,6 @@ export async function setupAuthenticatedTest(
   page: Page,
   user: TestUser = TEST_USERS.owner
 ): Promise<void> {
-  // login() already waits for the dashboard of the user's only organization
+  // login() already waits for the AI office of the user's only organization
   await login(page, user);
 }

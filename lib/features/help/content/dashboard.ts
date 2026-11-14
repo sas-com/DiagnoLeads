@@ -5,9 +5,9 @@ export const dashboardArticle: HelpArticle = {
   locale: 'ja',
   title: 'ダッシュボード',
   summary:
-    '診断から届いたリードと、対応が必要な相談申込を1画面で確かめます。ログインしたら、まずここで連絡待ちの相談申込がないかを見ます。',
+    '診断から届いたリードと、対応が必要な相談申込を1画面で確かめます。サイドメニューの「ダッシュボード」から開きます（ログインすると最初に開くのは AI社員オフィスです）。仕事を始めるときに、まずここで連絡待ちの相談申込がないかを見ます。',
   routes: ['/dashboard'],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-11-14',
   related: ['workflow-lifecycle'],
   blocks: [
     { type: 'h2', id: 'first', text: '最初に見るところ' },

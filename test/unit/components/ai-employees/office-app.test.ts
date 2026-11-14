@@ -1,8 +1,10 @@
 import {
   OFFICE_MIN_WIDTH,
   isAppWindow,
+  justArrived,
   launchedAsApp,
   officeFits,
+  withoutArrival,
 } from '@/components/features/ai-employees/office-app';
 import { describe, expect, it } from 'vitest';
 
@@ -21,6 +23,30 @@ describe('launchedAsApp', () => {
     expect(launchedAsApp('', false)).toBe(false);
     expect(launchedAsApp('?source=email', false)).toBe(false);
     expect(launchedAsApp('?app=1', false)).toBe(false);
+  });
+});
+
+describe('justArrived', () => {
+  it('is true for someone who just signed in or joined, and for nobody else', () => {
+    expect(justArrived('?source=login')).toBe(true);
+    expect(justArrived('?tab=1&source=login')).toBe(true);
+    expect(justArrived('')).toBe(false);
+    expect(justArrived('?source=app')).toBe(false);
+    expect(justArrived('?login=1')).toBe(false);
+  });
+});
+
+describe('withoutArrival', () => {
+  it('drops the mark once it was read, and keeps the rest of the address', () => {
+    expect(withoutArrival('/ja/office', '?source=login')).toBe('/ja/office');
+    expect(withoutArrival('/ja/office', '?tab=1&source=login', '#staff')).toBe(
+      '/ja/office?tab=1#staff'
+    );
+  });
+
+  it('leaves an address alone that carries no such mark: the start URL of the app stays', () => {
+    expect(withoutArrival('/ja/office', '')).toBeNull();
+    expect(withoutArrival('/ja/office', '?source=app')).toBeNull();
   });
 });
 

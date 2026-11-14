@@ -12,7 +12,14 @@ import { Building2, Download, Loader2, Lock } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DeskSheet, OFFICE_REFRESH_MS } from './desk-sheet';
-import { isAppWindow, launchedAsApp, officeFits, useInstallApp } from './office-app';
+import {
+  isAppWindow,
+  justArrived,
+  launchedAsApp,
+  officeFits,
+  useInstallApp,
+  withoutArrival,
+} from './office-app';
 import { OfficeImmersive } from './office-immersive';
 import { OfficeMap } from './office-map';
 
@@ -33,11 +40,16 @@ export function OfficeScreen() {
   const { data: session } = authClient.useSession();
   const [immersive, setImmersive] = useState(false);
   const { install } = useInstallApp();
-  // Opened as the app (the installed app, or its start URL): the office is the first screen,
-  // where the screen is wide enough for it (#1139)
+  // Opened as the app (the installed app, or its start URL), or just signed in (#1153): the
+  // full-screen office is the first screen, where the screen is wide enough for it (#1139)
   useEffect(() => {
+    const { pathname, search, hash } = window.location;
+    const arrived = justArrived(search);
+    // Coming in happens once: a reload is not coming in again
+    const settled = withoutArrival(pathname, search, hash);
+    if (settled) window.history.replaceState(window.history.state, '', settled);
     if (!officeFits(window.innerWidth)) return;
-    if (launchedAsApp(window.location.search, isAppWindow(window))) setImmersive(true);
+    if (arrived || launchedAsApp(search, isAppWindow(window))) setImmersive(true);
   }, []);
   const enterRef = useRef<HTMLButtonElement>(null);
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
