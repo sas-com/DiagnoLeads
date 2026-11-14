@@ -278,9 +278,13 @@
           "reportLoading": "Reading the figures of this room.",
           "reportUnavailable": "The figures of this room could not be read.",
           "ask": {
-            "sources": "Show me where they came from",
-            "funnel": "Show me how far they got",
+            "figures": "Show me the figures",
             "leads": "Show me the prospects"
+          },
+          "figureBoards": {
+            "sources": "Sources",
+            "funnel": "Progress",
+            "campaigns": "Campaigns"
           },
           "leadViews": {
             "needsAction": "Not started",
@@ -317,7 +321,14 @@
             "none": "—",
             "uncosted": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects. {count, plural, one {# has} other {# have}} no cost recorded.",
             "costed": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects.",
-            "returns": "The won amount and the ROI are counted from the deals of these prospects (ROI = won amount ÷ acquisition cost)."
+            "returns": "The won amount and the ROI are counted from the deals of these prospects (ROI = won amount ÷ acquisition cost).",
+            "keys": {
+              "open": "open its prospects"
+            },
+            "open": "Open the prospects of {source}",
+            "openHint": "Opening the row of a source shows its prospects of the last {days} days on the lead board. The row without a recorded source cannot be opened.",
+            "leadsOf": "Source: {source} (last {days} days)",
+            "back": "Back to the source board"
           },
           "funnel": {
             "board": "Progress board",
@@ -341,7 +352,42 @@
             "nurturing": "Prospects being nurtured now: {count} (not counted as a stage)."
           },
           "scroll": "Table of the {board}. Scroll with the arrow keys",
-          "onWall": "On the wall: {board}"
+          "onWall": "On the wall: {board}",
+          "boardOf": "{board} ({what})",
+          "campaigns": {
+            "board": "Campaign board",
+            "summary": "What the QR campaigns and the sales agencies brought",
+            "hint": "Campaigns are created and changed, and other periods chosen, in the normal view.",
+            "openQr": "Open the QR campaigns in the normal view",
+            "qr": {
+              "title": "QR campaigns",
+              "period": "Since each was created",
+              "empty": "There are no QR campaigns yet.",
+              "caption": "Scans, new prospects and their breakdown by QR campaign (since each was created)",
+              "columns": {
+                "campaign": "Campaign",
+                "scans": "Scans",
+                "newLeads": "New prospects",
+                "rate": "Rate",
+                "interested": "Interested (MQL)",
+                "consultation": "Consultations",
+                "existing": "Answers of existing leads"
+              },
+              "closed": "Not taking answers",
+              "note": "The rate is new prospects ÷ scans. Answers from visits that are not counted as scans are counted as new prospects too, so it can exceed 100%. Interested and consultations are counted by what the new prospects are now.",
+              "breakdownUnavailable": "The breakdown (interested, consultations, answers of existing leads) could not be read."
+            },
+            "agencies": {
+              "title": "Sales agencies",
+              "empty": "No prospect of the last {days} days has an agency name recorded.",
+              "caption": "Prospects, SQL, wins and acquisition cost by sales agency (prospects created in the last {days} days)",
+              "columns": {
+                "agency": "Agency",
+                "sqlRate": "SQL rate"
+              },
+              "note": "Prospects with an agency name recorded, counted by agency. The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects."
+            }
+          }
         },
         "leads": {
           "board": "Lead board",

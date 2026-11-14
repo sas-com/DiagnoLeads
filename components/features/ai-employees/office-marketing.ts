@@ -13,16 +13,29 @@ import type {
   ConversionFunnelData,
   DateRange,
   FunnelStageName,
+  QrCampaignBreakdown,
 } from '@/lib/features/analytics/types/schemas';
-import { LEAD_BOARD_VIEWS, type LeadBoardView } from './office-rooms';
+import {
+  DEFAULT_LEAD_SORT,
+  EMPTY_LEAD_FILTERS,
+  type LeadListFilters,
+  toListLeadsInput,
+} from '@/lib/features/leads/list-query';
+import { INFLOW_SOURCES, type InflowSource } from '@/lib/features/leads/types/pipeline';
+import type { ListLeadsInput } from '@/lib/features/leads/types/schemas';
+import { dashboardPeriod, jstDay } from '@/lib/jst';
+import { LEAD_BOARD_PAGE_SIZE, LEAD_BOARD_VIEWS, type LeadBoardView } from './office-rooms';
 
 /** The period of the room's figures: prospects created in the last 30 days (Japan days) */
 export const MARKETING_RANGE = '30d' as const satisfies DateRange;
 /** The same period in days, for the words of the room */
 export const MARKETING_RANGE_DAYS = 30;
 
-/** The boards of figures: where the prospects came from, and how far they got */
-export const MARKETING_FIGURE_BOARDS = ['sources', 'funnel'] as const;
+/**
+ * The boards of figures: where the prospects came from, how far they got, and what each campaign
+ * brought (QR campaigns and sales agencies, #1201)
+ */
+export const MARKETING_FIGURE_BOARDS = ['sources', 'funnel', 'campaigns'] as const;
 export type MarketingFigureBoard = (typeof MARKETING_FIGURE_BOARDS)[number];
 
 /** What the president can ask the room for: a board of figures, or a view of the lead board */
@@ -32,11 +45,14 @@ export type MarketingChoice = MarketingFigureBoard | LeadBoardView;
  * The choices in the order of their keys (1 is the first). A key keeps its meaning whichever
  * board is on the wall. From here on, a new choice is added at the end, so no key changes its
  * meaning again (the views of the lead board moved from 1-5 to 3-7 once, in #1200, a day after
- * the room was built).
+ * the room was built). So the campaign board, added in #1201, is 8 although it is shown with the
+ * other boards of figures.
  */
 export const MARKETING_CHOICES: readonly MarketingChoice[] = [
-  ...MARKETING_FIGURE_BOARDS,
+  'sources',
+  'funnel',
   ...LEAD_BOARD_VIEWS,
+  'campaigns',
 ];
 
 /** The board the room opens on: the one the report is about */
@@ -156,4 +172,112 @@ export function figureState(query: {
   if (query.error?.data?.code === 'FORBIDDEN') return 'forbidden';
   if (query.isError) return 'error';
   return query.data === undefined ? 'loading' : 'ready';
+}
+
+/**
+ * The Japan day the period of the room starts on ('YYYY-MM-DD'): the same instant the analytics
+ * API counts from (analyticsPeriodStart of the same range), as the lead list takes it
+ */
+export function marketingPeriodFromDay(now: Date): string {
+  return jstDay(dashboardPeriod(MARKETING_RANGE_DAYS, now).from);
+}
+
+/**
+ * The source of a row as the lead list can filter by it (#1202), or null when it cannot: the
+ * prospects without a recorded source, and values outside the list of sources, have no filter in
+ * `leads.list`, and no API is added for a room
+ */
+export function openableSource(source: string): InflowSource | null {
+  return (INFLOW_SOURCES as readonly string[]).includes(source) ? (source as InflowSource) : null;
+}
+
+/** The filters of the lead board opened from a row of the source board: that source, that period */
+export function sourceLeadFilters(source: InflowSource, now: Date): LeadListFilters {
+  return {
+    ...EMPTY_LEAD_FILTERS,
+    inflowSource: [source],
+    createdFrom: marketingPeriodFromDay(now),
+  };
+}
+
+/** Input of `leads.list` for a page of the lead board with these filters, newest first */
+export function leadBoardInputFor(
+  filters: LeadListFilters,
+  page: number,
+  organizationId: string
+): ListLeadsInput {
+  return toListLeadsInput(
+    { filters, sort: DEFAULT_LEAD_SORT, page },
+    organizationId,
+    LEAD_BOARD_PAGE_SIZE
+  );
+}
+
+/** What the campaign board reads of a QR campaign (a row of `distribution.listCampaigns`) */
+export interface QrCampaignFigures {
+  id: string;
+  name: string;
+  scanCount: number;
+  /** New leads created from the campaign's code */
+  completionCount: number;
+  isActive: boolean;
+  /** Where a scan goes; 'none' when the campaign takes no answers (stopped, expired, ...) */
+  destination: { kind: string };
+}
+
+/** A row of the QR campaigns on the campaign board */
+export interface QrCampaignRow {
+  id: string;
+  name: string;
+  /** Scans lead nowhere now: stopped, expired or without a diagnosis */
+  closed: boolean;
+  scans: number;
+  newLeads: number;
+  /** newLeads out of scans in whole percent; null without a scan */
+  newLeadRate: number | null;
+  /**
+   * What the answers with the campaign's code add; null while the breakdown is not read (a
+   * campaign no answer has reached has zeros)
+   */
+  breakdown: Pick<
+    QrCampaignBreakdown,
+    'interestedNewLeads' | 'consultationNewLeads' | 'existingLeadAnswers'
+  > | null;
+}
+
+const NO_ANSWERS = { interestedNewLeads: 0, consultationNewLeads: 0, existingLeadAnswers: 0 };
+
+/**
+ * The rows of the QR campaigns, in the order the API lists them (newest first). The scans and the
+ * new leads are the campaign's own counts; the breakdown comes from the analytics API and is left
+ * out (`null`) while it is not there.
+ */
+export function qrCampaignRows(
+  campaigns: readonly QrCampaignFigures[],
+  breakdowns: readonly QrCampaignBreakdown[] | undefined
+): QrCampaignRow[] {
+  const byId = new Map(breakdowns?.map((row) => [row.campaignId, row]));
+  return campaigns.map((campaign) => {
+    const found = byId.get(campaign.id);
+    return {
+      id: campaign.id,
+      name: campaign.name,
+      closed: !campaign.isActive || campaign.destination.kind === 'none',
+      scans: campaign.scanCount,
+      newLeads: campaign.completionCount,
+      newLeadRate:
+        campaign.scanCount > 0
+          ? Math.round((campaign.completionCount / campaign.scanCount) * 100)
+          : null,
+      breakdown: breakdowns
+        ? found
+          ? {
+              interestedNewLeads: found.interestedNewLeads,
+              consultationNewLeads: found.consultationNewLeads,
+              existingLeadAnswers: found.existingLeadAnswers,
+            }
+          : NO_ANSWERS
+        : null,
+    };
+  });
 }

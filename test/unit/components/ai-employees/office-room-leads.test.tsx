@@ -6,6 +6,7 @@
  * Real next-intl messages; tRPC mocked.
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
+import { marketingPeriodFromDay } from '@/components/features/ai-employees/office-marketing';
 import { LEAD_BOARD_PAGE_SIZE } from '@/components/features/ai-employees/office-rooms';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import {
@@ -30,6 +31,7 @@ interface ListInput {
   consultationRequested?: boolean;
   createdFromDay?: string;
   assignee?: string;
+  inflowSource?: string[];
 }
 
 const lead = (n: number, status = 'new') => ({
@@ -57,6 +59,12 @@ const mocks = vi.hoisted(() => ({
   inputs: [] as unknown[],
   /** The inputs of the analytics queries of the room */
   figureInputs: [] as unknown[],
+  /** The inputs of the queries of the campaign board, by procedure (#1201) */
+  campaignInputs: [] as { procedure: string; input: unknown }[],
+  /** The organization has no QR campaign and no agency of the period */
+  noCampaigns: false,
+  /** The breakdown of the QR campaigns cannot be read */
+  breakdownFails: false,
   /** What leads.list and the analytics answer: 'ok', 'forbidden', 'error' or 'loading' */
   mode: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
   /** The period has no prospects at all */
@@ -82,6 +90,8 @@ function answer(input: ListInput) {
   if (input.consultationRequested) rows = [];
   if (input.createdFromDay) rows = all.slice(0, 5);
   if (input.assignee === 'me') rows = all.slice(1, 2);
+  // The prospects of one source in the period (#1202): 10 of them, so two pages
+  if (input.inflowSource) rows = all.slice(0, 10);
   return {
     items: rows.slice(input.offset, input.offset + input.limit),
     total: rows.length,
@@ -173,11 +183,99 @@ function figureQuery<T>(input: unknown, answer: () => T) {
   return { data: answer(), error: null, isError: false };
 }
 
+/** Two QR campaigns, newest first: one that takes answers, one that was stopped */
+function campaignsAnswer() {
+  if (mocks.noCampaigns) return [];
+  return [
+    {
+      id: 'c0000000-0000-4000-8000-000000000001',
+      name: '秋の展示会',
+      scanCount: 40,
+      completionCount: 10,
+      isActive: true,
+      destination: { kind: 'ax_diagnosis' },
+    },
+    {
+      id: 'c0000000-0000-4000-8000-000000000002',
+      name: '春のセミナー',
+      scanCount: 0,
+      completionCount: 0,
+      isActive: false,
+      destination: { kind: 'none', reasons: ['inactive'] },
+    },
+  ];
+}
+
+/** The answers with the first campaign's code; no answer reached the second */
+function breakdownAnswer() {
+  return [
+    {
+      campaignId: 'c0000000-0000-4000-8000-000000000001',
+      existingLeadAnswers: 2,
+      interestedNewLeads: 4,
+      consultationNewLeads: 1,
+    },
+  ];
+}
+
+/** One sales agency with prospects of the period */
+function agenciesAnswer() {
+  if (mocks.noCampaigns) return [];
+  return [
+    {
+      agencyName: '見本アポ代行',
+      leadCount: 8,
+      sqlCount: 2,
+      sqlRate: 25,
+      wonCount: 1,
+      costedLeadCount: 8,
+      totalCost: 960_000,
+      costPerSql: 480_000,
+      deals: mocks.withDeals ? { ...RETURNS, wonAmount: 3_200_000, roi: 3.33 } : null,
+    },
+  ];
+}
+
+/** A query of the campaign board: asked only once the board is on the wall */
+function campaignQuery<T>(
+  procedure: string,
+  input: unknown,
+  options: { enabled?: boolean } | undefined,
+  answer: () => T,
+  fails = false
+) {
+  if (options?.enabled === false) return { data: undefined, error: null, isError: false };
+  mocks.campaignInputs.push({ procedure, input });
+  if (mocks.mode === 'loading') return { data: undefined, error: null, isError: false };
+  if (mocks.mode !== 'ok' || fails) {
+    return {
+      data: undefined,
+      error: { data: { code: mocks.mode === 'forbidden' ? 'FORBIDDEN' : 'INTERNAL' } },
+      isError: true,
+    };
+  }
+  return { data: answer(), error: null, isError: false };
+}
+
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     analytics: {
       getConversionFunnel: { useQuery: (input: unknown) => figureQuery(input, funnelAnswer) },
       getAcquisitionCost: { useQuery: (input: unknown) => figureQuery(input, costAnswer) },
+      getQrCampaignBreakdown: {
+        useQuery: (input: unknown, options?: { enabled?: boolean }) =>
+          campaignQuery('breakdown', input, options, breakdownAnswer, mocks.breakdownFails),
+      },
+      getAgencyPerformance: {
+        useQuery: (input: unknown, options?: { enabled?: boolean }) =>
+          campaignQuery('agencies', input, options, agenciesAnswer),
+      },
+    },
+    distribution: {
+      listCampaigns: {
+        useQuery: (input: unknown, options?: { enabled?: boolean }) =>
+          campaignQuery('campaigns', input, options, campaignsAnswer),
+      },
     },
     useUtils: () => ({
       aiEmployees: { office: { invalidate: vi.fn() } },
@@ -322,6 +420,9 @@ async function enterRoom(employees: ReturnType<typeof marketer>[] = []) {
 function reset() {
   mocks.inputs.length = 0;
   mocks.figureInputs.length = 0;
+  mocks.campaignInputs.length = 0;
+  mocks.noCampaigns = false;
+  mocks.breakdownFails = false;
   mocks.mode = 'ok';
   mocks.noProspects = false;
   mocks.withDeals = false;
@@ -428,7 +529,7 @@ describe('the marketing room', () => {
     const { office } = await enterMarketing();
     const board = within(office).getByRole('region', { name: '流入元ボード' });
     expect(within(board).getByText('過去30日に登録された見込み客・20 件')).toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /どこから来たかを見せて/ })).toHaveAttribute(
+    expect(within(office).getByRole('button', { name: '1流入元' })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
@@ -492,7 +593,7 @@ describe('the marketing room', () => {
     expect(
       within(board).getByText('再育成（ナーチャリング）中の見込み客は 2 件です（段には数えません）。')
     ).toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /どこまで進んだかを見せて/ })).toHaveAttribute(
+    expect(within(office).getByRole('button', { name: '2進み具合' })).toHaveAttribute(
       'aria-pressed',
       'true'
     );
@@ -530,6 +631,12 @@ describe('the marketing room', () => {
     ).toHaveAttribute('tabindex', '0');
     const views = within(office).getByRole('group', { name: '見込み客を見せて' });
     expect(within(views).getAllByRole('button')).toHaveLength(5);
+    const figures = within(office).getByRole('group', { name: '集客の数字を見せて' });
+    expect(within(figures).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      '1流入元',
+      '2進み具合',
+      '8施策',
+    ]);
   });
 
   it('takes the focus back to the report when the board that holds it leaves the wall', async () => {
@@ -557,9 +664,10 @@ describe('the marketing room', () => {
         .map((button) => button.textContent);
     for (const [key, label] of [
       ['7', '7すべて'],
-      ['2', '2どこまで進んだかを見せて'],
+      ['2', '2進み具合'],
       ['5', '5今週の新規'],
-      ['1', '1どこから来たかを見せて'],
+      ['1', '1流入元'],
+      ['8', '8施策'],
       ['3', '3未着手'],
       ['4', '4相談の申込'],
       ['6', '6自分の担当'],
@@ -568,8 +676,8 @@ describe('the marketing room', () => {
       expect(pressed()).toEqual([label]);
     }
     // No other number chooses anything
-    await user.keyboard('8');
     await user.keyboard('9');
+    await user.keyboard('0');
     expect(pressed()).toEqual(['6自分の担当']);
   });
 
@@ -723,6 +831,241 @@ describe('the marketing room', () => {
     fireEvent.keyDown(office, { key: '2', isComposing: true });
     fireEvent.keyDown(office, { key: '3', keyCode: 229 });
     expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
+  });
+});
+
+describe('the prospects of a source, opened from its row (#1202)', () => {
+  beforeEach(reset);
+
+  /** Enters the room and opens the row of the seminars with the arrow key and Enter */
+  async function openSeminars() {
+    const room = await enterMarketing();
+    await room.user.keyboard('{ArrowDown}');
+    expect(
+      within(room.office).getByRole('button', { name: '勉強会・セミナーの見込み客を開く' })
+    ).toHaveFocus();
+    await room.user.keyboard('{Enter}');
+    const board = within(room.office).getByRole('region', { name: '見込み客ボード' });
+    return { ...room, board };
+  }
+
+  it('moves over the rows that open with the arrow keys, and never onto the row without a source', async () => {
+    const { user, office } = await enterMarketing();
+    const board = within(office).getByRole('region', { name: '流入元ボード' });
+    const rows = within(board).getAllByRole('button', { name: /の見込み客を開く$/ });
+    expect(rows.map((row) => row.textContent)).toEqual(['勉強会・セミナー', '広告']);
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(rows[1]).toHaveFocus();
+    // At the end the focus stays; the row without a recorded source is no button
+    await user.keyboard('{ArrowDown}');
+    expect(rows[1]).toHaveFocus();
+    expect(
+      within(within(board).getByRole('row', { name: /^流入元の記録なし/ })).queryByRole('button')
+    ).not.toBeInTheDocument();
+    expect(
+      within(board).getByText(
+        '流入元の行を開くと、その流入元の過去30日の見込み客が見込み客ボードに出ます。「流入元の記録なし」の行は開けません。'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('shows the prospects of that source in the same period, asked from leads.list', async () => {
+    const { office, board } = await openSeminars();
+    expect(within(board).getByText(/流入元：勉強会・セミナー（過去30日）・10 件/)).toBeInTheDocument();
+    expect(within(board).getAllByRole('button', { name: /見本商事/ })).toHaveLength(
+      LEAD_BOARD_PAGE_SIZE
+    );
+    const asked = mocks.inputs.at(-1) as ListInput;
+    expect(asked).toMatchObject({ organizationId: ORG_ID, inflowSource: ['seminar'], offset: 0 });
+    // The first Japan day of the period the analytics API counts from
+    expect(asked.createdFromDay).toBe(marketingPeriodFromDay(new Date()));
+    // The source board stays the board that was asked for; the panel says what is on the wall
+    expect(within(office).getByRole('button', { name: '1流入元' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(
+      within(office)
+        .getAllByRole('status')
+        .map((status) => status.textContent)
+        .filter((text) => text?.startsWith('壁のボード'))
+    ).toEqual(['壁のボード：見込み客ボード（流入元：勉強会・セミナー（過去30日））']);
+    // The row that was opened is gone: the focus is on the report, not lost
+    expect(document.activeElement?.textContent).toContain('過去30日の新しい見込み客');
+  });
+
+  it('links to the same filter of the list in the normal view', async () => {
+    const { board } = await openSeminars();
+    expect(within(board).getByRole('link', { name: '通常の表示の一覧で開く' })).toHaveAttribute(
+      'href',
+      `/ja/leads?inflow=seminar&from=${marketingPeriodFromDay(new Date())}`
+    );
+  });
+
+  it('goes back one step at a time with Esc: the source board, the focus on its row, then the floor', async () => {
+    const { user, office } = await openSeminars();
+    // While the prospects of a source are on the wall, Esc belongs to the room
+    expect(within(office).getByRole('button', { name: 'フロアへ戻る' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
+    expect(
+      within(office).getByRole('button', { name: '勉強会・セミナーの見込み客を開く' })
+    ).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
+  });
+
+  it('goes back with the button of the board too', async () => {
+    const { user, office, board } = await openSeminars();
+    await user.click(within(board).getByRole('button', { name: /流入元ボードに戻る/ }));
+    expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
+  });
+
+  it('turns its pages and opens a customer file like any view of the lead board', async () => {
+    const { user, office, board } = await openSeminars();
+    await user.keyboard('{ArrowRight}');
+    expect(within(board).getByText('10 件中 9〜10 件')).toBeInTheDocument();
+    await user.keyboard('{ArrowLeft}{ArrowDown}{Enter}');
+    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
+    // Esc: the file, then the prospects of the source, then the source board
+    await user.keyboard('{Escape}');
+    expect(
+      within(within(office).getByRole('region', { name: '見込み客ボード' })).getByText(
+        /流入元：勉強会・セミナー/
+      )
+    ).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
+  });
+
+  it('leaves the prospects of the source when another board is asked for', async () => {
+    const { user, office } = await openSeminars();
+    await user.keyboard('7');
+    const board = within(office).getByRole('region', { name: '見込み客ボード' });
+    expect(within(board).getByText(/すべて・12 件/)).toBeInTheDocument();
+    expect(within(board).queryByRole('button', { name: /流入元ボードに戻る/ })).not.toBeInTheDocument();
+    // Back on the source board by its key, no row takes the focus by itself
+    await user.keyboard('1');
+    expect(document.activeElement?.textContent).not.toBe('勉強会・セミナー');
+  });
+});
+
+describe('the campaign board (#1201)', () => {
+  beforeEach(reset);
+
+  async function enterCampaigns() {
+    const room = await enterMarketing();
+    await room.user.keyboard('8');
+    const board = within(room.office).getByRole('region', { name: '施策ボード' });
+    return { ...room, board };
+  }
+  const cells = (board: HTMLElement, name: string) =>
+    within(within(board).getByRole('row', { name: new RegExp(`^${name}`) }))
+      .getAllByRole('cell')
+      .map((cell) => cell.textContent);
+
+  it('asks for its figures only once it is on the wall, for this organization', async () => {
+    const { user } = await enterMarketing();
+    expect(mocks.campaignInputs).toHaveLength(0);
+    await user.keyboard('8');
+    const asked = new Map(mocks.campaignInputs.map((entry) => [entry.procedure, entry.input]));
+    expect(asked.get('campaigns')).toEqual({ organizationId: ORG_ID });
+    expect(asked.get('breakdown')).toEqual({ organizationId: ORG_ID });
+    expect(asked.get('agencies')).toEqual({ organizationId: ORG_ID, dateRange: '30d' });
+  });
+
+  it('shows each QR campaign with its scans, new prospects, rate and breakdown', async () => {
+    const { office, board } = await enterCampaigns();
+    expect(cells(board, '秋の展示会')).toEqual(['40', '10', '25%', '4', '1', '2']);
+    // No scan yet: no rate, said with a dash; no answer reached it: zeros
+    expect(cells(board, '春のセミナー')).toEqual(['0', '0', '—', '0', '0', '0']);
+    expect(
+      within(within(board).getByRole('row', { name: /^春のセミナー/ })).getByText('受付停止中')
+    ).toBeInTheDocument();
+    expect(within(board).getByText('作成からの累計')).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: '8施策' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  it('shows each sales agency of the period, the won amount and the ROI only with deals', async () => {
+    const without = await enterCampaigns();
+    expect(cells(without.board, '見本アポ代行')).toEqual(['8', '2', '25%', '1', '￥960,000']);
+    expect(
+      within(without.board).queryByRole('columnheader', { name: 'ROI' })
+    ).not.toBeInTheDocument();
+    cleanup();
+
+    mocks.withDeals = true;
+    const { board } = await enterCampaigns();
+    expect(cells(board, '見本アポ代行')).toEqual([
+      '8',
+      '2',
+      '25%',
+      '1',
+      '￥960,000',
+      '￥3,200,000',
+      '3.33 倍',
+    ]);
+  });
+
+  it('shows the campaigns without the breakdown when it cannot be read, and says so', async () => {
+    mocks.breakdownFails = true;
+    const { board } = await enterCampaigns();
+    expect(cells(board, '秋の展示会')).toEqual(['40', '10', '25%', '—', '—', '—']);
+    expect(
+      within(board).getByText(
+        '内訳（関心あり・相談の申込・既存の再回答）を読めませんでした。'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('says that there is no campaign and no agency, each in its place', async () => {
+    mocks.noCampaigns = true;
+    const { board } = await enterCampaigns();
+    expect(within(board).getByText('QR キャンペーンは、まだありません。')).toBeInTheDocument();
+    expect(
+      within(board).getByText('過去30日に、代行会社名を記録した見込み客はいません。')
+    ).toBeInTheDocument();
+    expect(within(board).queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('tells a member without the permission so, with no figure', async () => {
+    mocks.mode = 'forbidden';
+    const { board } = await enterCampaigns();
+    expect(
+      within(board).getByText('見込み客を見る権限がありません。管理者に確かめてください。')
+    ).toBeInTheDocument();
+    expect(within(board).queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows that it is loading, and that reading failed', async () => {
+    mocks.mode = 'loading';
+    const loading = await enterCampaigns();
+    expect(within(loading.board).getAllByText('読み込んでいます')).toHaveLength(2);
+    cleanup();
+
+    mocks.mode = 'error';
+    const failed = await enterCampaigns();
+    expect(
+      within(failed.board).getAllByText(
+        '数字を読めませんでした。時間をおいて、もう一度開いてください。'
+      )
+    ).toHaveLength(2);
+  });
+
+  it('links to the QR campaigns and the analytics of the normal view, and closes the office', async () => {
+    const { user, board, onExit } = await enterCampaigns();
+    const qr = within(board).getByRole('link', { name: '通常の表示の QR キャンペーンで開く' });
+    expect(qr).toHaveAttribute('href', '/ja/settings/qr-campaigns');
+    expect(within(board).getByRole('link', { name: '通常の表示の分析で開く' })).toHaveAttribute(
+      'href',
+      '/ja/analytics'
+    );
+    qr.addEventListener('click', (event) => event.preventDefault());
+    await user.click(qr);
+    expect(onExit).toHaveBeenCalledTimes(1);
   });
 });
 
