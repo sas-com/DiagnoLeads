@@ -46,6 +46,10 @@ const mocks = vi.hoisted(() => ({
   membersTotal: null as number | null,
   membersInputs: [] as unknown[],
   invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
+  revoked: [] as { organizationId: string; invitationId: string }[],
+  revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
+  revokePending: false,
+  invitationsRefreshed: vi.fn(),
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -57,6 +61,7 @@ vi.mock('@/lib/trpc/client', () => ({
         dueTasks: { invalidate: mocks.refreshed },
       },
       deals: { board: { invalidate: vi.fn() } },
+      members: { listInvitations: { invalidate: mocks.invitationsRefreshed } },
     }),
     aiEmployees: {
       hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -73,6 +78,25 @@ vi.mock('@/lib/trpc/client', () => ({
             isFetching: false,
           };
         },
+      },
+      revokeInvitation: {
+        useMutation: (shared: { onSettled?: () => void } = {}) => ({
+          isPending: mocks.revokePending,
+          mutate: (
+            input: { organizationId: string; invitationId: string },
+            options: {
+              onSuccess?: () => void;
+              onError?: (error: { data: { code: string } }) => void;
+              onSettled?: () => void;
+            } = {}
+          ) => {
+            mocks.revoked.push(input);
+            if (mocks.revokeFails) options.onError?.({ data: { code: mocks.revokeFails } });
+            else options.onSuccess?.();
+            options.onSettled?.();
+            shared.onSettled?.();
+          },
+        }),
       },
       listInvitations: {
         useQuery: () =>
@@ -502,6 +526,10 @@ describe('the counter of the reception (#1196)', () => {
     mocks.members = [member(1, 'owner'), member(2, 'member', null)];
     mocks.membersTotal = null;
     mocks.invitations = [invitation(1), invitation(2, true)];
+    mocks.revoked.length = 0;
+    mocks.revokeFails = null;
+    mocks.revokePending = false;
+    mocks.invitationsRefreshed.mockClear();
   });
 
   it('reports what is recorded, and carries nothing out', async () => {
@@ -568,9 +596,10 @@ describe('the counter of the reception (#1196)', () => {
       '/ja/settings/members'
     );
     expect(within(shelf).queryAllByRole('button')).toHaveLength(0);
-    // The numbers do nothing in this shelf; Esc goes back to the counter, not to the floor
-    await user.keyboard('13');
+    // The other numbers do nothing in this shelf; Esc goes back to the counter, not to the floor
+    await user.keyboard('23');
     expect(within(office).getByRole('region', { name: 'メンバーと招待' })).toBeInTheDocument();
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
     expect(document.activeElement?.textContent).toContain('どの棚を開きますか');
@@ -586,6 +615,116 @@ describe('the counter of the reception (#1196)', () => {
       within(shelf).getByText('招待は、管理者とオーナーだけが見られます。')
     ).toBeInTheDocument();
     expect(within(office).getByText('メンバーは 2 人です。')).toBeInTheDocument();
+    // Revoking is not offered either, and its key does nothing
+    expect(within(office).queryByRole('button', { name: /招待を取り消す/ })).not.toBeInTheDocument();
+    await user.keyboard('1');
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('revokes an invitation only once the address of the invited person was typed (#1197)', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    expect(within(office).getByRole('button', { name: /招待を取り消す/ })).toHaveTextContent(
+      '1招待を取り消す'
+    );
+    // The key only opens the field: nothing is revoked, however often the keys are pressed
+    await user.keyboard('1');
+    const field = within(office).getByRole('textbox', {
+      name: '取り消す招待の、相手のメールアドレスを入力してください',
+    });
+    expect(field).toHaveFocus();
+    await user.keyboard('11{Enter}{Enter}');
+    expect(mocks.revoked).toHaveLength(0);
+    expect(
+      within(office).getByText('招待中の相手のメールアドレスと合っていません。')
+    ).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: 'この招待を取り消す' })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    // The width and the case of the letters do not count
+    await user.clear(field);
+    await user.type(field, ' Invited1@Example.com{Enter}');
+    expect(mocks.revoked).toEqual([
+      { organizationId: ORG_ID, invitationId: '00000000-0000-4000-8000-0000000000c1' },
+    ]);
+    expect(mocks.invitationsRefreshed).toHaveBeenCalledWith({ organizationId: ORG_ID });
+    expect(
+      within(office).getByText('invited1@example.com への招待を取り消しました。')
+    ).toBeInTheDocument();
+    // The field is gone, and the focus is on what was reported
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(document.activeElement?.textContent).toContain('への招待を取り消しました');
+  });
+
+  it('closes the field with Esc, not the shelf, and keeps what was typed out of the next time', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    await user.keyboard('invited1');
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: 'メンバーと招待' })).toBeInTheDocument();
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(mocks.revoked).toHaveLength(0);
+    await user.click(within(office).getByRole('button', { name: /招待を取り消す/ }));
+    expect(within(office).getByRole('textbox')).toHaveValue('');
+    await user.click(within(office).getByRole('button', { name: /棚に戻る/ }));
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
+  });
+
+  it('has no way back while the revoking is being saved', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    mocks.revokePending = true;
+    await user.keyboard('x');
+    expect(within(office).getByRole('button', { name: /棚に戻る/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    await user.keyboard('{Escape}');
+    await user.click(within(office).getByRole('button', { name: /棚に戻る/ }));
+    expect(within(office).getByRole('textbox')).toBeInTheDocument();
+    expect(within(office).getByRole('region', { name: 'メンバーと招待' })).toBeInTheDocument();
+  });
+
+  it('says so when the invitation is gone or the revoking failed, in its own words', async () => {
+    mocks.revokeFails = 'NOT_FOUND';
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    await user.keyboard('invited2@example.com{Enter}');
+    expect(
+      within(office).getByText(
+        'その招待は、もう取り消されているか、承認されています。一覧を読み直しました。'
+      )
+    ).toBeInTheDocument();
+    expect(mocks.invitationsRefreshed).toHaveBeenCalled();
+    mocks.revokeFails = 'INTERNAL';
+    await user.keyboard('1');
+    await user.keyboard('invited2@example.com{Enter}');
+    expect(
+      within(office).getByText(
+        'すみません、取り消せませんでした。時間をおいて、もう一度お願いします。'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('closes the choice while there is no invitation, and takes no key of a conversion (IME)', async () => {
+    mocks.invitations = [];
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    expect(within(office).getByRole('button', { name: /招待を取り消す/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    await user.keyboard('1');
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    mocks.invitations = [invitation(1)];
+    fireEvent.keyDown(office, { key: '1', isComposing: true });
+    fireEvent.keyDown(office, { key: '1', keyCode: 229 });
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   it('opens the settings shelf with its key: fixed doors to the normal view, moved over with the arrows', async () => {
