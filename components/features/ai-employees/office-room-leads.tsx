@@ -155,11 +155,12 @@ export function OfficeRoomLeads({
     // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
     if (isImeKey(event)) return false;
     if (open) {
-      if (event.key === 'Escape') {
-        setOpen(null);
-        return true;
-      }
-      return fileKeys.current?.(event) ?? false;
+      // The file first: while it saves it uses Esc up, so it is not closed over a request that
+      // is on its way (#1205)
+      if (fileKeys.current?.(event)) return true;
+      if (event.key !== 'Escape') return false;
+      setOpen(null);
+      return true;
     }
     if (source && event.key === 'Escape') {
       closeSource();

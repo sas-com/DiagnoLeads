@@ -259,7 +259,7 @@
         "back": "Back to the floor",
         "work": {
           "desk": "Today",
-          "marketing": "Leads",
+          "marketing": "Acquisition and prospects",
           "sales": "Deals",
           "engineering": "Surveys",
           "backoffice": "General affairs"
@@ -352,6 +352,7 @@
             "nurturing": "Prospects being nurtured now: {count} (not counted as a stage)."
           },
           "scroll": "Table of the {board}. Scroll with the arrow keys",
+          "scrollRows": "Table of the {board}. The up and down arrows choose a row, and scroll at the first and last row",
           "onWall": "On the wall: {board}",
           "boardOf": "{board} ({what})",
           "campaigns": {

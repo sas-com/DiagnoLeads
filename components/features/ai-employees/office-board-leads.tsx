@@ -20,7 +20,9 @@ import { useRoomKeys } from './use-room-keys';
 
 /**
  * Moves the focus over the rows of a board with the up and down arrows: from no row, down goes to
- * the first and up to the last; at either end the focus stays. The key is used either way.
+ * the first and up to the last. At either end (and on a board without rows) the focus stays and
+ * the key is not used: it goes back to the browser, which scrolls the board with it, so what lies
+ * under the last row can be reached by keyboard (#1214). True when the key was used.
  */
 export function focusNextRow(
   board: HTMLElement | null,
@@ -29,11 +31,10 @@ export function focusNextRow(
 ): boolean {
   const rows = Array.from(board?.querySelectorAll<HTMLElement>(selector) ?? []);
   const current = rows.indexOf(document.activeElement as HTMLElement);
-  const target = rows[nextRow(current, event.key === 'ArrowDown' ? 1 : -1, rows.length)];
-  if (target) {
-    event.preventDefault();
-    target.focus();
-  }
+  const next = nextRow(current, event.key === 'ArrowDown' ? 1 : -1, rows.length);
+  if (next === current) return false;
+  event.preventDefault();
+  rows[next].focus();
   return true;
 }
 

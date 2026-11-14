@@ -127,10 +127,14 @@ export function OfficeLeadFile({
 
   // The file's keys: each one keeps its meaning, and one that is closed right now does nothing
   // (it is still used up, so it never reaches the room behind the file). Enter and Tab are left
-  // to the focused control; Esc goes back, and is the room's.
+  // to the focused control. Esc goes back and is the room's, except while a record is being
+  // saved or taken back: the request is out already, so closing the file would look like
+  // calling it off while it is carried out, with its report unseen (#1205). The file uses the
+  // key up until the answer is there, like the deal file does.
   const onFileKey: RoomKeys = (event) => {
     // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
     if (isImeKey(event)) return false;
+    if (event.key === 'Escape') return busy;
     const action = fileActionOfKey(event.key);
     if (!action) return false;
     event.preventDefault();
@@ -229,8 +233,13 @@ export function OfficeLeadFile({
           <li>
             <RoomChoiceButton
               keyCap="Esc"
-              main={recorded || (contacts.data !== undefined && !canEdit)}
-              onClick={onClose}
+              main={(recorded || (contacts.data !== undefined && !canEdit)) && !busy}
+              // Closed while saving, like Esc: it stays in its place and keeps the focus
+              closed={busy}
+              waiting={busy}
+              onClick={() => {
+                if (!busy) onClose();
+              }}
             >
               {t('choices.back')}
             </RoomChoiceButton>

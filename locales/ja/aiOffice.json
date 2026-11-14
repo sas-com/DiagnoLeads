@@ -259,7 +259,7 @@
         "back": "フロアへ戻る",
         "work": {
           "desk": "今日の予定",
-          "marketing": "リード管理",
+          "marketing": "集客と見込み客",
           "sales": "商談",
           "engineering": "現行調査",
           "backoffice": "総務の窓口"
@@ -352,6 +352,7 @@
             "nurturing": "再育成（ナーチャリング）中の見込み客は {count} 件です（段には数えません）。"
           },
           "scroll": "{board}の表。矢印キーでスクロールできます",
+          "scrollRows": "{board}の表。上下の矢印キーで行を選び、端の行ではスクロールできます",
           "onWall": "壁のボード：{board}",
           "boardOf": "{board}（{what}）",
           "campaigns": {
