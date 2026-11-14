@@ -9,7 +9,7 @@ import { HeaderLeadSearch } from '@/components/header/HeaderLeadSearch';
 import NotificationDropdown from '@/components/header/NotificationDropdown';
 import UserDropdown from '@/components/header/UserDropdown';
 import { useSidebar } from '@/context/SidebarContext';
-import { homePath } from '@/lib/routes/home';
+import { homeEntryPath } from '@/lib/routes/home';
 import { RiCloseLine, RiMenuLine, RiMore2Fill } from '@remixicon/react';
 import { useLocale, useTranslations } from 'next-intl';
 import type React from 'react';
@@ -60,7 +60,7 @@ const AppHeader: React.FC = () => {
               <LogoMark size="sm" />
             </span>
             <span className="hidden sm:block">
-              <Logo size="sm" href={homePath(locale)} />
+              <Logo size="sm" href={homeEntryPath(locale)} />
             </span>
           </div>
 

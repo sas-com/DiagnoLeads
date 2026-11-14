@@ -23,11 +23,23 @@ export const ARRIVAL_VALUE = 'login';
 export const ARRIVAL_PATH = `${HOME_PATH}?${ARRIVAL_PARAM}=${ARRIVAL_VALUE}`;
 
 /** Home in a language: where the logo and "back home" lead, in the normal view */
+/**
+ * Coming home (#1169): by the logo, by "back to home", or after choosing an organization. The
+ * office opens full screen again, on the floor at once: the title greets only who comes in.
+ * Like the arrival, a fixed path of this site, never made from what a visitor gave.
+ */
+export const HOME_VALUE = 'home';
+export const HOME_ENTRY_PATH = `${HOME_PATH}?${ARRIVAL_PARAM}=${HOME_VALUE}`;
+
 export function homePath(locale: string): string {
   return `/${locale}${HOME_PATH}`;
 }
 
 /** Where someone who just came in is sent, in a language */
+export function homeEntryPath(locale: string): string {
+  return `/${locale}${HOME_ENTRY_PATH}`;
+}
+
 export function arrivalPath(locale: string): string {
   return `/${locale}${ARRIVAL_PATH}`;
 }

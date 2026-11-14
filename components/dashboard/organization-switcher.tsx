@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { useOrganization } from '@/hooks/use-organization';
 import type { Organization } from '@/lib/db/schema';
-import { homePath } from '@/lib/routes/home';
+import { homeEntryPath } from '@/lib/routes/home';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Plus } from 'lucide-react';
@@ -90,7 +90,7 @@ export function OrganizationSwitcher() {
     // This prevents data from previous organization from showing
     await utils.invalidate();
     // Home, in the normal view: the organization is switched from the header, not on arrival
-    router.push(homePath(locale));
+    router.push(homeEntryPath(locale));
   };
 
   if (isLoading || orgsLoading) {

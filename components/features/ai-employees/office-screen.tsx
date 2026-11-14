@@ -7,12 +7,15 @@ import { useOrganization } from '@/hooks/use-organization';
 import { authClient } from '@/lib/auth/client';
 import { summarizeOffice } from '@/lib/features/ai-employees/office';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
+import { ARRIVAL_PARAM } from '@/lib/routes/home';
 import { trpc } from '@/lib/trpc/client';
 import { Building2, Download, Loader2, Lock } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DeskSheet, OFFICE_REFRESH_MS } from './desk-sheet';
 import {
+  cameHome,
   isAppWindow,
   justArrived,
   launchedAsApp,
@@ -38,21 +41,36 @@ export function OfficeScreen() {
   const summaryHeadingId = useId();
   const { organizationId: contextOrgId, organization } = useOrganization();
   const { data: session } = authClient.useSession();
-  const [immersive, setImmersive] = useState(false);
+  // The full-screen office, and the scene it starts on: the title for who comes in, the floor
+  // for who comes home (#1169)
+  const [immersive, setImmersive] = useState<false | 'title' | 'world'>(false);
   const { install } = useInstallApp();
+  // The mark in the address, as the router sees it: the logo pressed on this very page changes
+  // only the query, and the office has to open then too
+  const mark = useSearchParams().get(ARRIVAL_PARAM);
+  const opened = useRef(false);
   // Opened as the app (the installed app, or its start URL), or just signed in (#1153): the
-  // full-screen office is the first screen, where the screen is wide enough for it (#1139)
+  // full-screen office is the first screen, where the screen is wide enough for it (#1139).
+  // Coming home (the logo, #1169) opens it too, on the floor
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the mark is the reason to look at the address again
   useEffect(() => {
+    // The app starts in the office once, when this page opens: not again when the mark goes
+    const first = !opened.current;
+    opened.current = true;
     const { pathname, search, hash } = window.location;
     const arrived = justArrived(search);
+    const home = cameHome(search);
     // Coming in happens once: a reload is not coming in again. The state is null on purpose:
     // Next.js takes a state it wrote itself (window.history.state) for one of its own writes and
     // leaves the router's address as it was, so the mark would come back with the next navigation
     const settled = withoutArrival(pathname, search, hash);
     if (settled) window.history.replaceState(null, '', settled);
     if (!officeFits(window.innerWidth)) return;
-    if (arrived || launchedAsApp(search, isAppWindow(window))) setImmersive(true);
-  }, []);
+    if (home) setImmersive('world');
+    else if (arrived || (first && launchedAsApp(search, isAppWindow(window)))) {
+      setImmersive('title');
+    }
+  }, [mark]);
   const enterRef = useRef<HTMLButtonElement>(null);
   const organizationId = contextOrgId && UUID.test(contextOrgId) ? contextOrgId : '';
   const office = trpc.aiEmployees.office.useQuery(
@@ -96,7 +114,7 @@ export function OfficeScreen() {
                 type="button"
                 variant="outline"
                 className="min-h-11"
-                onClick={() => setImmersive(true)}
+                onClick={() => setImmersive('title')}
               >
                 <Building2 className="h-4 w-4" aria-hidden="true" />
                 {t('enterOffice')}
@@ -172,6 +190,7 @@ export function OfficeScreen() {
               presidentName={session?.user?.name ?? null}
               employees={employees}
               canManage={canManage}
+              startOn={immersive}
               onExit={() => {
                 setImmersive(false);
                 // Back where the president came in
