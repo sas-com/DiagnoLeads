@@ -22,20 +22,25 @@ export const ARRIVAL_VALUE = 'login';
 /** Where signing in leads when no page was asked for (without the language) */
 export const ARRIVAL_PATH = `${HOME_PATH}?${ARRIVAL_PARAM}=${ARRIVAL_VALUE}`;
 
-/** Home in a language: where the logo and "back home" lead, in the normal view */
+/**
+ * Coming home (#1169): by the logo, by "back to home", or after choosing an organization. The
+ * office opens full screen again, on the floor at once: the title greets only who comes in.
+ * Like the arrival, a fixed path of this site, never made from what a visitor gave.
+ */
+export const HOME_VALUE = 'home';
+export const HOME_ENTRY_PATH = `${HOME_PATH}?${ARRIVAL_PARAM}=${HOME_VALUE}`;
+
+/** The page of the office in a language, in the normal view (the side menu leads there) */
 export function homePath(locale: string): string {
   return `/${locale}${HOME_PATH}`;
+}
+
+/** Where the logo, "back to home" and a switch of organization lead, in a language */
+export function homeEntryPath(locale: string): string {
+  return `/${locale}${HOME_ENTRY_PATH}`;
 }
 
 /** Where someone who just came in is sent, in a language */
 export function arrivalPath(locale: string): string {
   return `/${locale}${ARRIVAL_PATH}`;
-}
-
-/**
- * Where "clock in" leads from any page of the normal view (#1162): the full-screen office opens,
- * the same way as right after signing in. A fixed path, never built from what someone passed.
- */
-export function enterOfficePath(locale: string): string {
-  return arrivalPath(locale);
 }

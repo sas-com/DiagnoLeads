@@ -4,6 +4,10 @@
  * drawing kept inside its box, and a robot of its own for every role.
  */
 import {
+  PENDANTS,
+  PENDANT_HEIGHT,
+} from '@/components/features/ai-employees/office-furniture';
+import {
   AREA_RECTS,
   DESK_SEATS,
   FLOOR_DEPTH,
@@ -19,8 +23,6 @@ import {
   robotPrims,
 } from '@/components/features/ai-employees/office-robot';
 import {
-  PENDANTS,
-  PENDANT_HEIGHT,
   SCENE_HEIGHT,
   SCENE_WIDTH,
   buildOfficeScene,

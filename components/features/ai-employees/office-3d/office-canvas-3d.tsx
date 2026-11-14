@@ -6,33 +6,32 @@ import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef, useState } from 'react';
 import type { Group, OrthographicCamera } from 'three';
-import {
-  AREA_RECTS,
-  CHARGING_PADS,
-  FLOOR_DEPTH,
-  FLOOR_WIDTH,
-  type FloorPoint,
-  OFFICE_AREAS,
-  type OfficeArea,
-  ROLE_DESKS,
-  TRAINING_DESKS,
-  spotOf,
-} from '../office-map-layout';
+import { FLOOR_DEPTH, FLOOR_WIDTH, type FloorPoint, spotOf } from '../office-map-layout';
 import { type OfficeEvent, emotionOf } from './office-emotion';
 import { pointAlong, routeBetween, routeLength } from './office-nav';
+import {
+  OfficeDaylight,
+  OfficeReflections,
+  OfficeScenery,
+  OfficeShadowPace,
+} from './office-scenery-3d-view';
 import {
   CAMERA_OFFSET,
   FLOOR_MIDDLE,
   type ScreenPoint,
+  type Stage3D,
   type View3D,
   cameraPosition,
   easeTarget,
-  pxPerUnit,
-  viewTarget,
+  easeView,
+  stageView,
 } from './office-view-3d';
 import { Robot3D } from './robot-3d';
 
 const NO_PAN: ScreenPoint = { x: 0, y: 0 };
+
+/** How long the camera glides to a new scene, in seconds */
+const SCENE_GLIDE = 0.9;
 
 /** How fast a robot walks, in floor units a second */
 export const WALK_SPEED = 3.2;
@@ -43,81 +42,6 @@ export interface Office3DEmployee {
   status: Exclude<DeskStatus, 'vacant'>;
   look: RobotLook;
   tone: AiTone;
-}
-
-const AREA_COLORS: Readonly<Record<OfficeArea, [day: string, night: string]>> = {
-  sales: ['#e8d3ae', '#5b4f3c'],
-  marketing: ['#dfe6ee', '#3d4654'],
-  engineering: ['#e8d3ae', '#5b4f3c'],
-  corridor: ['#f1f3f6', '#454c59'],
-  training: ['#e3e8ef', '#3f4856'],
-  lounge: ['#c9a57a', '#4f4030'],
-  charging: ['#d9dee6', '#3a424f'],
-  backoffice: ['#f3ead9', '#544a3b'],
-};
-
-/** The floor, the back walls and the furniture, from the same layout as the 2D office */
-function Floor({ night }: { night: boolean }) {
-  const wall = night ? '#39414f' : '#e9e4da';
-  const desk = night ? '#4a3a2c' : '#7a5a3f';
-  return (
-    <group>
-      <mesh position={[FLOOR_WIDTH / 2, -0.2, FLOOR_DEPTH / 2]} receiveShadow>
-        <boxGeometry args={[FLOOR_WIDTH + 0.6, 0.3, FLOOR_DEPTH + 0.6]} />
-        <meshStandardMaterial color={night ? '#1d2330' : '#5d6373'} />
-      </mesh>
-      {OFFICE_AREAS.map((area) => {
-        const r = AREA_RECTS[area];
-        return (
-          <mesh
-            key={area}
-            position={[r.x + r.w / 2, -0.02, r.y + r.h / 2]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            receiveShadow
-          >
-            <planeGeometry args={[r.w - 0.06, r.h - 0.06]} />
-            <meshStandardMaterial color={AREA_COLORS[area][night ? 1 : 0]} roughness={0.9} />
-          </mesh>
-        );
-      })}
-      {/* The two back walls */}
-      <mesh position={[FLOOR_WIDTH / 2, 1.1, -0.1]}>
-        <boxGeometry args={[FLOOR_WIDTH + 0.4, 2.3, 0.2]} />
-        <meshStandardMaterial color={wall} />
-      </mesh>
-      <mesh position={[-0.1, 1.1, FLOOR_DEPTH / 2]}>
-        <boxGeometry args={[0.2, 2.3, FLOOR_DEPTH + 0.4]} />
-        <meshStandardMaterial color={wall} />
-      </mesh>
-      {/* Glass partitions between the rooms and the corridor, with a gap for each door */}
-      {OFFICE_AREAS.filter((area) => area !== 'corridor').map((area) => {
-        const r = AREA_RECTS[area];
-        const z = r.y < AREA_RECTS.corridor.y ? r.y + r.h : r.y;
-        const half = (r.w - 2.2) / 2;
-        return [r.x + half / 2, r.x + r.w - half / 2].map((x) => (
-          <mesh key={`${area}-${x}`} position={[x, 0.75, z]}>
-            <boxGeometry args={[half - 0.1, 1.5, 0.06]} />
-            <meshStandardMaterial color="#9fd3e6" transparent opacity={0.28} />
-          </mesh>
-        ));
-      })}
-      {/* The desks of the roles, the study desks and the charging pads */}
-      {[...Object.values(ROLE_DESKS), ...TRAINING_DESKS].map((d) => (
-        <mesh key={`${d.x}-${d.y}`} position={[d.x + d.w / 2, 0.38, d.y + d.d / 2]} castShadow>
-          <boxGeometry args={[d.w, 0.76, d.d]} />
-          <meshStandardMaterial color={desk} roughness={0.7} />
-        </mesh>
-      ))}
-      {CHARGING_PADS.map((pad) => (
-        <mesh key={`${pad.x}-${pad.y}`} position={[pad.x + pad.w / 2, 0.03, pad.y + pad.d / 2]}>
-          <cylinderGeometry
-            args={[Math.min(pad.w, pad.d) / 2, Math.min(pad.w, pad.d) / 2, 0.06, 32]}
-          />
-          <meshStandardMaterial color="#3a3320" emissive="#e9cf9a" emissiveIntensity={0.25} />
-        </mesh>
-      ))}
-    </group>
-  );
 }
 
 /** Where every employee stands right now, by role: read each frame by the name tags */
@@ -157,12 +81,15 @@ function Walker({
   employee,
   event,
   still,
+  attentive,
   onMove,
   onWalking,
 }: {
   employee: Office3DEmployee;
   event: OfficeEvent | null;
   still: boolean;
+  /** The president talks to this employee: it turns to the viewer */
+  attentive: boolean;
   /** Told where the employee is, each time it moves */
   onMove: (role: AiEmployeeRole, at: FloorPoint) => void;
   /** Told when the employee sets off and when it arrives */
@@ -171,7 +98,8 @@ function Walker({
   const invalidate = useThree((state) => state.invalidate);
   const group = useRef<Group>(null);
   const spot = spotOf(employee.role, employee.status);
-  const restHeading = spot.facing === 'left' ? 0 : Math.PI / 2;
+  // Towards its desk or table; towards the viewer (between the two) while it is talked to
+  const restHeading = attentive ? Math.PI / 4 : spot.facing === 'left' ? 0 : Math.PI / 2;
   const walk = useRef<{ route: FloorPoint[]; length: number; travelled: number }>({
     route: [spot],
     length: 0,
@@ -194,7 +122,7 @@ function Walker({
       // With less motion the canvas only draws when something changed: this did
       invalidate();
     }
-  }, [spot.x, spot.y, still]);
+  }, [spot.x, spot.y, still, restHeading]);
 
   // The office says in words that the employee is on its way (the canvas is decoration)
   const role = employee.role;
@@ -236,6 +164,8 @@ function Walker({
  * Each frame it tells where it looks (`onView`), so that the name tags over the canvas follow it.
  */
 function CameraRig({
+  stage,
+  subject,
   zoom,
   pan,
   still,
@@ -243,6 +173,10 @@ function CameraRig({
   places,
   onView,
 }: {
+  /** The scene of the office: the floor, or a scene that frames its subject */
+  stage: Stage3D;
+  /** What a scene other than the floor is about */
+  subject: FloorPoint | null;
   zoom: number;
   pan: ScreenPoint;
   /** Less motion: the camera jumps instead of gliding */
@@ -255,7 +189,10 @@ function CameraRig({
   const camera = useThree((state) => state.camera) as OrthographicCamera;
   const size = useThree((state) => state.size);
   const invalidate = useThree((state) => state.invalidate);
-  const looking = useRef<FloorPoint>(FLOOR_MIDDLE);
+  const shown = useRef<View3D | null>(null);
+  // After a change of scene the whole view glides for this long (seconds): on the floor itself
+  // a drag and a zoom show at once
+  const gliding = useRef(0);
 
   // The angle is set once; from then on the camera only slides
   useEffect(() => {
@@ -263,21 +200,45 @@ function CameraRig({
     camera.lookAt(0, 0, 0);
   }, [camera]);
 
-  // With less motion the canvas only draws when something changed: a new zoom, pan or size did
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new scene is the reason to glide
+  useEffect(() => {
+    gliding.current = SCENE_GLIDE;
+  }, [stage]);
+
+  // With less motion the canvas only draws when something changed: a new scene, zoom, pan or
+  // size did
   // biome-ignore lint/correctness/useExhaustiveDependencies: the values are the reason to draw again
   useEffect(() => {
     invalidate();
-  }, [invalidate, zoom, pan.x, pan.y, size.width, size.height, still]);
+  }, [
+    invalidate,
+    stage,
+    subject?.x,
+    subject?.y,
+    zoom,
+    pan.x,
+    pan.y,
+    size.width,
+    size.height,
+    still,
+  ]);
 
   useFrame((_, delta) => {
-    const to = viewTarget(zoom, follow());
-    looking.current = still ? to : easeTarget(looking.current, to, delta * 4);
-    const view: View3D = {
-      target: looking.current,
-      pxPerUnit: pxPerUnit({ w: size.width, h: size.height }, zoom),
-      pan,
+    const goal = stageView(stage, {
       size: { w: size.width, h: size.height },
-    };
+      zoom,
+      pan,
+      followed: follow(),
+      subject,
+    });
+    const from = shown.current;
+    let view: View3D;
+    if (still || !from) view = goal;
+    else if (gliding.current > 0) {
+      gliding.current -= delta;
+      view = easeView(from, goal, delta * 5);
+    } else view = { ...goal, target: easeTarget(from.target, goal.target, delta * 4) };
+    shown.current = view;
     const [x, y, z] = cameraPosition(view);
     camera.position.set(x, y, z);
     if (camera.zoom !== view.pxPerUnit) {
@@ -326,6 +287,9 @@ export default function OfficeCanvas3D({
   vacant = [],
   events,
   night,
+  stage = 'world',
+  subject = null,
+  attentive = null,
   zoom = 1,
   pan = NO_PAN,
   focus = null,
@@ -341,6 +305,12 @@ export default function OfficeCanvas3D({
   /** What just happened to an employee, by role */
   events: Partial<Record<AiEmployeeRole, OfficeEvent>>;
   night: boolean;
+  /** The scene of the office this floor is behind: the floor itself unless told otherwise */
+  stage?: Stage3D;
+  /** What a conversation, a room or the customization is about: where the camera goes */
+  subject?: FloorPoint | null;
+  /** The employee the president talks to: it turns to the viewer */
+  attentive?: AiEmployeeRole | null;
   zoom?: number;
   /** How far the floor was dragged, in screen pixels */
   pan?: ScreenPoint;
@@ -355,8 +325,11 @@ export default function OfficeCanvas3D({
   onWalking?: (role: AiEmployeeRole, walking: boolean) => void;
 }) {
   const places = useRef<Places3D>({});
+  // When somebody last moved over the floor: the shadows are drawn again while they do
+  const movedAt = useRef(0);
   const onMove = (role: AiEmployeeRole, at: FloorPoint) => {
     places.current[role] = at;
+    movedAt.current = performance.now();
   };
   return (
     <Canvas
@@ -374,6 +347,8 @@ export default function OfficeCanvas3D({
       style={{ pointerEvents: 'none' }}
     >
       <CameraRig
+        stage={stage}
+        subject={subject}
         zoom={zoom}
         pan={pan}
         still={reducedMotion}
@@ -382,20 +357,12 @@ export default function OfficeCanvas3D({
         onView={onView}
       />
       <FrameCounter onFps={onFps} onReady={onReady} />
-      <ambientLight intensity={night ? 0.55 : 1.1} />
-      <directionalLight
-        position={[-8, 24, 14]}
-        intensity={night ? 0.5 : 1.6}
-        castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
-      />
+      <OfficeReflections night={night} />
+      <OfficeShadowPace walking={() => performance.now() - movedAt.current < 200} />
+      <OfficeDaylight night={night} />
       {/* The middle of the floor sits at the origin, where the camera looks */}
       <group position={[-FLOOR_WIDTH / 2, 0, -FLOOR_DEPTH / 2]}>
-        <Floor night={night} />
+        <OfficeScenery night={night} />
         {vacant.map((role) => (
           <VacantSeat key={role} role={role} night={night} />
         ))}
@@ -405,6 +372,7 @@ export default function OfficeCanvas3D({
             employee={employee}
             event={events[employee.role] ?? null}
             still={reducedMotion}
+            attentive={attentive === employee.role}
             onMove={onMove}
             onWalking={onWalking}
           />

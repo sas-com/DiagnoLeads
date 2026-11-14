@@ -279,6 +279,37 @@ describe('OfficeScreen', () => {
         screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
       ).not.toBeInTheDocument();
     });
+
+  describe('opened by the logo, or by another way home (#1169)', () => {
+    const width = window.innerWidth;
+    const comeHomeAt = (value: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value });
+      window.history.replaceState(null, '', '/ja/office?source=home');
+      renderScreen();
+    };
+    afterEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      window.history.replaceState(null, '', '/');
+    });
+
+    it('opens the full-screen office on the floor, past the title, and drops the mark', async () => {
+      comeHomeAt(1440);
+      const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+      // The floor: the staff list is there, and nobody is asked to clock in again
+      expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
+      expect(within(office).queryByRole('button', { name: /^出社する/ })).not.toBeInTheDocument();
+      expect(`${window.location.pathname}${window.location.search}`).toBe('/ja/office');
+    });
+
+    it('stays in the normal view on a narrow screen, and drops the mark there too', async () => {
+      comeHomeAt(390);
+      expect(await screen.findByRole('button', { name: '出社する（全画面）' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+      ).not.toBeInTheDocument();
+      expect(window.location.search).toBe('');
+    });
+  });
   });
 
   it('tells a viewer without permission instead of drawing the floor', () => {

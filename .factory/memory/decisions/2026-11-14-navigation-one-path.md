@@ -6,7 +6,7 @@ title: "導線を1本にそろえる。入口は出社の画面・フロア案�
 status: active
 superseded_by: []
 issues: [1161, 1162, 1163, 1164]
-paths: ["components/features/ai-employees/office-rooms.ts", "components/layout/AppHeader.tsx", "components/layout/AppSidebar.tsx", "lib/routes/home.ts"]
+paths: ["components/features/ai-employees/office-rooms.ts", "components/layout/AppSidebar.tsx", "lib/routes/home.ts"]
 ---
 
 ### [UI] 導線を1本にそろえる。入口は出社の画面・フロア案内に5つの場所（未完成は今のページへの扉）・管理画面は残して部屋にそろえる・ダッシュボードは今日に統合（Epic #1161）
@@ -27,7 +27,7 @@ paths: ["components/features/ai-employees/office-rooms.ts", "components/layout/A
   | 5 | 総務・受付 | 部屋（今日の期限） |
 
 - **ルール**:
-  - 入口は出社の画面1つ。管理画面のどのページからも、ヘッダーの「出社する」で出社の画面へ1回で戻る（幅 768px 以上。オフィスのページには自分の入口があるので出さない）。行き先はログイン後と同じ決まったパス（`enterOfficePath`）で、利用者の値から作らない
+  - 入口は出社の画面1つ。管理画面のどのページからも、ロゴで出社の画面のフロアへ1回で戻る（幅 768px 以上。#1169、決定 `2026-11-14-concept-and-flow`）。はじめはヘッダーに「出社する」を足していたが、ロゴが出社の画面を開くようになり、入口が2つになるので外した
   - 扉の行き先は、この表の決まったパスだけ。部屋ができたら、その場所を `OFFICE_ROOMS` に移し、扉から外す。鍵の数字は変えない
   - 扉を開くと、出社の画面を閉じてからページへ移る（部屋の中のリンクと同じ）
 - **却下案**:
