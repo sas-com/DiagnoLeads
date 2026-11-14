@@ -18,7 +18,7 @@ paths: ["components/features/ai-employees/office-room-sales.tsx", "components/fe
   - **商談ファイルのキー**（`DEAL_KEYS`）：1 次の段へ進める・2 前の段へ戻す・3 次の行動を済みにする・4 次の行動を決める（入力欄が開く）・Z いまのを取り消す・Esc ボードに戻る
   - **受注・失注は部屋の中で扱わない**。日付・金額・理由の入力が要るので、商談のページへのリンクにする。売上予測・顧客探し・商談の作成も、通常の表示へのリンク
 - **部屋の型と登録表**（#1142 の「1. 部屋の型」。4部屋とも通している）:
-  - 部屋の props は `OfficeRoomProps`（`office-room-contract.ts`）：`organizationId`・`guide`（部屋の AI社員。役割の無い部屋は `null`）・`keysRef`・`onLeaveOffice`・`onFileOpenChange`
+  - 部屋の props は `OfficeRoomProps`（`office-room-contract.ts`）：`organizationId`・`guide`（部屋の AI社員。役割の無い部屋は `null`）・`keysRef`・`onLeaveOffice`・`onFileOpenChange`・`onBusyChange`
   - 入れ物（`office-immersive.tsx`）は、部屋の部品を登録表（`office-room-registry.tsx` の `ROOM_VIEWS`）から取る。入れ物に部屋ごとの出し分けを書かない
   - 型より前に作った部屋（マーケティング室・開発室・総務・受付）は、登録表の中の薄い包みで、今の props の名前に渡し直している。部屋の props を変えたら、その行も直す
   - キーの受け渡しは `useRoomKeys(keysRef, handler)`（`use-room-keys.ts`）
@@ -27,6 +27,7 @@ paths: ["components/features/ai-employees/office-room-sales.tsx", "components/fe
     - 理由：はじめは顧客ファイルと同じに「1つ答えたら全部閉じる」にしたが、取り消しの無い答え（決めた次の行動・引き継ぎ書が出た移動）のあとが行き止まりになった
   - **Z は直前の答えだけを取り消す**。次の答えをすると、前の答えの取り消しは無くなる
   - **保存している間は、Esc と「ボードに戻る」を閉じる**。閉じると、結果（引き継ぎ書を送った・失敗した）が読まれないまま実行される。欄が開いていないときも同じにする
+    - 出社の画面の右上の「フロアへ戻る」も、保存中は閉じる。部屋が `onBusyChange` で保存中を入れ物に知らせ、入れ物がボタンを `aria-disabled` にする（Esc は部屋のキーが先に受けるので、マウスで押せるこのボタンだけが抜けていた）。知らせない部屋は、止められない：ファイルで保存する部屋は、`onBusyChange` を呼ぶ
   - **段の移動の決まりは、通常の表示（`use-stage-move.tsx`）と同じ**：見極めから進めるときは SQL判定を先に聞く（決定 `2026-10-26-sql-before-leaving-qualification`）。取り消しは段と確度を戻し、SQL判定は戻さない。取り消せるかは `moveIsUndoable`（`lib/features/deals/types/pipeline.ts`）の1か所で決め、両方の画面から呼ぶ（決定 `2026-10-26-deal-move-undo`。戻せない副作用を足すときは、ここに足す）
   - **SQL判定の質問は、選択肢の場所に開く**。数字のキーでは答えにならない（「適格」はボタン、「不適格」は失注の理由が要るので商談のページへのリンク、Esc で選択肢に戻る）。フォーカスは質問の全体に置く。選択肢の文に「（先に SQL判定）」と出して、先に知らせる
   - **「次の行動を決める」は入力して保存するもの**で、Z の取り消しは付けない（会話の「名前の変更」と同じ）。件名と期限は必須で、足りないまま送ろうとしたら、足りないと伝える。期限の「明日」「3日後」「来週の月曜」は欄の中のボタンで、数字のキーは付けない

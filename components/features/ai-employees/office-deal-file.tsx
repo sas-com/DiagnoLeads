@@ -113,6 +113,7 @@ export function OfficeDealFile({
   keysRef,
   onClose,
   onLeaveOffice,
+  onBusyChange,
 }: {
   organizationId: string;
   /** The deal as the board holds it now: it follows the answers given here */
@@ -131,6 +132,8 @@ export function OfficeDealFile({
   onClose: () => void;
   /** A page of the normal view is opened: the office closes */
   onLeaveOffice: () => void;
+  /** Told while an answer is being saved (the office keeps the room open), and when it is over */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room.dealFile');
   // What is shown may be out of date once the deal left the boards: nothing is changed then
@@ -171,6 +174,10 @@ export function OfficeDealFile({
   });
 
   const busy = update.isPending || markTask.isPending || addTask.isPending;
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   // The answer that stands: its kind closes the answers of that kind (see dealActionOpen)
   const last =
     outcome?.kind === 'moved' || outcome?.kind === 'done' || outcome?.kind === 'added'
