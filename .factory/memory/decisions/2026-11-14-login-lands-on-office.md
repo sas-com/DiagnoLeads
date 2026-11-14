@@ -19,6 +19,7 @@ paths: ["lib/routes/home.ts", "lib/auth/safe-callback.ts", "components/auth/**",
 - **作り**:
   - 行き先は `lib/routes/home.ts` の決まったパスだけ：ホーム `HOME_PATH`（`/office`）と、入ってきた直後の `ARRIVAL_PATH`（`/office?source=login`）。`safeCallbackPath` の既定がこれになる
   - 「入ってきた」と数えるのは、ログインした直後と、招待を承認した直後。この2つだけ、出社の画面が自分で開く。ロゴ・組織の切り替え・404 は、通常の表示の中の移動なので、印を付けない（`homePath`）
+  - 印を外すときは `window.history.replaceState(null, '', …)` と書く（状態は `null`）。`window.history.state` を渡すと、Next.js は自分の書き込みと見なしてルーターのアドレスを更新せず、次の移動で印が戻る（`security-specialist` のレビューで見つかり、ブラウザで、移動・戻る・読み直しのあとも印が戻らないことを確かめた）
   - 入ってきた印（`source=login`）は、アプリの開始の URL と同じキーの別の値。オフィスは、読んだらアドレスから外す（`withoutArrival`。読み直しや、あとで戻ってきたときに、また全画面にならないように）。アプリの `source=app` は外さない
 - **ルール**:
   - ログインのあとの行き先を、利用者が渡した値から作らない。`callbackUrl` は `safeCallbackPath` を通したものだけに従い、通らなければ `ARRIVAL_PATH` にする。行き先を足すときも、`lib/routes/home.ts` の定数を使う

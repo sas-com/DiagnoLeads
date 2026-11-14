@@ -45,9 +45,11 @@ export function OfficeScreen() {
   useEffect(() => {
     const { pathname, search, hash } = window.location;
     const arrived = justArrived(search);
-    // Coming in happens once: a reload is not coming in again
+    // Coming in happens once: a reload is not coming in again. The state is null on purpose:
+    // Next.js takes a state it wrote itself (window.history.state) for one of its own writes and
+    // leaves the router's address as it was, so the mark would come back with the next navigation
     const settled = withoutArrival(pathname, search, hash);
-    if (settled) window.history.replaceState(window.history.state, '', settled);
+    if (settled) window.history.replaceState(null, '', settled);
     if (!officeFits(window.innerWidth)) return;
     if (arrived || launchedAsApp(search, isAppWindow(window))) setImmersive(true);
   }, []);

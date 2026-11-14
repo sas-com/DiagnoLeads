@@ -101,6 +101,10 @@ export async function login(page: Page, user: TestUser): Promise<void> {
  * with `page.goto` does not need this.
  */
 export async function leaveFullScreenOffice(page: Page): Promise<void> {
+  // Below 768px (OFFICE_MIN_WIDTH) the office does not open full screen: nothing to leave. CI
+  // runs the desktop project only; the phone projects run on a developer's machine
+  const width = page.viewportSize()?.width;
+  if (width !== undefined && width < 768) return;
   const office = page.getByRole('dialog');
   await office.waitFor({ state: 'visible' });
   await page.keyboard.press('Escape');
