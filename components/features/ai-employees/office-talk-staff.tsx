@@ -53,7 +53,7 @@ export function namesTheEmployee(typed: string, name: string): boolean {
 
 // The field of the office, over the defaults of the shared input: the same by day and by night
 // (the office follows the clock, not the theme), square, and with the focus ring of the office
-const FIELD = cn(
+export const FIELD = cn(
   'min-h-11 rounded-none border-[#f5f1e8]/45 bg-[#0b1020] text-base text-[#f5f1e8] placeholder:text-[#8b93a8] focus-visible:border-[#e9cf9a] focus-visible:ring-0 focus-visible:ring-offset-0 md:text-base dark:border-[#f5f1e8]/45 dark:bg-[#0b1020] dark:text-[#f5f1e8] dark:focus-visible:ring-0',
   FOCUS
 );
