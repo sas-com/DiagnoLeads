@@ -185,7 +185,7 @@ describe('OfficeImmersive', () => {
       '2マーケティング室リード管理',
       '3営業フロア商談ページを開く',
       '4開発室現行調査',
-      '5総務・受付今日の期限',
+      '5総務・受付総務の窓口',
     ]);
     expect(within(guide).getByRole('link', { name: /社長のデスク/ })).toHaveAttribute(
       'href',
