@@ -7,9 +7,13 @@ import {
   FLOOR_MIDDLE,
   FLOOR_SPAN,
   FOLLOW_FROM,
+  STAGE_FRAMES,
+  SUBJECT_HEIGHT,
   type View3D,
   cameraPosition,
   easeTarget,
+  easeView,
+  stageView,
   projectFloor,
   pxPerUnit,
   viewTarget,
@@ -155,5 +159,78 @@ describe('easeTarget', () => {
     expect(easeTarget(from, to, 1)).toEqual(to);
     expect(easeTarget(from, to, 3)).toEqual(to);
     expect(easeTarget(from, to, -1)).toEqual(from);
+  });
+});
+
+describe('stageView (#1148)', () => {
+  const sizes = [
+    { w: 1280, h: 720 },
+    { w: 1440, h: 900 },
+    { w: 1920, h: 1080 },
+  ];
+  const subject = { x: 2.1, y: 12.05 };
+
+  it('is the zoom and the drag of the president on the floor', () => {
+    const size = { w: 1440, h: 900 };
+    const pan = { x: 30, y: -12 };
+    const followed = { x: 5, y: 3 };
+    const view = stageView('world', { size, zoom: 1.4, pan, followed, subject });
+    expect(view).toEqual({ target: followed, pxPerUnit: pxPerUnit(size, 1.4), pan, size });
+    // Zoomed out it rests on the middle, whoever is chosen
+    expect(stageView('world', { size, zoom: 1, pan, followed, subject }).target).toEqual(
+      FLOOR_MIDDLE
+    );
+  });
+
+  it('puts the subject of a scene at the scene’s place on every screen, closer than the floor', () => {
+    for (const stage of ['talk', 'room', 'studio'] as const) {
+      for (const size of sizes) {
+        // What the president did on the floor (a zoom, a drag) does not move a scene
+        const view = stageView(stage, {
+          size,
+          zoom: 0.8,
+          pan: { x: 200, y: 90 },
+          followed: { x: 20, y: 3 },
+          subject,
+        });
+        const at = projectFloor(subject, SUBJECT_HEIGHT, view);
+        expect(at.x).toBeCloseTo(STAGE_FRAMES[stage].at.x * size.w, 6);
+        expect(at.y).toBeCloseTo(STAGE_FRAMES[stage].at.y * size.h, 6);
+        expect(view.pxPerUnit).toBeGreaterThan(pxPerUnit(size, 1));
+        // The whole robot (2.4 high) fits over and under that place
+        const feet = projectFloor(subject, 0, view);
+        const head = projectFloor(subject, 2.4, view);
+        expect(head.y).toBeGreaterThan(0);
+        expect(feet.y).toBeLessThan(size.h);
+      }
+    }
+  });
+
+  it('keeps the employee left of the panels: in the left half of the screen', () => {
+    for (const stage of ['talk', 'room', 'studio'] as const) {
+      expect(STAGE_FRAMES[stage].at.x).toBeLessThan(0.5);
+    }
+  });
+
+  it('shows the floor when a scene has nothing to be about', () => {
+    const size = { w: 1440, h: 900 };
+    const pan = { x: 0, y: 0 };
+    expect(stageView('talk', { size, zoom: 1, pan, followed: null, subject: null })).toEqual(
+      stageView('world', { size, zoom: 1, pan, followed: null, subject: null })
+    );
+  });
+});
+
+describe('easeView', () => {
+  const size = { w: 1440, h: 900 };
+  const from: View3D = { target: { x: 12, y: 8 }, pxPerUnit: 50, pan: { x: 0, y: 0 }, size };
+  const to: View3D = { target: { x: 2, y: 12 }, pxPerUnit: 100, pan: { x: -260, y: 20 }, size };
+
+  it('glides everything part of the way, arrives with a full step, and never overshoots', () => {
+    const half = easeView(from, to, 0.5);
+    expect(half).toEqual({ target: { x: 7, y: 10 }, pxPerUnit: 75, pan: { x: -130, y: 10 }, size });
+    expect(easeView(from, to, 1)).toEqual(to);
+    expect(easeView(from, to, 7)).toEqual(to);
+    expect(easeView(from, to, -1)).toEqual(from);
   });
 });
