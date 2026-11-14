@@ -172,7 +172,7 @@ vi.mock('@/lib/trpc/client', () => ({
           }),
       },
       save: {
-        useMutation: () => ({
+        useMutation: (hook: { onSuccess?: () => void } = {}) => ({
           isPending: mocks.saving,
           mutate: (
             input: { organizationId: string; leadId: string; card: Record<string, unknown> },
@@ -185,6 +185,7 @@ vi.mock('@/lib/trpc/client', () => ({
             }
             // The server now holds what was saved
             mocks.card = { ...input.card, updatedAt: new Date(), updatedByName: null };
+            hook.onSuccess?.();
             options.onSuccess?.();
           },
         }),
@@ -533,6 +534,42 @@ describe('the engineering room', () => {
       // Undone, the draft can be asked for again
       await user.keyboard('3');
       expect(mocks.saves).toHaveLength(3);
+    });
+
+    it('drafts and undoes for a lead without a card: the card is empty again, which the file shows as none', async () => {
+      mocks.card = null;
+      const { user, office, file } = await openFile();
+      expect(
+        within(office).getByText('初回商談の事前調査カードは、まだ用意されていません。')
+      ).toBeInTheDocument();
+      await user.keyboard('3');
+      expect(within(file).getByText('見本の手引きの質問1')).toBeInTheDocument();
+      await user.keyboard('z');
+      expect(mocks.saves[1].card).toEqual({
+        estimatedSystem: null,
+        estimatedSystemBasis: null,
+        recentNews: null,
+        hypotheses: {},
+        firstQuestions: [],
+      });
+      expect(
+        within(office).getByText('初回商談の事前調査カードは、まだ用意されていません。')
+      ).toBeInTheDocument();
+    });
+
+    it('does not undo over a card somebody changed after the draft', async () => {
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      // Somebody edits the card on the lead's page; the file reads it again (turning to the
+      // other part draws the file anew)
+      mocks.card = { ...(mocks.card as object), recentNews: 'あとから人が書いた動き' };
+      await user.keyboard('1');
+      expect(within(office).getByText(/下書きのあとに、事前調査カードが書き換えられました/)).toBeInTheDocument();
+      expect(
+        within(office).getByRole('button', { name: /いまの下書きを取り消す/ })
+      ).toHaveAttribute('aria-disabled', 'true');
+      await user.keyboard('z');
+      expect(mocks.saves).toHaveLength(1);
     });
 
     it('keeps the undo open when it did not go through', async () => {

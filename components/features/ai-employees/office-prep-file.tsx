@@ -28,9 +28,10 @@ import {
 import { useRoomKeys } from './use-room-keys';
 
 type Outcome =
-  // before: the card as it was read, which the undo saves back. undoFailed: the undo did not go
+  // before: the card as it was read, which the undo saves back. after: the draft that was saved;
+  // the undo is only taken while the card still says that. undoFailed: the undo did not go
   // through, so the draft is still saved and can be undone again
-  | { kind: 'drafted'; before: PrepCardFields; undoFailed?: boolean }
+  | { kind: 'drafted'; before: PrepCardFields; after: PrepCardFields; undoFailed?: boolean }
   | { kind: 'undone' }
   | { kind: 'failed' };
 
@@ -117,11 +118,18 @@ export function OfficePrepFile({
     source && material ? buildPrepDraft(current, source, (key, values) => tAll(key, values)) : null;
   const fillable = draft !== null && !samePrepCard(current, draft);
 
-  const save = trpc.leadPrep.save.useMutation();
-  const busy = save.isPending;
-  const state = { canEdit, drafted, busy, fillable };
-  // The lead's page shows the same card
-  const refresh = () => void utils.leadPrep.get.invalidate(scope);
+  // The lead's page shows the same card. Asked for here and not in the answers below: this still
+  // runs when the file was closed (a link at the foot) before the save came back
+  const save = trpc.leadPrep.save.useMutation({
+    onSuccess: () => void utils.leadPrep.get.invalidate(scope),
+  });
+  const saving = save.isPending;
+  // While the card is read again, nothing is taken: an answer would start from an old card
+  const rereading = prep.isFetching === true;
+  // Somebody changed the card after the draft (on the lead's page): saving the old card back
+  // would wipe what they wrote, so the undo is closed and the file says why
+  const stale = outcome?.kind === 'drafted' && !rereading && !samePrepCard(current, outcome.after);
+  const state = { canEdit, drafted, busy: saving || rereading, fillable, stale };
   const answer = (action: PrepFileAction) => {
     if (!prepActionOpen(action, state)) return;
     if (action === 'draft') {
@@ -130,9 +138,8 @@ export function OfficePrepFile({
         { ...scope, card: draft },
         {
           onSuccess: () => {
-            setOutcome({ kind: 'drafted', before: current });
+            setOutcome({ kind: 'drafted', before: current, after: draft });
             setPart('prep');
-            refresh();
           },
           onError: () => setOutcome({ kind: 'failed' }),
         }
@@ -141,10 +148,7 @@ export function OfficePrepFile({
       save.mutate(
         { ...scope, card: outcome.before },
         {
-          onSuccess: () => {
-            setOutcome({ kind: 'undone' });
-            refresh();
-          },
+          onSuccess: () => setOutcome({ kind: 'undone' }),
           // The draft is still saved: keep it in hand, so the undo can be asked for again
           onError: () =>
             setOutcome((now) =>
@@ -169,7 +173,7 @@ export function OfficePrepFile({
   // out, and a file closed now would carry it out without its report or its undo
   const onFileKey: RoomKeys = (event) => {
     if (isImeKey(event)) return false;
-    if (event.key === 'Escape') return busy;
+    if (event.key === 'Escape') return saving;
     const action = prepActionOfKey(event.key);
     if (action) {
       // A key that is closed right now does nothing, and is not anyone else's either
@@ -219,9 +223,11 @@ export function OfficePrepFile({
           {outcome && (
             <p className="text-base leading-relaxed font-medium">
               {outcome.kind === 'drafted'
-                ? outcome.undoFailed
-                  ? t('undoFailed')
-                  : t('drafted')
+                ? stale
+                  ? t('changedSince')
+                  : outcome.undoFailed
+                    ? t('undoFailed')
+                    : t('drafted')
                 : outcome.kind === 'undone'
                   ? t('undone')
                   : t('failed')}
@@ -261,7 +267,7 @@ export function OfficePrepFile({
               <RoomChoiceButton
                 keyCap={PREP_FILE_KEYS.draft}
                 closed={!prepActionOpen('draft', state)}
-                waiting={busy}
+                waiting={state.busy}
                 onClick={() => answer('draft')}
               >
                 {t('choices.draft')}
@@ -273,7 +279,7 @@ export function OfficePrepFile({
               <RoomChoiceButton
                 keyCap={PREP_FILE_KEYS.undo}
                 closed={!prepActionOpen('undo', state)}
-                waiting={busy}
+                waiting={state.busy}
                 onClick={() => answer('undo')}
               >
                 {t('choices.undo')}
@@ -283,10 +289,10 @@ export function OfficePrepFile({
           <li>
             <RoomChoiceButton
               keyCap="Esc"
-              closed={busy}
-              waiting={busy}
+              closed={saving}
+              waiting={saving}
               onClick={() => {
-                if (!busy) onClose();
+                if (!saving) onClose();
               }}
             >
               {t('choices.back')}

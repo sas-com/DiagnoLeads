@@ -141,12 +141,14 @@ describe('the preparation file', () => {
   });
 
   it('takes the draft once, only from someone who may change the card, and never while saving', () => {
-    const open = { canEdit: true, drafted: false, busy: false, fillable: true };
+    const open = { canEdit: true, drafted: false, busy: false, fillable: true, stale: false };
     expect(prepActionOpen('draft', open)).toBe(true);
     expect(prepActionOpen('undo', open)).toBe(false);
     // Right after a draft: the draft is closed, the undo is open
     expect(prepActionOpen('draft', { ...open, drafted: true })).toBe(false);
     expect(prepActionOpen('undo', { ...open, drafted: true })).toBe(true);
+    // The card was changed after the draft: the undo would wipe it, so it is closed
+    expect(prepActionOpen('undo', { ...open, drafted: true, stale: true })).toBe(false);
     // Nothing to fill: closed
     expect(prepActionOpen('draft', { ...open, fillable: false })).toBe(false);
     for (const action of ['draft', 'undo'] as const) {

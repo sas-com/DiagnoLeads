@@ -186,12 +186,13 @@ export function samePrepCard(a: PrepCardFields, b: PrepCardFields): boolean {
  * Whether an answer over a preparation file is carried out right now. The draft is taken once:
  * after it, it stays closed until it is undone or the file is opened again, so the same key
  * pressed once too often does nothing. It is also closed while there is nothing to fill. The undo
- * is only open right after a draft.
+ * is only open right after a draft, and only while the card still says what the draft saved: once
+ * somebody changed it, saving the old card back would wipe what they wrote.
  */
 export function prepActionOpen(
   action: PrepFileAction,
-  state: { canEdit: boolean; drafted: boolean; busy: boolean; fillable: boolean }
+  state: { canEdit: boolean; drafted: boolean; busy: boolean; fillable: boolean; stale: boolean }
 ): boolean {
   if (state.busy || !state.canEdit) return false;
-  return action === 'undo' ? state.drafted : !state.drafted && state.fillable;
+  return action === 'undo' ? state.drafted && !state.stale : !state.drafted && state.fillable;
 }
