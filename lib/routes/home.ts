@@ -31,3 +31,11 @@ export function homePath(locale: string): string {
 export function arrivalPath(locale: string): string {
   return `/${locale}${ARRIVAL_PATH}`;
 }
+
+/**
+ * Where "clock in" leads from any page of the normal view (#1162): the full-screen office opens,
+ * the same way as right after signing in. A fixed path, never built from what someone passed.
+ */
+export function enterOfficePath(locale: string): string {
+  return arrivalPath(locale);
+}

@@ -2822,7 +2822,8 @@
       "moreMenu": "More menu",
       "themeToDark": "Switch to dark mode",
       "themeToLight": "Switch to light mode"
-    }
+    },
+    "enterOffice": "Clock in"
   },
   "tags": {
     "manageTags": "Manage Tags",

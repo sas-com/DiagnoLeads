@@ -9,9 +9,11 @@ import { HeaderLeadSearch } from '@/components/header/HeaderLeadSearch';
 import NotificationDropdown from '@/components/header/NotificationDropdown';
 import UserDropdown from '@/components/header/UserDropdown';
 import { useSidebar } from '@/context/SidebarContext';
-import { homePath } from '@/lib/routes/home';
-import { RiCloseLine, RiMenuLine, RiMore2Fill } from '@remixicon/react';
+import { enterOfficePath, homePath } from '@/lib/routes/home';
+import { RiBuilding2Line, RiCloseLine, RiMenuLine, RiMore2Fill } from '@remixicon/react';
 import { useLocale, useTranslations } from 'next-intl';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import type React from 'react';
 import { useState } from 'react';
 
@@ -20,6 +22,9 @@ const AppHeader: React.FC = () => {
   const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
   const locale = useLocale();
   const t = useTranslations('header.a11y');
+  const tHeader = useTranslations('header');
+  // The office page has its own way in; everywhere else, the office is one press away (#1162)
+  const onOfficePage = usePathname() === homePath(locale);
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) {
@@ -87,6 +92,16 @@ const AppHeader: React.FC = () => {
           } items-center justify-between w-full gap-4 px-5 py-4 lg:flex shadow-theme-md lg:justify-end lg:px-0 lg:shadow-none`}
         >
           <div className="flex items-center gap-2 2xsm:gap-3">
+            {/* The full-screen office needs 768px (md), like the office's own button */}
+            {!onOfficePage && (
+              <Link
+                href={enterOfficePath(locale)}
+                className="hidden h-11 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm font-medium text-gray-700 hover:bg-gray-100 md:flex dark:border-gray-800 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+                <RiBuilding2Line className="h-5 w-5" aria-hidden="true" />
+                {tHeader('enterOffice')}
+              </Link>
+            )}
             <HelpButton />
             <OrganizationSwitcher />
             <ThemeToggleButton />

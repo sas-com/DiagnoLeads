@@ -27,6 +27,7 @@
       }
     },
     "rooms": {
+      "desk": "President's desk",
       "sales": "Sales floor",
       "training": "Training room",
       "lounge": "Lounge",
@@ -232,7 +233,10 @@
       "room": {
         "back": "Back to the floor",
         "work": {
+          "desk": "Today",
           "marketing": "Leads",
+          "sales": "Deals",
+          "engineering": "Surveys",
           "backoffice": "Due today"
         },
         "guide": {
@@ -358,7 +362,8 @@
           "openToday": "Open Today in the normal view",
           "undoFailed": "It could not be undone and is still marked as done. Please try again.",
           "reportNext": "Here is number {index} of {total}."
-        }
+        },
+        "door": "opens a page"
       },
       "tones": {
         "brisk": {

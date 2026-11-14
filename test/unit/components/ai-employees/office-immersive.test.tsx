@@ -13,6 +13,7 @@ import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
+import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
@@ -152,6 +153,47 @@ describe('OfficeImmersive', () => {
   it('says nothing about the width on a wide screen', () => {
     const { office } = renderOffice();
     expect(within(office).queryByText(/幅の広い画面/)).not.toBeInTheDocument();
+  });
+
+  it('lists every place of the work in the floor guide: rooms are entered, doors open a page (#1162)', async () => {
+    const user = userEvent.setup();
+    const { office, onExit } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
+    expect(
+      Array.from(guide.querySelectorAll('a, button')).map((entry) => entry.textContent)
+    ).toEqual([
+      '1社長のデスク今日の予定ページを開く',
+      '2マーケティング室リード管理',
+      '3営業フロア商談ページを開く',
+      '4開発室現行調査ページを開く',
+      '5総務・受付今日の期限',
+    ]);
+    expect(within(guide).getByRole('link', { name: /社長のデスク/ })).toHaveAttribute(
+      'href',
+      '/ja/today'
+    );
+    expect(within(guide).getByRole('link', { name: /開発室/ })).toHaveAttribute(
+      'href',
+      '/ja/deals?kind=survey'
+    );
+    // A door leaves the full-screen office for its page
+    await user.click(within(guide).getByRole('link', { name: /営業フロア/ }));
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens a door with its key, like its button (#1162)', async () => {
+    const user = userEvent.setup();
+    const router = useRouter();
+    const { office, onExit } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.keyboard('3');
+    expect(onExit).toHaveBeenCalledTimes(1);
+    expect(router.push).toHaveBeenCalledWith('/ja/deals');
+    await user.keyboard('1');
+    expect(router.push).toHaveBeenLastCalledWith('/ja/today');
+    await user.keyboard('4');
+    expect(router.push).toHaveBeenLastCalledWith('/ja/deals?kind=survey');
   });
 
   it('shows the staff and the president’s tasks once in the office', async () => {
