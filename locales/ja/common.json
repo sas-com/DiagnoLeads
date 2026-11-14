@@ -5346,6 +5346,7 @@
     "conflictTitle": "ほかの人が先に保存しました",
     "conflictBody": "入力中の内容はこの画面に残っています。最新の内容を読み込むと、入力中の内容は破棄されます。",
     "reload": "最新の内容を読み込む",
+    "reloadError": "最新の内容を読み込めませんでした。入力中の内容は残っています。もう一度お試しください。",
     "updatedBy": "{date} {name} が更新",
     "drafts": {
       "basisDiagnosis": "Web診断の回答（移行元）",

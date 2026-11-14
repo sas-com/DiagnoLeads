@@ -200,11 +200,11 @@ export function OfficePrepFile({
           { ...scope, card: outcome.before, expectedUpdatedAt: fresh.card?.updatedAt ?? null },
           {
             onSuccess: () => setOutcome({ kind: 'undone' }),
-            onError: (error) => {
-              // Refused: the card was changed just now. It is read again, and the file then says
-              // that the draft can no longer be undone (stale)
-              if (error.data?.code === 'CONFLICT') return;
-              // The draft is still there: keep it in hand, so the undo can be asked for again
+            onError: () => {
+              // The draft is still there: keep it in hand, so the undo can be asked for again.
+              // Also when the server refused (the card was saved just now): the card is read
+              // again, and when what it says changed, the file says that instead (stale comes
+              // first); when only its date changed, the undo goes through the next time
               setOutcome((kept) =>
                 kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : { kind: 'failed' }
               );

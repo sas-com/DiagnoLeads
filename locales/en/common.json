@@ -5346,6 +5346,7 @@
     "conflictTitle": "Someone else saved first",
     "conflictBody": "What you typed is still on this screen. Loading the latest card discards it.",
     "reload": "Load the latest card",
+    "reloadError": "The latest card could not be loaded. What you typed is still here. Please try again.",
     "updatedBy": "Updated by {name} on {date}",
     "drafts": {
       "basisDiagnosis": "The Web diagnosis answer (migration source)",

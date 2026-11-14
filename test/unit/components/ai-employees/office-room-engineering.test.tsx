@@ -704,9 +704,13 @@ describe('the engineering room', () => {
     });
 
     it('sends the date of the card it just read with each save (#1225)', async () => {
-      const readAt = new Date('2026-11-14T01:00:00Z');
-      mocks.card = { ...(mocks.card as object), updatedAt: readAt };
+      // The screen holds the card with an old date; the server's row has a newer one (somebody
+      // saved the same content). The date sent must be the one just read, not the screen's
+      const onScreen = new Date('2026-11-14T01:00:00Z');
+      const readAt = new Date('2026-11-14T02:00:00Z');
+      mocks.card = { ...(mocks.card as object), updatedAt: onScreen };
       const { user } = await openFile();
+      mocks.server = { ...(mocks.card as object), updatedAt: readAt };
       await user.keyboard('3');
       expect(mocks.saves[0].expectedUpdatedAt).toEqual(readAt);
       // The undo sends the date of the draft it read back
@@ -738,6 +742,23 @@ describe('the engineering room', () => {
       expect(mocks.saves).toHaveLength(2);
       expect(mocks.saves[1].card.recentNews).toBe('いま同僚が書いた動き');
       expect(within(file).getByText('いま同僚が書いた動き')).toBeInTheDocument();
+    });
+
+    it('lets the undo be asked for again when the server refused it over a date only (#1225)', async () => {
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      // Somebody saves the card without changing what it says: only its date moves
+      mocks.conflictWith = { ...(mocks.card as object), updatedAt: new Date(Date.now() + 1000) };
+      await user.keyboard('z');
+      expect(
+        await within(office).findByText(
+          '取り消せませんでした。下書きは保存されたままです。もう一度、取り消せます。'
+        )
+      ).toBeInTheDocument();
+      await user.keyboard('z');
+      expect(
+        await within(office).findByText('下書きを取り消し、事前調査カードを元に戻しました。')
+      ).toBeInTheDocument();
     });
 
     it('closes the undo when the server refuses it: the card was changed just now (#1225)', async () => {

@@ -289,6 +289,8 @@ describe('savePrepCard', () => {
       '("lead_prep_cards"."lead_id" = $1 and "lead_prep_cards"."organization_id" = $2 and "lead_prep_cards"."updated_at" = $3)'
     );
     expect(where.params.slice(0, 2)).toEqual([LEAD_ID, ORG_ID]);
+    // The date compared is the one that was read, not the new one
+    expect(new Date(where.params[2] as string | Date).getTime()).toBe(READ_AT.getTime());
   });
 
   it('writes nothing over a card somebody saved since it was read', async () => {

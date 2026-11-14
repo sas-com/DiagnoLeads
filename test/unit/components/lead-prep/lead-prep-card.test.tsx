@@ -11,13 +11,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   result: {} as Record<string, unknown>,
   mutate: vi.fn(),
+  invalidate: vi.fn(),
   // What the card gave the mutation: called to answer a save
   hook: {} as { onSuccess?: () => void; onError?: (error: { data?: { code?: string } }) => void },
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
   trpc: {
-    useUtils: () => ({ leadPrep: { get: { invalidate: vi.fn() } } }),
+    useUtils: () => ({ leadPrep: { get: { invalidate: mocks.invalidate } } }),
     leadPrep: {
       get: { useQuery: () => mocks.result },
       save: {
@@ -53,6 +54,7 @@ const renderCard = () =>
 
 beforeEach(() => {
   mocks.mutate.mockReset();
+  mocks.invalidate.mockReset();
   mocks.result = { data: { card: null, canEdit: true, draftSource }, isError: false };
 });
 
@@ -125,7 +127,10 @@ describe('LeadPrepCard', () => {
       recentNews: '同僚が書いた動き',
       updatedAt: new Date('2026-10-18T02:00:00Z'),
     };
-    const refetch = vi.fn(async () => ({ data: { card: latest, canEdit: true, draftSource } }));
+    const refetch = vi.fn(async () => ({
+      isSuccess: true,
+      data: { card: latest, canEdit: true, draftSource },
+    }));
     mocks.result = {
       data: { card: savedCard, canEdit: true, draftSource },
       isError: false,
@@ -152,6 +157,50 @@ describe('LeadPrepCard', () => {
     expect(mocks.mutate).toHaveBeenLastCalledWith(
       expect.objectContaining({ expectedUpdatedAt: latest.updatedAt })
     );
+  });
+
+  it('keeps what was typed when the latest card cannot be loaded (#1225)', async () => {
+    // A read that failed hands back the card from before, like the query does
+    const refetch = vi.fn(async () => ({
+      isSuccess: false,
+      isError: true,
+      data: { card: savedCard, canEdit: true, draftSource },
+    }));
+    mocks.result = {
+      data: { card: savedCard, canEdit: true, draftSource },
+      isError: false,
+      refetch,
+    };
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: '編集' }));
+    fireEvent.change(screen.getByLabelText('最近の動き'), { target: { value: '自分が書いた動き' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    act(() => mocks.hook.onError?.({ data: { code: 'CONFLICT' } }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込む' }));
+    });
+    // Nothing was refilled from the old card: the form, and the notice, are as they were
+    expect(screen.getByLabelText('最近の動き')).toHaveValue('自分が書いた動き');
+    expect(screen.getByText('ほかの人が先に保存しました')).toBeInTheDocument();
+  });
+
+  it('reads the card behind the form anew when a save is refused (#1225)', () => {
+    mocks.result = { data: { card: savedCard, canEdit: true, draftSource }, isError: false };
+    renderCard();
+    fireEvent.click(screen.getByRole('button', { name: '編集' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    act(() => mocks.hook.onError?.({ data: { code: 'CONFLICT' } }));
+    expect(mocks.invalidate).toHaveBeenCalledWith({ organizationId: ORG_ID, leadId: LEAD_ID });
+  });
+
+  it('does not start an editing while the card is being read again (#1225)', () => {
+    mocks.result = {
+      data: { card: savedCard, canEdit: true, draftSource },
+      isError: false,
+      isFetching: true,
+    };
+    renderCard();
+    expect(screen.getByRole('button', { name: '編集' })).toBeDisabled();
   });
 
   it('shows a card saved empty as none, and still saves over that row with its date (#1225)', () => {

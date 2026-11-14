@@ -73,9 +73,13 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
       toast.success(t('saved'));
     },
     onError: (error) => {
-      // Somebody else saved first: what was typed stays, until the card is read again
-      if (error.data?.code === 'CONFLICT') setConflict(true);
-      else toast.error(t('saveError'));
+      // Somebody else saved first: what was typed stays (it is in the form), until the card is
+      // read again. The card behind the form is read anew, so that after a cancel the card shown
+      // and the next editing start from what is saved now, not from the copy that was refused
+      if (error.data?.code === 'CONFLICT') {
+        setConflict(true);
+        void utils.leadPrep.get.invalidate({ organizationId, leadId });
+      } else toast.error(t('saveError'));
     },
   });
 
@@ -107,8 +111,10 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
   // Read the card as it is now and start over from it: what was typed is dropped
   const reload = async () => {
     const latest = await query.refetch();
-    if (latest.data) fill(latest.data.card);
-    else toast.error(t('saveError'));
+    // A read that failed still hands back the card from before (the query keeps it): only a
+    // read that went through may refill the form, or the old card and its old date come back
+    if (latest.isSuccess) fill(latest.data.card);
+    else toast.error(t('reloadError'));
   };
 
   const draft = () => {
@@ -131,7 +137,15 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
         <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
         {card && isPrepReady(card) && <Badge color="emerald">{t('ready')}</Badge>}
         {data?.canEdit && !editing && (
-          <Button size="sm" variant="ghost" className="ml-auto h-8" onClick={startEditing}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="ml-auto h-8"
+            // While the card is read again (right after a save), its date is the one from
+            // before: an editing started now would be refused by the user's own save
+            disabled={query.isFetching === true}
+            onClick={startEditing}
+          >
             <Pencil className="mr-1 h-4 w-4" aria-hidden="true" />
             {card ? t('edit') : t('start')}
           </Button>
