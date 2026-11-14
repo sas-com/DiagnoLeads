@@ -1,4 +1,9 @@
-import { isAppWindow, launchedAsApp } from '@/components/features/ai-employees/office-app';
+import {
+  OFFICE_MIN_WIDTH,
+  isAppWindow,
+  launchedAsApp,
+  officeFits,
+} from '@/components/features/ai-employees/office-app';
 import { describe, expect, it } from 'vitest';
 
 /** The office as an installed app (#1125) */
@@ -16,6 +21,16 @@ describe('launchedAsApp', () => {
     expect(launchedAsApp('', false)).toBe(false);
     expect(launchedAsApp('?source=email', false)).toBe(false);
     expect(launchedAsApp('?app=1', false)).toBe(false);
+  });
+});
+
+describe('officeFits', () => {
+  it('takes a tablet and wider, and not a phone (#1139)', () => {
+    expect(OFFICE_MIN_WIDTH).toBe(768);
+    expect(officeFits(390)).toBe(false);
+    expect(officeFits(767)).toBe(false);
+    expect(officeFits(768)).toBe(true);
+    expect(officeFits(1440)).toBe(true);
   });
 });
 

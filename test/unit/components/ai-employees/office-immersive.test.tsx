@@ -122,6 +122,38 @@ describe('OfficeImmersive', () => {
     expect(within(office).getByRole('button', { name: /^出社する/ })).toHaveFocus();
   });
 
+  it('points to the normal view on a narrow screen, and still lets the president in (#1139)', async () => {
+    const width = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    try {
+      const user = userEvent.setup();
+      const { office, onExit } = renderOffice();
+      expect(
+        within(office).getByText(
+          'この画面は、幅の広い画面（パソコン・タブレットの横向き）向けです。この幅では、通常の表示をお使いください。'
+        )
+      ).toBeInTheDocument();
+      // The way out comes first; clocking in is still there
+      const choices = within(office)
+        .getAllByRole('button')
+        .filter((button) => /通常の表示に戻る|出社する/.test(button.textContent ?? ''));
+      expect(choices.map((button) => button.textContent)).toEqual([
+        '通常の表示に戻るEsc',
+        '出社するEnter',
+      ]);
+      await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+      expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
+      expect(onExit).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    }
+  });
+
+  it('says nothing about the width on a wide screen', () => {
+    const { office } = renderOffice();
+    expect(within(office).queryByText(/幅の広い画面/)).not.toBeInTheDocument();
+  });
+
   it('shows the staff and the president’s tasks once in the office', async () => {
     const user = userEvent.setup();
     const { office } = renderOffice();

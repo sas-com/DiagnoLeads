@@ -45,6 +45,13 @@ Closes #
 - [ ] Tested locally
 - [ ] Tested on staging (if applicable)
 
+## 役立った学び／外れた学び
+
+<!-- .factory/memory/learnings.md の学びに従って作業したら、1行に1つ、見出しの「### 」より後ろをそのまま写す。外れた学びには理由を添える。無ければ「なし」のまま。毎月の見直しで数える（.factory/memory/README.md） -->
+
+- 役立った：なし
+- 外れた：なし
+
 ## Checklist
 
 ### Code Quality

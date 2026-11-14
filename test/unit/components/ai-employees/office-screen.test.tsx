@@ -10,7 +10,7 @@ import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 const EMPLOYEE_ID = '770e8400-e29b-41d4-a716-446655440001';
@@ -211,6 +211,34 @@ describe('OfficeScreen', () => {
     expect(within(office).getByText(/社長 山田 太郎/)).toBeInTheDocument();
     await user.click(within(office).getByRole('button', { name: /^通常の表示に戻る/ }));
     expect(screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })).not.toBeInTheDocument();
+  });
+
+  describe('opened as the app', () => {
+    const width = window.innerWidth;
+    const openAt = (value: number) => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value });
+      window.history.replaceState(null, '', '/ja/office?source=app');
+      renderScreen();
+    };
+    afterEach(() => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+      window.history.replaceState(null, '', '/');
+    });
+
+    it('starts in the full-screen office on a wide screen', async () => {
+      openAt(1440);
+      expect(
+        await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+      ).toBeInTheDocument();
+    });
+
+    it('stays in the normal view on a narrow screen, with the way in still there (#1139)', async () => {
+      openAt(390);
+      expect(await screen.findByRole('button', { name: '出社する（全画面）' })).toBeInTheDocument();
+      expect(
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+      ).not.toBeInTheDocument();
+    });
   });
 
   it('tells a viewer without permission instead of drawing the floor', () => {

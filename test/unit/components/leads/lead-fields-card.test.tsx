@@ -9,7 +9,7 @@ import type { Lead } from '@/lib/db/schema';
 import type { LeadCardId } from '@/lib/features/leads/detail-fields';
 import enMessages from '@/locales/en/common.json';
 import jaMessages from '@/locales/ja/common.json';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Building2 } from 'lucide-react';
 import { NextIntlClientProvider } from 'next-intl';
@@ -88,6 +88,22 @@ describe('LeadFieldsCard with the input limits (#575)', () => {
       id: lead.id,
       organizationId: ORG_ID,
     });
+  });
+
+  it('keeps editing on the Esc of a conversion, and cancels on a plain Esc (#1012)', async () => {
+    const user = userEvent.setup();
+    renderCard('inflow');
+    const box = screen.getByRole('textbox', { name: jaMessages.leads.referrerName });
+    await user.click(box);
+    await user.paste('佐藤');
+
+    fireEvent.keyDown(box, { key: 'Escape', keyCode: 229 });
+    fireEvent.keyDown(box, { key: 'Escape', isComposing: true });
+    expect(screen.getByRole('textbox', { name: jaMessages.leads.referrerName })).toHaveValue('佐藤');
+
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: jaMessages.leads.referrerName })).not.toBeInTheDocument();
+    expect(mutateAsync).not.toHaveBeenCalled();
   });
 
   it('tells the over-long phone under its input in the page’s language and does not save', async () => {

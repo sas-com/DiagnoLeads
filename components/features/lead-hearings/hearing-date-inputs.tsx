@@ -147,7 +147,7 @@ export function HearingDateInput({
               e.preventDefault();
               commit();
               if (onEnter && !isImeKey(e.nativeEvent)) onEnter();
-            } else if (e.key === 'Escape' && draft !== null) {
+            } else if (e.key === 'Escape' && draft !== null && !isImeKey(e.nativeEvent)) {
               changeDraft(null);
             }
           }}

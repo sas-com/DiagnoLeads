@@ -41,6 +41,7 @@ import {
   Office3DTrialPanel,
 } from './office-3d/office-3d-trial';
 import type { OfficeEvent } from './office-3d/office-emotion';
+import { officeFits } from './office-app';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
 import {
@@ -189,6 +190,8 @@ export function OfficeImmersive({
   const night = isNightHour(hourIn(now, timeZone));
   const tasks = presidentTasks(statuses, canManage);
   const hired = employees.length;
+  // Measured once the office is on the screen: never guessed while it is rendered on the server
+  const narrow = mounted && !officeFits(size.w);
   const vacant = AI_EMPLOYEE_ROLES.length - hired;
 
   useEffect(() => {
@@ -554,30 +557,33 @@ export function OfficeImmersive({
                 </p>
               </div>
               <div className="space-y-6">
+                {/* Too narrow for the office (#1139): it says so, and the way out comes first */}
+                {narrow && (
+                  <p className="max-w-md text-base leading-relaxed">{t('title.narrow')}</p>
+                )}
                 <div className="flex max-w-md flex-col gap-1">
-                  <button
-                    type="button"
-                    data-autofocus
-                    onClick={clockIn}
-                    className={cn(
-                      'flex min-h-14 items-center justify-between gap-4 border-l-[3px] border-white bg-[linear-gradient(90deg,#f3dfb4_0%,#e9cf9a_70%,rgba(233,207,154,0)_100%)] px-5 text-left text-lg font-bold text-[#1b2130] hover:brightness-105',
-                      FOCUS
-                    )}
-                  >
-                    {t('title.clockIn')}
-                    <span className={cn(KEY, 'border-[#1b2130]/60')}>Enter</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={leave}
-                    className={cn(
-                      'flex min-h-14 items-center justify-between gap-4 border-l-[3px] border-transparent px-5 text-left text-lg font-bold text-[#d8d2c4] hover:border-[#e9cf9a]/60 hover:bg-white/10 hover:text-white',
-                      FOCUS
-                    )}
-                  >
-                    {t('title.back')}
-                    <span className={KEY}>Esc</span>
-                  </button>
+                  {(narrow ? (['back', 'clockIn'] as const) : (['clockIn', 'back'] as const)).map(
+                    (choice, index) => (
+                      <button
+                        key={choice}
+                        type="button"
+                        data-autofocus={index === 0 ? '' : undefined}
+                        onClick={choice === 'clockIn' ? clockIn : leave}
+                        className={cn(
+                          'flex min-h-14 items-center justify-between gap-4 border-l-[3px] px-5 text-left text-lg font-bold',
+                          index === 0
+                            ? 'border-white bg-[linear-gradient(90deg,#f3dfb4_0%,#e9cf9a_70%,rgba(233,207,154,0)_100%)] text-[#1b2130] hover:brightness-105'
+                            : 'border-transparent text-[#d8d2c4] hover:border-[#e9cf9a]/60 hover:bg-white/10 hover:text-white',
+                          FOCUS
+                        )}
+                      >
+                        {t(`title.${choice}`)}
+                        <span className={cn(KEY, index === 0 && 'border-[#1b2130]/60')}>
+                          {choice === 'clockIn' ? 'Enter' : 'Esc'}
+                        </span>
+                      </button>
+                    )
+                  )}
                 </div>
                 <p className="text-sm text-[#d8d2c4]">
                   {companyName ? `${companyName}　` : ''}

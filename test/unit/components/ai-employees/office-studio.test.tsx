@@ -238,6 +238,14 @@ describe('the studio', () => {
     expect(raise).toHaveAttribute('aria-disabled', 'true');
   });
 
+  it('marks the tabs that nothing reads yet', async () => {
+    const { board } = await openStudio();
+    expect(within(board).getByRole('tab', { name: /能力値/ })).toHaveTextContent('準備中');
+    expect(within(board).getByRole('tab', { name: /働き方/ })).toHaveTextContent('準備中');
+    expect(within(board).getByRole('tab', { name: /見た目/ })).not.toHaveTextContent('準備中');
+    expect(within(board).getByRole('tab', { name: /性格と話し方/ })).not.toHaveTextContent('準備中');
+  });
+
   it('says that the abilities and the work style do nothing yet', async () => {
     const { user, board } = await openStudio();
     const note = /仕事はまだ準備中なので、今は働きには効きません。/;

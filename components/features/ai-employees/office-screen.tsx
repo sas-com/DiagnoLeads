@@ -12,7 +12,7 @@ import { Building2, Download, Loader2, Lock } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { useEffect, useId, useRef, useState } from 'react';
 import { DeskSheet, OFFICE_REFRESH_MS } from './desk-sheet';
-import { isAppWindow, launchedAsApp, useInstallApp } from './office-app';
+import { isAppWindow, launchedAsApp, officeFits, useInstallApp } from './office-app';
 import { OfficeImmersive } from './office-immersive';
 import { OfficeMap } from './office-map';
 
@@ -33,8 +33,10 @@ export function OfficeScreen() {
   const { data: session } = authClient.useSession();
   const [immersive, setImmersive] = useState(false);
   const { install } = useInstallApp();
-  // Opened as the app (the installed app, or its start URL): the office is the first screen
+  // Opened as the app (the installed app, or its start URL): the office is the first screen,
+  // where the screen is wide enough for it (#1139)
   useEffect(() => {
+    if (!officeFits(window.innerWidth)) return;
     if (launchedAsApp(window.location.search, isAppWindow(window))) setImmersive(true);
   }, []);
   const enterRef = useRef<HTMLButtonElement>(null);

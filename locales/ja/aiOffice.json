@@ -181,7 +181,8 @@
         "tagline": "あなたは社長。優秀な AI社員とともに、新しい価値を生み出す。",
         "clockIn": "出社する",
         "back": "通常の表示に戻る",
-        "staff": "社長 {name}　・　AI社員 {hired}名（空席 {vacant}）"
+        "staff": "社長 {name}　・　AI社員 {hired}名（空席 {vacant}）",
+        "narrow": "この画面は、幅の広い画面（パソコン・タブレットの横向き）向けです。この幅では、通常の表示をお使いください。"
       },
       "tasks": {
         "heading": "社長の仕事",
@@ -530,7 +531,8 @@
           "standard": "ふつう",
           "detailed": "くわしく"
         },
-        "discardBack": "変更を捨てて戻る"
+        "discardBack": "変更を捨てて戻る",
+        "soon": "準備中"
       },
       "trial3d": {
         "on": "3D（検証）",
