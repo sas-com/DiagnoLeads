@@ -158,7 +158,7 @@ describe('the switch to the 3D floor', () => {
   it('is on V, not on a number: the numbers belong to the rooms', async () => {
     const { user, office } = await enterOffice();
     expect(within(office).getByRole('button', { name: /3D（試験中）/ })).toHaveTextContent('V');
-    await user.keyboard('3');
+    await user.keyboard('9');
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
     await user.keyboard('v');
     expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();

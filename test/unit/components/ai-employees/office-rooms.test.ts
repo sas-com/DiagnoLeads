@@ -44,6 +44,14 @@ describe('the rooms', () => {
     expect(ROOM_ROLES.backoffice).toBe('back_office');
   });
 
+  it('hold the sales floor under the key of the floor guide (#1171)', () => {
+    expect(ROOM_ROLES.sales).toBe('sales');
+    expect(roomOfKey('3')).toBe('sales');
+    // The keys the first rooms were given stay theirs
+    expect(roomOfKey('2')).toBe('marketing');
+    expect(roomOfKey('5')).toBe('backoffice');
+  });
+
   it('are not entered by the keys of the camera or by other keys', () => {
     for (const key of ['0', '+', '-', 'e', 'E', 'Enter', '9']) expect(roomOfKey(key)).toBeNull();
   });

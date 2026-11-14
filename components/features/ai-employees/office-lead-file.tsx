@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
+import type { RoomKeys } from './office-room-contract';
 import { ROOM_BOARD, ROOM_FRAME, RoomChoiceButton } from './office-room-parts';
 import {
   FILE_CONTACT_CHOICES,
@@ -20,16 +21,8 @@ import {
 
 export type BoardLead = RouterOutputs['leads']['list']['items'][number];
 
-/**
- * The key a room is handed: enough of the browser's event to read the key and to tell whether it
- * belongs to a Japanese conversion (IME), which a room must never take as an answer
- */
-export type RoomKeyEvent = Pick<KeyboardEvent, 'key' | 'isComposing' | 'keyCode'> & {
-  preventDefault: () => void;
-};
-
-/** What the keys of a room do; true when the key was used */
-export type RoomKeys = (event: RoomKeyEvent) => boolean;
+// The contract of the rooms holds these now (#1142); kept here for the files that import them
+export type { RoomKeyEvent, RoomKeys } from './office-room-contract';
 
 /** The colour of a lead status on the dark board; the word is always shown with it */
 export const LEAD_STATUS_COLORS: Record<string, string> = {

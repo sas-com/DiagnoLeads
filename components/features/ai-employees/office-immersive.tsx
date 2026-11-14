@@ -64,8 +64,8 @@ import {
 } from './office-president';
 import { shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
-import { OfficeRoomDue } from './office-room-due';
-import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
+import type { RoomKeys } from './office-room-contract';
+import { ROOM_VIEWS } from './office-room-registry';
 import { OFFICE_ROOMS, type OfficeRoom, ROOM_KEYS, ROOM_ROLES, roomOfKey } from './office-rooms';
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
@@ -290,6 +290,8 @@ export function OfficeImmersive({
     }
     onExit();
   }, [onExit]);
+  // What the room shows comes from the registry: the office does not know the rooms (#1142)
+  const RoomView = ROOM_VIEWS[room];
   const enterRoom = (next: OfficeRoom) => {
     setRoom(next);
     setStage('room');
@@ -1064,28 +1066,18 @@ export function OfficeImmersive({
                 {!roomFileOpen && <span className={cn(KEY, 'bg-[#0a0e18]/60')}>Esc</span>}
                 {t('room.back')}
               </button>
-              {room === 'marketing' ? (
-                <OfficeRoomLeads
-                  organizationId={organizationId}
-                  role={ROOM_ROLES[room]}
-                  status={statuses[ROOM_ROLES[room]]}
-                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
-                  look={looks[ROOM_ROLES[room]]}
-                  keysRef={roomKeys}
-                  onOpenLead={leave}
-                  onFileOpenChange={setRoomFileOpen}
-                />
-              ) : (
-                <OfficeRoomDue
-                  organizationId={organizationId}
-                  role={ROOM_ROLES[room]}
-                  status={statuses[ROOM_ROLES[room]]}
-                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
-                  look={looks[ROOM_ROLES[room]]}
-                  keysRef={roomKeys}
-                  onOpenNormal={leave}
-                />
-              )}
+              <RoomView
+                organizationId={organizationId}
+                guide={{
+                  role: ROOM_ROLES[room],
+                  status: statuses[ROOM_ROLES[room]],
+                  name: byRole.get(ROOM_ROLES[room])?.name ?? null,
+                  look: looks[ROOM_ROLES[room]],
+                }}
+                keysRef={roomKeys}
+                onLeaveOffice={leave}
+                onFileOpenChange={setRoomFileOpen}
+              />
             </>
           )}
 

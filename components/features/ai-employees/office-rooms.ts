@@ -3,7 +3,8 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
  * The rooms of the full-screen office that hold work (#1127, decision
  * 2026-11-13-office-is-the-base): the business screens live inside the office. The marketing room
  * is the first: its wall board is the lead list. The reception (back office) hands over what is
- * due, one at a time (#1133).
+ * due, one at a time (#1133). The sales floor holds the deals (#1171; its functions are in
+ * rooms/deals-board.ts).
  *
  * Pure functions only.
  */
@@ -19,12 +20,13 @@ import {
 import type { ListLeadsInput } from '@/lib/features/leads/types/schemas';
 
 /** The rooms the president can walk into */
-export const OFFICE_ROOMS = ['marketing', 'backoffice'] as const;
+export const OFFICE_ROOMS = ['marketing', 'sales', 'backoffice'] as const;
 export type OfficeRoom = (typeof OFFICE_ROOMS)[number];
 
 /** The AI employee each room belongs to */
 export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
   marketing: 'marketer',
+  sales: 'sales',
   backoffice: 'back_office',
 };
 
@@ -35,6 +37,7 @@ export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
  */
 export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
   marketing: '2',
+  sales: '3',
   backoffice: '5',
 };
 
@@ -201,7 +204,8 @@ export function dueActionOpen(
   return action === 'undo' ? state.justDone : !state.justDone && !state.finished;
 }
 
-function actionOfKey<Action extends string>(
+/** The answer a key stands for in a table of fixed keys (letters in either case) */
+export function actionOfKey<Action extends string>(
   keys: Readonly<Record<Action, string>>,
   key: string
 ): Action | null {
