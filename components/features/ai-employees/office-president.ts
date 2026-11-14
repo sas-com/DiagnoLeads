@@ -111,16 +111,47 @@ export function cameraOffset(input: {
 /** The screen width from which the panels sit in the corners around the floor */
 export const WIDE_SCREEN = 1280;
 
-/** How much closer than "the whole floor in view" the camera starts on a wide screen */
+/** How much closer than "the whole floor in view" the camera starts at most, on a wide screen */
 export const HOME_CLOSE_UP = 1.2;
+
+/**
+ * The width the panels take on each side of the floor, margin included (the president and the
+ * staff on the left: `left-6 w-72`; the tasks and the one in front on the right: `right-6 w-80`)
+ */
+export const HUD_SIDES = { left: 312, right: 344 };
+
+/** The share of the drawing's width that the floor itself spans, corner to corner */
+const FLOOR_SHARE = 0.9;
+
+/**
+ * How far past the room between the side panels the floor may reach when the camera starts:
+ * its corners pass under the panels, but whoever sits near a corner must not
+ */
+const CORNER_REACH = 1.3;
+
+/**
+ * How much closer than "the whole floor in view" the camera starts (#1183). On a screen with
+ * room between the side panels the floor starts larger than the screen holds, so the office
+ * reads as a place; where the panels leave less room it starts with the whole floor in view,
+ * so that nobody stands under a panel when the office opens.
+ */
+export function homeCloseUp(size: { w: number; h: number }, aspect = 10 / 7): number {
+  if (size.w < WIDE_SCREEN) return 1;
+  const floor = Math.min(size.w, size.h * aspect) * FLOOR_SHARE;
+  const between = size.w - HUD_SIDES.left - HUD_SIDES.right;
+  return Math.max(1, Math.min(HOME_CLOSE_UP, (between / floor) * CORNER_REACH));
+}
+
+/** How far the floor starts to the side, so that it is centred between the side panels */
+export function homeShift(size: { w: number; h: number }): number {
+  return size.w < WIDE_SCREEN ? 0 : (HUD_SIDES.left - HUD_SIDES.right) / 2;
+}
 
 /**
  * Where the camera starts in the office, as a zoom of the floor that covers the screen and a
  * shift in pixels, and how far the camera can step back from there (`out`, a factor of the
- * starting zoom). On a wide screen the floor starts larger than the screen can hold whole, so
- * the office reads as a place and not as a picture of one: its corners pass under the panels,
- * and stepping back brings the whole floor into view. On a narrow screen the floor covers the
- * screen and is dragged around.
+ * starting zoom): to the whole floor in view. On a narrow screen the floor covers the screen
+ * and is dragged around.
  */
 export function homeView(
   size: { w: number; h: number },
@@ -129,11 +160,12 @@ export function homeView(
   if (size.w < WIDE_SCREEN) return { zoom: 1, x: 0, y: 0, out: 1 };
   const cover = Math.max(size.w, size.h * aspect);
   const fit = Math.min(size.w, size.h * aspect);
+  const closeUp = homeCloseUp(size, aspect);
   return {
-    zoom: (fit / cover) * HOME_CLOSE_UP,
-    x: 0,
+    zoom: (fit / cover) * closeUp,
+    x: homeShift(size),
     y: -Math.round(size.h * 0.03),
-    out: 1 / HOME_CLOSE_UP,
+    out: 1 / closeUp,
   };
 }
 
