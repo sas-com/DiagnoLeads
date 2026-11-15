@@ -176,7 +176,11 @@ describe('the views of the deal board', () => {
     expect(dealBoardPages(0)).toBe(1);
     expect(dealBoardPages(rows.length)).toBe(2);
     expect(dealBoardPage(rows, 1)).toHaveLength(DEAL_BOARD_PAGE_SIZE);
-    expect(dealBoardPage(rows, 2)).toEqual([8, 9, 10]);
+    expect(dealBoardPage(rows, 2)).toEqual([
+      DEAL_BOARD_PAGE_SIZE,
+      DEAL_BOARD_PAGE_SIZE + 1,
+      DEAL_BOARD_PAGE_SIZE + 2,
+    ]);
   });
 });
 
