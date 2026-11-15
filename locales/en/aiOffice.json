@@ -687,7 +687,7 @@
             "more": "There are {count} more. Please check them in the normal view.",
             "invitations": "Invitations sent (expired ones included)",
             "invitationsHidden": "Only admins and owners can see invitations.",
-            "invitationsError": "The invitations could not be read.",
+            "invitationsError": " The invitations could not be read.",
             "noInvitations": "No invitation is waiting to be accepted.",
             "expires": "Expires: {date}",
             "expired": "Link expired",
@@ -708,7 +708,7 @@
           },
           "settingsShelf": {
             "board": "Settings shelf",
-            "report": "This is the settings shelf. Choose a page; it opens in the normal view.",
+            "report": "Choose a page; it opens in the normal view.",
             "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view.",
             "heading": "Pages to open"
           },

@@ -203,7 +203,9 @@ export function OfficeRoomMembers({
                   count: members.data.total,
                   waiting: invited.waiting,
                 })
-              : tShelf('report', { count: members.data.total });
+              : // Said, not only shown on the board: who listens does not see it
+                tShelf('report', { count: members.data.total }) +
+                (invited.state === 'error' ? tShelf('invitationsError') : '');
   const more = members.data ? members.data.total - members.data.members.length : 0;
 
   return (
@@ -318,7 +320,8 @@ export function OfficeRoomMembers({
           </output>
         ) : (
           <div className="grid min-h-0 flex-1 content-start gap-x-8 gap-y-6 overflow-y-auto px-5 py-5 md:grid-cols-2">
-            {/* First on a narrow screen: the one thing done here is about the invitations */}
+            {/* First in the reading order (the one thing done here is about the invitations); on the
+                right on a wide screen */}
             <div className="min-w-0 space-y-3 md:order-last">
               <h3 className={CAP}>{tShelf('invitations')}</h3>
               {invited.state === 'hidden' ? (

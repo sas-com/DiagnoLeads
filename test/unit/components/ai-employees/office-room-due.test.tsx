@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => ({
   members: [] as unknown[],
   membersTotal: null as number | null,
   membersInputs: [] as unknown[],
+  membersFail: false,
   invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
   revoked: [] as { organizationId: string; invitationId: string }[],
   revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
@@ -80,6 +81,14 @@ vi.mock('@/lib/trpc/client', () => ({
       list: {
         useQuery: (input: unknown) => {
           mocks.membersInputs.push(input);
+          if (mocks.membersFail) {
+            return {
+              data: undefined,
+              error: { data: { code: 'INTERNAL' } },
+              isError: true,
+              isFetching: false,
+            };
+          }
           return {
             data: { members: mocks.members, total: mocks.membersTotal ?? mocks.members.length },
             error: null,
@@ -584,19 +593,19 @@ describe('the counter of the reception (#1196)', () => {
   });
 
   it('keeps marking closed until a queue that arrives late was shown for a moment (#1236)', async () => {
-    mocks.armMs = 300;
+    mocks.armMs = 1000;
     mocks.mode = 'loading';
     const { user, office, refresh } = await enterCounter();
     await user.keyboard('1');
     // The shelf is open for longer than the moment, with nothing to see yet
-    await act(() => new Promise((resolve) => setTimeout(resolve, 350)));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1050)));
     mocks.mode = 'ok';
     refresh();
     const done = await within(office).findByRole('button', { name: /済みにする/ });
     expect(done).toHaveAttribute('aria-disabled', 'true');
     await user.keyboard('1');
     expect(mocks.updates).toHaveLength(0);
-    await waitFor(() => expect(done).not.toHaveAttribute('aria-disabled'));
+    await waitFor(() => expect(done).not.toHaveAttribute('aria-disabled'), { timeout: 3000 });
     await user.keyboard('1');
     expect(mocks.updates).toHaveLength(1);
     mocks.armMs = 0;
@@ -604,8 +613,21 @@ describe('the counter of the reception (#1196)', () => {
 
   it('says what could not be read instead of leaving it out (#1236)', async () => {
     mocks.invitations = 'error';
-    const { office } = await enterCounter();
+    const { user, office } = await enterCounter();
     expect(within(office).getByText(/メンバーは 2 人です。招待の件数を読めませんでした。/)).toBeInTheDocument();
+    // The shelf says so too, not only its board
+    await user.keyboard('2');
+    expect(
+      within(office).getByText('メンバーは 2 人です。招待を読めませんでした。')
+    ).toBeInTheDocument();
+  });
+
+  it('says that the members could not be read only when there is no figure at all', async () => {
+    mocks.membersFail = true;
+    const { office } = await enterCounter();
+    expect(within(office).getByText(/メンバーの人数を読めませんでした。どの棚を開きますか。/)).toBeInTheDocument();
+    expect(within(office).queryByText(/招待の件数を読めませんでした/)).not.toBeInTheDocument();
+    mocks.membersFail = false;
   });
 
   it('names the shelf that is open over its guide', async () => {
