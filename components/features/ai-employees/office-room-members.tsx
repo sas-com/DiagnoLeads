@@ -209,9 +209,10 @@ export function OfficeRoomMembers({
   return (
     <div className={ROOM_FRAME}>
       <div className={cn(PANEL, GUIDE_PANEL)}>
-        <ShelfName shelf="members" />
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
+          {/* Read out with the report: the focus comes here when the shelf opens */}
+          <ShelfName shelf="members" />
           <RoomGuideLine>
             {t(`guide.${roomGuide(status)}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
@@ -317,37 +318,8 @@ export function OfficeRoomMembers({
           </output>
         ) : (
           <div className="grid min-h-0 flex-1 content-start gap-x-8 gap-y-6 overflow-y-auto px-5 py-5 md:grid-cols-2">
-            <div className="min-w-0 space-y-3">
-              <h3 className={CAP}>{tShelf('members', { count: members.data.total })}</h3>
-              <ul className="space-y-1">
-                {members.data.members.map((member) => (
-                  <li
-                    key={member.id}
-                    className="flex items-start justify-between gap-3 border-b border-[#f5f1e8]/10 py-2 text-sm"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-base font-bold">
-                        {member.user.name || member.user.email}
-                      </span>
-                      {member.user.name && (
-                        <span className="block text-xs break-all text-[#d8d2c4]">
-                          {member.user.email}
-                        </span>
-                      )}
-                    </span>
-                    <span className="shrink-0 rounded-full border border-[#d8d2c4] px-2.5 py-0.5 text-xs text-[#d8d2c4]">
-                      {roleLabel(member.role)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {more > 0 && (
-                <p className="text-sm text-[#d8d2c4]">{tShelf('more', { count: more })}</p>
-              )}
-            </div>
-
             {/* First on a narrow screen: the one thing done here is about the invitations */}
-            <div className="order-first min-w-0 space-y-3 md:order-none">
+            <div className="min-w-0 space-y-3 md:order-last">
               <h3 className={CAP}>{tShelf('invitations')}</h3>
               {invited.state === 'hidden' ? (
                 <p className="text-sm text-[#d8d2c4]">{tShelf('invitationsHidden')}</p>
@@ -385,6 +357,34 @@ export function OfficeRoomMembers({
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+            <div className="min-w-0 space-y-3">
+              <h3 className={CAP}>{tShelf('members', { count: members.data.total })}</h3>
+              <ul className="space-y-1">
+                {members.data.members.map((member) => (
+                  <li
+                    key={member.id}
+                    className="flex items-start justify-between gap-3 border-b border-[#f5f1e8]/10 py-2 text-sm"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-base font-bold">
+                        {member.user.name || member.user.email}
+                      </span>
+                      {member.user.name && (
+                        <span className="block text-xs break-all text-[#d8d2c4]">
+                          {member.user.email}
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 rounded-full border border-[#d8d2c4] px-2.5 py-0.5 text-xs text-[#d8d2c4]">
+                      {roleLabel(member.role)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {more > 0 && (
+                <p className="text-sm text-[#d8d2c4]">{tShelf('more', { count: more })}</p>
               )}
             </div>
           </div>

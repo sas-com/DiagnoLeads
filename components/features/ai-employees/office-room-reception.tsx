@@ -210,6 +210,11 @@ export function OfficeRoomReception({
                           count: memberCount ?? 0,
                           waiting: invited.state === 'ready' ? invited.waiting : 0,
                         }),
+                      // Said, not left out: who listens does not see the board
+                      members.isError && tDesk('members.unread'),
+                      !members.isError &&
+                        invited.state === 'error' &&
+                        tDesk('members.invitationsUnread'),
                       tDesk('ask'),
                     ]
                       .filter(Boolean)

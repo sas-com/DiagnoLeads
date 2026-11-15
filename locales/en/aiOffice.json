@@ -653,7 +653,9 @@
           },
           "members": {
             "members": " Members: {count}.",
-            "withInvitations": " Members: {count}. Pending invitations: {waiting}."
+            "withInvitations": " Members: {count}. Pending invitations: {waiting}.",
+            "unread": " The members could not be read.",
+            "invitationsUnread": " The invitations could not be read."
           },
           "choices": {
             "due": "Take what is due today",
@@ -661,7 +663,7 @@
             "settings": "Choose a settings page"
           },
           "figures": {
-            "due": "Due today",
+            "due": "Due by today",
             "dueValue": "{count}",
             "overdueValue": "{count} overdue",
             "members": "Members",
@@ -705,7 +707,8 @@
           "settingsShelf": {
             "board": "Settings shelf",
             "report": "This is the settings shelf. Choose a page; it opens in the normal view.",
-            "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view."
+            "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view.",
+            "heading": "Pages to open"
           },
           "shelves": {
             "due": "What is due",

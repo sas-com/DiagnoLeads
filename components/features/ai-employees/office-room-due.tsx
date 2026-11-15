@@ -213,10 +213,11 @@ export function OfficeRoomDue({
     <div className={ROOM_FRAME}>
       {/* Whose room this is, what is handed over, and what the president answers */}
       <div className={cn(PANEL, GUIDE_PANEL)}>
-        <ShelfName shelf="due" />
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
+          {/* Read out with the report: the focus comes here when the shelf opens */}
+          <ShelfName shelf="due" />
           <RoomGuideLine>
             {t(`guide.${guide}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
