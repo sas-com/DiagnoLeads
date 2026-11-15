@@ -44,7 +44,7 @@ export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomPro
         onFileOpenChange={onFileOpenChange}
       />
     ),
-  backoffice: ({ organizationId, guide, keysRef, onLeaveOffice, onFileOpenChange }) =>
+  backoffice: ({ organizationId, guide, keysRef, onLeaveOffice, onFileOpenChange, onBusyChange }) =>
     guide && (
       <OfficeRoomReception
         organizationId={organizationId}
@@ -55,6 +55,7 @@ export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomPro
         keysRef={keysRef}
         onOpenNormal={onLeaveOffice}
         onFileOpenChange={onFileOpenChange}
+        onBusyChange={onBusyChange}
       />
     ),
 };

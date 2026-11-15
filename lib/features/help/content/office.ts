@@ -260,7 +260,7 @@ export const officeArticle: HelpArticle = {
       type: 'table',
       header: ['キー', '棚', 'できること'],
       rows: [
-        ['1', '今日の期限を受け取る', '期限が来た次の行動を1件ずつ片づける（下の手順）'],
+        ['1', '今日までの期限を受け取る', '期限が来た次の行動を1件ずつ片づける（下の手順）'],
         [
           '2',
           'メンバーと招待を見る',
@@ -291,7 +291,7 @@ export const officeArticle: HelpArticle = {
           { type: 'text', text: 'フロアで' },
           { type: 'ui', text: '総務・受付' },
           { type: 'text', text: 'を押し（5 キーでも入れます）、窓口で' },
-          { type: 'ui', text: '今日の期限を受け取る' },
+          { type: 'ui', text: '今日までの期限を受け取る' },
           { type: 'text', text: '（1 キー）を選びます。' },
         ],
         '出てきた1件の、やること・相手・期限・メモを確かめます。右に、このあと出てくる順番が並びます。',

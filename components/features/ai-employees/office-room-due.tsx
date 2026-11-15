@@ -54,6 +54,7 @@ export function OfficeRoomDue({
   keysRef,
   onOpenNormal,
   onBack,
+  onBusyChange,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -68,6 +69,8 @@ export function OfficeRoomDue({
   onOpenNormal: () => void;
   /** Back to the counter of the reception (#1196) */
   onBack: () => void;
+  /** Told while a mark is being saved, and when it no longer is */
+  onBusyChange: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tDue = useTranslations('aiOffice.immersive.room.due');
@@ -77,6 +80,7 @@ export function OfficeRoomDue({
   const locale = useLocale();
   const utils = trpc.useUtils();
   const reportRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLParagraphElement>(null);
   // The queue as it was when the room opened, where the president is in it, and what was done
   const [queue, setQueue] = useState<DueTaskView[] | null>(null);
   const [index, setIndex] = useState(0);
@@ -127,6 +131,12 @@ export function OfficeRoomDue({
     onError: (_error, input) => setOutcome(input.done === false ? 'undoFailed' : 'failed'),
   });
 
+  const saving = update.isPending;
+  useEffect(() => {
+    onBusyChange(saving);
+    return () => onBusyChange(false);
+  }, [saving, onBusyChange]);
+
   const forbidden = due.error?.data?.code === 'FORBIDDEN';
   const canEdit = loaded?.canEdit === true;
   const today = loaded?.today ?? '';
@@ -157,7 +167,8 @@ export function OfficeRoomDue({
       update.mutate({ organizationId, id: justDone, done: false });
     }
     // The answer is in the report: the focus goes there, off a button that is closed now
-    reportRef.current?.focus();
+    // Only what was answered: the whole report would be read again from the shelf's name
+    resultRef.current?.focus();
   };
 
   // The room's keys: each one keeps its meaning, and one that is closed right now does nothing.
@@ -221,7 +232,12 @@ export function OfficeRoomDue({
           <RoomGuideLine>
             {t(`guide.${guide}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
-          <p className="text-base leading-relaxed font-medium" aria-live="polite">
+          <p
+            ref={resultRef}
+            tabIndex={-1}
+            className="text-base leading-relaxed font-medium outline-none"
+            aria-live="polite"
+          >
             {report}
           </p>
           {queue && count > 0 && !canEdit && (
@@ -274,7 +290,7 @@ export function OfficeRoomDue({
             </ul>
           </>
         )}
-        <ShelfBackButton onBack={onBack} />
+        <ShelfBackButton onBack={onBack} closed={update.isPending} />
       </div>
 
       {/* What is handed over now, and the order of the rest */}
