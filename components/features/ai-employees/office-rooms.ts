@@ -5,7 +5,9 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
  * is the first: its wall board is the lead list. The reception (back office) hands over what is
  * due, one at a time (#1133). The sales floor holds the deals (#1171; its functions are in
  * rooms/deals-board.ts). The engineering room shows the surveys of the current systems (#1194;
- * its pure functions are in rooms/survey-board.ts).
+ * its pure functions are in rooms/survey-board.ts). The training room is where the AI employees
+ * are brought up: their onboarding, their reviews and their promotions (#1191, decision
+ * 2026-11-14-training-room-grows-employees); it belongs to no one employee.
  *
  * Pure functions only.
  */
@@ -21,15 +23,22 @@ import {
 import type { ListLeadsInput } from '@/lib/features/leads/types/schemas';
 
 /** The rooms the president can walk into */
-export const OFFICE_ROOMS = ['marketing', 'sales', 'engineering', 'backoffice'] as const;
+export const OFFICE_ROOMS = [
+  'marketing',
+  'sales',
+  'engineering',
+  'backoffice',
+  'training',
+] as const;
 export type OfficeRoom = (typeof OFFICE_ROOMS)[number];
 
-/** The AI employee each room belongs to */
-export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
+/** The AI employee each room belongs to; null for the training room, which is everyone's */
+export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole | null>> = {
   marketing: 'marketer',
   sales: 'sales',
   engineering: 'engineer',
   backoffice: 'back_office',
+  training: null,
 };
 
 /**
@@ -37,14 +46,21 @@ export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
  * the system is reached from the floor. A place whose room is not built yet is a door: entering it
  * opens its page of the normal view, until the room takes its place.
  */
-export const FLOOR_PLACES = ['desk', 'marketing', 'sales', 'engineering', 'backoffice'] as const;
+export const FLOOR_PLACES = [
+  'desk',
+  'marketing',
+  'sales',
+  'engineering',
+  'backoffice',
+  'training',
+] as const;
 export type FloorPlace = (typeof FLOOR_PLACES)[number];
 export type FloorDoor = Exclude<FloorPlace, OfficeRoom>;
 
 /**
  * The key of each place. The numbers follow the floor guide of the design (1 the president's
  * desk, 2 marketing, 3 sales, 4 engineering, 5 reception): a place keeps its number when its room
- * opens.
+ * opens. A new place takes the next number (6 the training room, #1191).
  */
 export const PLACE_KEYS: Readonly<Record<FloorPlace, string>> = {
   desk: '1',
@@ -52,6 +68,7 @@ export const PLACE_KEYS: Readonly<Record<FloorPlace, string>> = {
   sales: '3',
   engineering: '4',
   backoffice: '5',
+  training: '6',
 };
 
 /** The key that enters each room from the floor */
@@ -60,6 +77,7 @@ export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
   sales: PLACE_KEYS.sales,
   engineering: PLACE_KEYS.engineering,
   backoffice: PLACE_KEYS.backoffice,
+  training: PLACE_KEYS.training,
 };
 
 /**

@@ -47,6 +47,11 @@ export const AGENT_EFFORT = 'low' as const;
 export const STEP_LOCK_MS = 40_000;
 /** Reminders to hand in the report before the session gives up */
 export const MAX_REMINDERS = 2;
+/**
+ * Longest wait for one call: the function stops at 30 seconds (vercel.json maxDuration), and the
+ * lock, the limits and the save take the rest. The same as the other AI calls (client.ts)
+ */
+export const AGENT_CALL_TIMEOUT_MS = 20_000;
 
 const MEMORY_TOOL: Anthropic.MemoryTool20250818 = { type: 'memory_20250818', name: 'memory' };
 
@@ -64,7 +69,8 @@ export type ClaudeCall = (
   scope: { operation: 'ai-employee-onboarding' | 'ai-employee-review'; organizationId: string }
 ) => Promise<Anthropic.Message>;
 
-const defaultCall: ClaudeCall = (params, scope) => createClaudeMessage(params, scope);
+const defaultCall: ClaudeCall = (params, scope) =>
+  createClaudeMessage(params, scope, { timeoutMs: AGENT_CALL_TIMEOUT_MS });
 
 export type StepOutcome =
   /** One step was made and the session runs on: ask for the next */
@@ -78,6 +84,8 @@ export type StepOutcome =
   | { state: 'retry' }
   /** The employee is paused: it does not work */
   | { state: 'paused' }
+  /** The agents are switched off: nothing is sent to Claude, even for a running session */
+  | { state: 'disabled' }
   /** The session is not running (handed in, over) */
   | { state: 'closed'; status: AiEmployeeSessionStatus };
 
@@ -186,6 +194,8 @@ export async function advanceSession(
 ): Promise<StepOutcome | null> {
   const now = input.now ?? new Date();
   const call = input.call ?? defaultCall;
+  // The switch stops what is running too: once it is off, no step calls Claude
+  if (!agentEnabled()) return { state: 'disabled' };
 
   const [found] = await db
     .select({ status: aiEmployeeSessions.status, employeeStatus: aiEmployees.status })
@@ -330,9 +340,9 @@ export async function advanceSession(
   }
 
   const changes = netChanges(notes, after);
-  await db.transaction(async (tx) => {
-    await saveNoteChanges(tx, scope, changes, { kind: 'agent', sessionId: session.id }, now);
-    await tx
+  const saved = await db.transaction(async (tx) => {
+    // The step must still hold the session (not cancelled meanwhile): else nothing is kept
+    const [kept] = await tx
       .update(aiEmployeeSessions)
       .set({
         ...usage,
@@ -344,8 +354,13 @@ export async function advanceSession(
         updatedAt: now,
         ...(status === 'failed' ? { finishedAt: now } : {}),
       })
-      .where(held);
+      .where(and(held, eq(aiEmployeeSessions.status, 'running')))
+      .returning({ id: aiEmployeeSessions.id });
+    if (!kept) return false;
+    await saveNoteChanges(tx, scope, changes, { kind: 'agent', sessionId: session.id }, now);
+    return true;
   });
+  if (!saved) return { state: 'closed', status: 'cancelled' };
 
   if (status === 'failed') return { state: 'failed', resultCode: resultCode ?? 'failed' };
   return status === 'waiting' ? { state: 'waiting' } : { state: 'running' };

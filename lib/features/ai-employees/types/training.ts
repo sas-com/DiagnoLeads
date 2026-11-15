@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { refusedNoteContent } from '../agent/memory';
 import { employeeScopeSchema, officeScopeSchema } from './schemas';
 
 /**
@@ -29,12 +30,17 @@ export const AI_EMPLOYEE_CORRECTION_MAX_LENGTH = 600;
 
 /** One paragraph of plain text: line breaks allowed, no other control characters */
 const PARAGRAPH = /^[^\p{Cc}\p{Cf}]*$/u;
+/**
+ * What the president writes for an employee reaches Claude: like the notes, never a person's
+ * contact details or a secret (decision 2026-10-25-ai-no-personal-data)
+ */
 const paragraph = (max: number) =>
   z
     .string()
     .trim()
     .max(max)
-    .refine((value) => PARAGRAPH.test(value.replace(/\r?\n/g, ' ')), 'Invalid characters');
+    .refine((value) => PARAGRAPH.test(value.replace(/\r?\n/g, ' ')), 'Invalid characters')
+    .refine((value) => refusedNoteContent(value) === null, 'personal_data');
 
 export const trainingScopeSchema = officeScopeSchema;
 

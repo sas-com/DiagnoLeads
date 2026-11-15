@@ -50,7 +50,13 @@ import { officeFits } from './office-app';
 import { OfficeTags2D } from './office-floor-labels';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
-import { DESK_SEATS, areaOf, spotOf } from './office-map-layout';
+import {
+  DESK_SEATS,
+  type OfficeArea,
+  TRAINING_ROOM_SPOT,
+  areaOf,
+  spotOf,
+} from './office-map-layout';
 import {
   type TalkChoice,
   type TalkLine,
@@ -87,6 +93,9 @@ import { OfficeTalkStaff, type StaffMatter } from './office-talk-staff';
 import { StatusDot } from './office-world-tag';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
+
+/** The rooms whose name on the floor is a door into them (#1191) */
+const ENTERABLE_AREAS: readonly OfficeArea[] = ['training'];
 
 /**
  * The floor in 3D (#1135, spike): three.js is loaded only when the president switches to it, so
@@ -313,6 +322,10 @@ export function OfficeImmersive({
     setRoom(next);
     setStage('room');
   };
+  // The name of the training room on the floor enters it, like its key and the floor guide (#1191)
+  const enterArea = (area: OfficeArea) => {
+    if ((OFFICE_ROOMS as readonly string[]).includes(area)) enterRoom(area as OfficeRoom);
+  };
   // A place whose room is not built yet opens its page of the normal view (#1162)
   const doorHref = (door: FloorDoor) => `/${locale}${DOOR_PAGES[door]}`;
   const openDoor = (door: FloorDoor) => {
@@ -438,11 +451,11 @@ export function OfficeImmersive({
         : stage === 'world'
           ? home.zoom * zoom
           : 1.08;
-  // In a room the camera rests on the desk of the room's AI employee, left of the board
-  const [roomDeskX, roomDeskY] = project(
-    DESK_SEATS[ROOM_ROLES[room]].x,
-    DESK_SEATS[ROOM_ROLES[room]].y
-  );
+  // In a room the camera rests on the desk of the room's AI employee, left of the board (the
+  // training room belongs to no one: the camera rests on its study desks)
+  const roomRole = ROOM_ROLES[room];
+  const roomSpot = roomRole ? DESK_SEATS[roomRole] : TRAINING_ROOM_SPOT;
+  const [roomDeskX, roomDeskY] = project(roomSpot.x, roomSpot.y);
   const camera =
     stage === 'room'
       ? cameraOffset({
@@ -507,11 +520,7 @@ export function OfficeImmersive({
   // What a scene other than the floor is about: the desk of the room's employee, or the employee
   // the president talks to or customizes
   const subject3d =
-    stage === 'room'
-      ? DESK_SEATS[ROOM_ROLES[room]]
-      : stage === 'talk' || stage === 'studio'
-        ? spot
-        : null;
+    stage === 'room' ? roomSpot : stage === 'talk' || stage === 'studio' ? spot : null;
   // What the 3D floor shows: the real statuses, with what the trial panel pretends on top
   const shown3d = Object.fromEntries(
     AI_EMPLOYEE_ROLES.map((role) => [
@@ -617,6 +626,8 @@ export function OfficeImmersive({
               selected={selected}
               onChoose={setSelected}
               onTalk={talkTo}
+              enterableAreas={ENTERABLE_AREAS}
+              onEnterArea={enterArea}
               camera={camera}
               scale={scale}
               width={width}
@@ -664,6 +675,8 @@ export function OfficeImmersive({
               selected={selected}
               onChoose={setSelected}
               onTalk={talkTo}
+              enterableAreas={ENTERABLE_AREAS}
+              onEnterArea={enterArea}
             />
           )}
           {/* Seen through a camera */}
@@ -1109,12 +1122,14 @@ export function OfficeImmersive({
               </button>
               <RoomView
                 organizationId={organizationId}
-                guide={{
-                  role: ROOM_ROLES[room],
-                  status: statuses[ROOM_ROLES[room]],
-                  name: byRole.get(ROOM_ROLES[room])?.name ?? null,
-                  look: looks[ROOM_ROLES[room]],
-                }}
+                guide={
+                  roomRole && {
+                    role: roomRole,
+                    status: statuses[roomRole],
+                    name: byRole.get(roomRole)?.name ?? null,
+                    look: looks[roomRole],
+                  }
+                }
                 keysRef={roomKeys}
                 onLeaveOffice={leave}
                 onFileOpenChange={setRoomFileOpen}

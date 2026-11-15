@@ -6,7 +6,7 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { aiEmployeeMemories, aiEmployeeMemoryVersions } from '@/lib/db/schema';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import type { MemoryChange, MemoryNotes } from './memory';
+import type { MemoryChange } from './memory';
 
 type Database = Pick<typeof defaultDb, 'select' | 'insert' | 'update' | 'delete'>;
 
@@ -103,17 +103,4 @@ export async function saveNoteChanges(
       createdAt: now,
     }))
   );
-}
-
-/** The notes after the changes (for a step that keeps going in memory) */
-export function applyChanges(
-  notes: MemoryNotes,
-  changes: readonly MemoryChange[]
-): Map<string, string> {
-  const next = new Map(notes);
-  for (const change of changes) {
-    if (change.content === null) next.delete(change.path);
-    else next.set(change.path, change.content);
-  }
-  return next;
 }

@@ -45,7 +45,9 @@ const PATH_RULE =
   'Paths must look like /memories/<name>.md or /memories/<folder>/<name>.md: lower-case letters, digits, "-" and "_" only, with the extension .md or .txt.';
 
 /** Why a text is not written, or null when it may be */
-export function refusedNoteContent(text: string): string | null {
+export function refusedNoteContent(raw: string): string | null {
+  // Full-width letters, digits and ＠ are read as their ASCII forms
+  const text = raw.normalize('NFKC');
   // An e-mail address
   if (/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/.test(text)) {
     return 'an e-mail address';
@@ -123,15 +125,14 @@ function error(notes: MemoryNotes, result: string): MemoryOutcome {
   return { result, isError: true, notes, changes: [] };
 }
 
-/** A write, checked for content and limits */
-function write(
-  notes: MemoryNotes,
-  updates: MemoryChange[],
-  result: string,
-  written: readonly string[]
-): MemoryOutcome {
-  for (const text of written) {
-    const refused = refusedNoteContent(text);
+/**
+ * A write, checked for content and limits. Each note is checked whole as it would be after the
+ * write, so an address cannot be put together over several edits
+ */
+function write(notes: MemoryNotes, updates: MemoryChange[], result: string): MemoryOutcome {
+  for (const change of updates) {
+    if (change.content === null) continue;
+    const refused = refusedNoteContent(change.content);
     if (refused) {
       return error(
         notes,
@@ -200,9 +201,7 @@ export function runMemoryCommand(notes: MemoryNotes, input: unknown): MemoryOutc
       if (!isNote(path))
         return error(notes, `Error: ${path} is not a valid note path. ${PATH_RULE}`);
       // The tool's description says it "creates or overwrites": overwriting is allowed
-      return write(notes, [{ path, content: text }], `File created successfully at: ${path}`, [
-        text,
-      ]);
+      return write(notes, [{ path, content: text }], `File created successfully at: ${path}`);
     }
 
     case 'str_replace': {
@@ -234,8 +233,7 @@ export function runMemoryCommand(notes: MemoryNotes, input: unknown): MemoryOutc
       return write(
         notes,
         [{ path, content: next }],
-        `The memory file has been edited.\n${numbered(path, next)}`,
-        [newStr]
+        `The memory file has been edited.\n${numbered(path, next)}`
       );
     }
 
@@ -258,8 +256,7 @@ export function runMemoryCommand(notes: MemoryNotes, input: unknown): MemoryOutc
       return write(
         notes,
         [{ path, content: lines.join('\n') }],
-        `The file ${path} has been edited.`,
-        [text]
+        `The file ${path} has been edited.`
       );
     }
 
@@ -273,8 +270,7 @@ export function runMemoryCommand(notes: MemoryNotes, input: unknown): MemoryOutc
       return write(
         notes,
         targets.map((target) => ({ path: target, content: null })),
-        `Successfully deleted ${path}`,
-        []
+        `Successfully deleted ${path}`
       );
     }
 
@@ -299,8 +295,7 @@ export function runMemoryCommand(notes: MemoryNotes, input: unknown): MemoryOutc
             { path: oldPath, content: null },
             { path: newPath, content },
           ],
-          `Successfully renamed ${oldPath} to ${newPath}`,
-          []
+          `Successfully renamed ${oldPath} to ${newPath}`
         );
       }
       const inside = isDir(oldPath) ? notesIn(notes, oldPath) : [];
@@ -323,8 +318,7 @@ export function runMemoryCommand(notes: MemoryNotes, input: unknown): MemoryOutc
             content: notes.get(note) ?? '',
           })),
         ],
-        `Successfully renamed ${oldPath} to ${newPath}`,
-        []
+        `Successfully renamed ${oldPath} to ${newPath}`
       );
     }
 

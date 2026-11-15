@@ -17,7 +17,7 @@ import {
   auditLogs,
 } from '@/lib/db/schema';
 import type Anthropic from '@anthropic-ai/sdk';
-import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, ne, sql } from 'drizzle-orm';
 import {
   MEMORY_PATH,
   type MemoryNotes,
@@ -136,7 +136,20 @@ async function inTransaction<T>(
   }
 }
 
-function toSession(row: typeof aiEmployeeSessions.$inferSelect): TrainingSession {
+const sessionColumns = {
+  id: aiEmployeeSessions.id,
+  kind: aiEmployeeSessions.kind,
+  status: aiEmployeeSessions.status,
+  report: aiEmployeeSessions.report,
+  resultCode: aiEmployeeSessions.resultCode,
+  steps: aiEmployeeSessions.steps,
+  createdAt: aiEmployeeSessions.createdAt,
+  updatedAt: aiEmployeeSessions.updatedAt,
+};
+
+function toSession(
+  row: Pick<typeof aiEmployeeSessions.$inferSelect, keyof typeof sessionColumns>
+): TrainingSession {
   return {
     id: row.id,
     kind: row.kind as AiEmployeeSessionKind,
@@ -215,8 +228,9 @@ export async function getTraining(
   const result: TrainingEmployee[] = [];
   for (const employee of employees) {
     if (!isAiEmployeeRole(employee.role)) continue;
+    // The conversation itself is never read here: it stays on the server
     const [session] = await db
-      .select()
+      .select(sessionColumns)
       .from(aiEmployeeSessions)
       .where(
         and(
@@ -492,7 +506,9 @@ async function runCounts(db: Database, organizationId: string, employeeId: strin
       and(
         eq(aiEmployeeRuns.organizationId, organizationId),
         eq(aiEmployeeRuns.employeeId, employeeId),
-        gte(aiEmployeeRuns.startedAt, since)
+        gte(aiEmployeeRuns.startedAt, since),
+        // A run still going is not counted either way
+        ne(aiEmployeeRuns.status, 'running')
       )
     )
     .groupBy(aiEmployeeRuns.status);
@@ -548,7 +564,23 @@ export async function startReview(
   const narrowed = recommendation === 'narrow' ? toLevel(level - 1) : null;
 
   try {
-    return await db.transaction(async (tx) => {
+    return await inTransaction(db, async (tx) => {
+      // A review left open (its self-review was stopped) is closed as it stood: only the newest
+      // review can be decided, never one counted from older facts
+      await tx
+        .update(aiEmployeeReviews)
+        .set({
+          status: 'decided',
+          levelAfter: sql`${aiEmployeeReviews.levelBefore}`,
+          decidedAt: now,
+        })
+        .where(
+          and(
+            eq(aiEmployeeReviews.organizationId, input.organizationId),
+            eq(aiEmployeeReviews.employeeId, employee.id),
+            eq(aiEmployeeReviews.status, 'open')
+          )
+        );
       const [session] = await tx
         .insert(aiEmployeeSessions)
         .values({
@@ -594,7 +626,7 @@ export async function startReview(
         .returning({ id: aiEmployeeReviews.id });
       if (!review) throw new Error('The review was not created');
       if (narrowed !== null) {
-        await tx
+        const [lowered] = await tx
           .update(aiEmployees)
           .set({ level: narrowed, levelChangedAt: now, updatedAt: now })
           .where(
@@ -603,7 +635,9 @@ export async function startReview(
               eq(aiEmployees.organizationId, input.organizationId),
               eq(aiEmployees.level, level)
             )
-          );
+          )
+          .returning({ id: aiEmployees.id });
+        if (!lowered) throw new Abort('level_changed');
         await audit(tx, {
           organizationId: input.organizationId,
           userId: input.userId,
@@ -613,7 +647,7 @@ export async function startReview(
           after: { level: narrowed, failureRate: facts.failureRate, runs: facts.runs },
         });
       }
-      return ok({ reviewId: review.id, sessionId: session.id, recommendation });
+      return { reviewId: review.id, sessionId: session.id, recommendation };
     });
   } catch (error) {
     if (isOpenSessionConflict(error)) return fail('open_session');

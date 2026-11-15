@@ -200,6 +200,21 @@ describe('what is never written', () => {
     }
   });
 
+  it('checks a note whole after an edit: an address is not put together over several edits', () => {
+    const current = notes({ '/memories/x.md': '連絡は taro AT example.com まで' });
+    const out = run(current, {
+      command: 'str_replace',
+      path: '/memories/x.md',
+      old_str: ' AT ',
+      new_str: '@',
+    });
+    expect(out.isError).toBe(true);
+    expect(out.notes.get('/memories/x.md')).toBe('連絡は taro AT example.com まで');
+    // Full-width forms are read as their ASCII ones
+    expect(refusedNoteContent('ｔａｒｏ＠ｅｘａｍｐｌｅ．ｃｏｍ')).not.toBeNull();
+    expect(refusedNoteContent('０３－１２３４－５６７８')).not.toBeNull();
+  });
+
   it('lets dates, counts and ordinary work notes through', () => {
     for (const text of ['2026-11-14 に開始', '30日で20件', 'リードを評価して営業に渡す']) {
       expect(refusedNoteContent(text), text).toBeNull();

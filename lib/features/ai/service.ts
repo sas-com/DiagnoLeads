@@ -15,12 +15,6 @@ export { untrustedDataBlock } from './prompt-safety';
 export type { AiOperation } from './usage';
 
 /**
- * Longest wait for one Claude call made by an agent step (#1188). The function stops at 30
- * seconds (vercel.json maxDuration): the database work of the step takes the rest.
- */
-export const AGENT_CALL_TIMEOUT_MS = 25_000;
-
-/**
  * One Messages API call for another feature, with the usage line written as soon as the response
  * is in (usage.ts). The SDK's errors are thrown as they are: the caller decides what a refusal,
  * a timeout or a misconfiguration means for its work.
@@ -31,9 +25,11 @@ export async function createClaudeMessage(
   options: { timeoutMs?: number } = {}
 ): Promise<Anthropic.Message> {
   const startedAt = performance.now();
-  const message = await anthropic.messages.create(params, {
-    timeout: options.timeoutMs ?? AGENT_CALL_TIMEOUT_MS,
-  });
+  // Without a timeout of its own, the client's (client.ts) applies
+  const message = await anthropic.messages.create(
+    params,
+    options.timeoutMs === undefined ? undefined : { timeout: options.timeoutMs }
+  );
   logAiUsage(
     {
       operation: scope.operation,

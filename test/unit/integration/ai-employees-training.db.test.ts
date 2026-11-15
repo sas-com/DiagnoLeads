@@ -12,6 +12,7 @@
 import * as schema from '@/lib/db/schema';
 import {
   aiEmployeeMemoryVersions,
+  aiEmployeeReviews,
   aiEmployeeRuns,
   aiEmployeeSessions,
   aiEmployees,
@@ -29,13 +30,19 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
 
-const claude = vi.hoisted(() => ({ replies: [] as unknown[], requests: [] as unknown[] }));
+const claude = vi.hoisted(() => ({
+  replies: [] as unknown[],
+  requests: [] as unknown[],
+  // Run while Claude "thinks": what a person may do in the middle of a step
+  during: null as null | (() => Promise<void>),
+}));
 vi.mock('@/lib/features/ai/service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/features/ai/service')>();
   return {
     ...actual,
     createClaudeMessage: vi.fn(async (params: unknown) => {
       claude.requests.push(structuredClone(params));
+      if (claude.during) await claude.during();
       const next = claude.replies.shift();
       if (!next) throw new Error('No scripted reply left');
       if (next instanceof Error) throw next;
@@ -136,6 +143,7 @@ describe.skipIf(!url)('AI employees: the training room (PostgreSQL)', () => {
   beforeEach(() => {
     claude.replies.length = 0;
     claude.requests.length = 0;
+    claude.during = null;
   });
 
   afterAll(async () => {
@@ -485,5 +493,127 @@ describe.skipIf(!url)('AI employees: the training room (PostgreSQL)', () => {
         ['/memories/goals.md', null],
       ])
     );
+  });
+
+  it('refuses a policy that holds contact details (#1189)', async () => {
+    await expect(
+      adminA.aiEmployees.setPolicy({
+        organizationId: orgA,
+        employeeId: marketer,
+        policy: '担当は taro@example.com です',
+      })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect((await employee(marketer)).policy).toBe('製造業の見込み客を重視してください。');
+  });
+
+  it('stops every step once the switch is off, even of a running session', async () => {
+    const back = (
+      await adminA.aiEmployees.hire({ organizationId: orgA, role: 'back_office', name: 'AI 期限' })
+    ).id;
+    const { sessionId } = await adminA.aiEmployees.startOnboarding({
+      organizationId: orgA,
+      employeeId: back,
+      locale: 'ja',
+    });
+    process.env.AI_EMPLOYEE_AGENT_ENABLED = 'false';
+    try {
+      expect(await adminA.aiEmployees.advance({ organizationId: orgA, sessionId })).toEqual({
+        state: 'disabled',
+      });
+    } finally {
+      process.env.AI_EMPLOYEE_AGENT_ENABLED = 'true';
+    }
+    expect(claude.requests).toHaveLength(0);
+    expect((await session(sessionId)).steps).toBe(0);
+
+    // Stopped while Claude answers: the step keeps nothing, not even the notes it wrote
+    claude.during = async () => {
+      await adminA.aiEmployees.cancelSession({ organizationId: orgA, sessionId });
+    };
+    claude.replies.push(
+      reply('tool_use', [
+        memory('n', { command: 'create', path: '/memories/role.md', file_text: '期限を見張る' }),
+      ])
+    );
+    expect(await adminA.aiEmployees.advance({ organizationId: orgA, sessionId })).toEqual({
+      state: 'closed',
+      status: 'cancelled',
+    });
+    const training = await adminA.aiEmployees.training({ organizationId: orgA });
+    expect(training.employees.find((e: { id: string }) => e.id === back).notes).toEqual([]);
+    expect(await session(sessionId)).toMatchObject({ status: 'cancelled' });
+  });
+
+  it('ends a session at its limits: no report after the reminders, an answer cut off, too many steps', async () => {
+    const back = (await pg
+      .select({ id: aiEmployees.id })
+      .from(aiEmployees)
+      .where(and(eq(aiEmployees.organizationId, orgA), eq(aiEmployees.role, 'back_office'))))[0].id;
+    const text = reply('end_turn', [{ type: 'text', text: 'Hello.', citations: null }]);
+    const first = await adminA.aiEmployees.startOnboarding({
+      organizationId: orgA,
+      employeeId: back,
+      locale: 'ja',
+    });
+    claude.replies.push(text, text, text);
+    for (const expected of ['running', 'running']) {
+      expect(
+        (await adminA.aiEmployees.advance({ organizationId: orgA, sessionId: first.sessionId })).state
+      ).toBe(expected);
+    }
+    expect(await adminA.aiEmployees.advance({ organizationId: orgA, sessionId: first.sessionId })).toEqual(
+      { state: 'failed', resultCode: 'no_report' }
+    );
+
+    const second = await adminA.aiEmployees.startOnboarding({
+      organizationId: orgA,
+      employeeId: back,
+      locale: 'ja',
+    });
+    claude.replies.push(reply('max_tokens', [{ type: 'text', text: '…', citations: null }]));
+    expect(
+      await adminA.aiEmployees.advance({ organizationId: orgA, sessionId: second.sessionId })
+    ).toEqual({ state: 'failed', resultCode: 'max_tokens' });
+
+    const third = await adminA.aiEmployees.startOnboarding({
+      organizationId: orgA,
+      employeeId: back,
+      locale: 'ja',
+    });
+    await pg
+      .update(aiEmployeeSessions)
+      .set({ steps: 12 })
+      .where(eq(aiEmployeeSessions.id, third.sessionId));
+    expect(
+      await adminA.aiEmployees.advance({ organizationId: orgA, sessionId: third.sessionId })
+    ).toEqual({ state: 'failed', resultCode: 'step_limit' });
+    expect(claude.requests).toHaveLength(4);
+  });
+
+  it('closes a review left open when the next one starts: only the newest can be decided', async () => {
+    const [last] = await pg
+      .select()
+      .from(aiEmployeeReviews)
+      .where(eq(aiEmployeeReviews.employeeId, marketer));
+    // A review whose self-review was stopped, from the past, still open
+    const past = new Date(Date.now() - 40 * 86_400_000);
+    await pg
+      .update(aiEmployeeReviews)
+      .set({ status: 'open', levelAfter: null, decidedAt: null, createdAt: past })
+      .where(eq(aiEmployeeReviews.id, last.id));
+    const next = await adminA.aiEmployees.startReview({
+      organizationId: orgA,
+      employeeId: marketer,
+      locale: 'ja',
+    });
+    const [old] = await pg
+      .select()
+      .from(aiEmployeeReviews)
+      .where(eq(aiEmployeeReviews.id, last.id));
+    expect(old).toMatchObject({ status: 'decided', levelAfter: old.levelBefore });
+    await expect(
+      adminA.aiEmployees.decideReview({ organizationId: orgA, reviewId: last.id, decision: 'keep' })
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: 'not_waiting' });
+    await adminA.aiEmployees.cancelSession({ organizationId: orgA, sessionId: next.sessionId });
   });
 });
