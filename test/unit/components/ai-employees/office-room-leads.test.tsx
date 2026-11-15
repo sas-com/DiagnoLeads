@@ -57,6 +57,8 @@ interface ContactRecord {
 
 const mocks = vi.hoisted(() => ({
   inputs: [] as unknown[],
+  // Called each time every leads.list query is marked to be read again
+  reread: vi.fn(),
   /** The inputs of the analytics queries of the room */
   figureInputs: [] as unknown[],
   /** The inputs of the queries of the campaign board, by procedure (#1201) */
@@ -292,6 +294,7 @@ vi.mock('@/lib/trpc/client', () => ({
         myDay: { invalidate: vi.fn() },
       },
       analytics: { getDashboard: { invalidate: vi.fn() } },
+      leads: { list: { invalidate: mocks.reread } },
     }),
     leadFollowUp: {
       contacts: {
@@ -393,12 +396,21 @@ const marketer = (deskStatus: 'training' | 'idle' | 'paused') => ({
   profile: DEFAULT_AI_EMPLOYEE_PROFILE,
 });
 
+const enMessages = mergeMessageFiles(MESSAGE_FILES.en);
+
 /** Enters the room: the source board is on the wall */
-async function enterMarketing(employees: ReturnType<typeof marketer>[] = []) {
+async function enterMarketing(
+  employees: ReturnType<typeof marketer>[] = [],
+  locale: 'ja' | 'en' = 'ja'
+) {
   const user = userEvent.setup();
   const onExit = vi.fn();
   const ui = () => (
-    <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+    <NextIntlClientProvider
+      locale={locale}
+      messages={locale === 'ja' ? messages : enMessages}
+      timeZone="Asia/Tokyo"
+    >
       <OfficeImmersive
         organizationId={ORG_ID}
         companyName="テスト商事"
@@ -410,8 +422,12 @@ async function enterMarketing(employees: ReturnType<typeof marketer>[] = []) {
     </NextIntlClientProvider>
   );
   const view = render(ui());
-  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
-  await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+  const office = screen.getByRole('dialog', {
+    name: locale === 'ja' ? 'AI社員オフィス（全画面）' : 'AI office (full screen)',
+  });
+  await user.click(
+    within(office).getByRole('button', { name: locale === 'ja' ? /^出社する/ : /^Enter the office/ })
+  );
   await user.keyboard('2');
   // Draws the office again as it is: what the mocked queries answer now is read anew
   const redraw = () => view.rerender(ui());
@@ -428,6 +444,7 @@ async function enterRoom(employees: ReturnType<typeof marketer>[] = []) {
 
 function reset() {
   mocks.inputs.length = 0;
+  mocks.reread.mockClear();
   mocks.figureInputs.length = 0;
   mocks.campaignInputs.length = 0;
   mocks.noCampaigns = false;
@@ -524,6 +541,51 @@ describe('the marketing room', () => {
     const { office } = await enterMarketing();
     expect(within(office).getByRole('button', { name: '3未着手' })).toBeInTheDocument();
     expect(within(office).getByRole('button', { name: '4相談の申込' })).toBeInTheDocument();
+  });
+
+  it('reads the total out with what it counts where only the number is shown (en, #1253)', async () => {
+    const { office } = await enterMarketing([], 'en');
+    const chip = within(office).getByRole('button', { name: '3Not started3 prospects' });
+    // The eye gets the number alone
+    expect(chip).toHaveTextContent('3Not started33 prospects');
+    expect(chip.querySelector('[aria-hidden="true"]')).toHaveTextContent(/^3$/);
+    expect(within(office).getByRole('button', { name: '4Consultations0 prospects' })).toBeInTheDocument();
+  });
+
+  it('reads the lead boards and the totals on the choices anew when a lead board is asked for (#1253)', async () => {
+    const { user, office } = await enterMarketing();
+    // Entering the room reads once; nothing is read again for the source board
+    expect(mocks.reread).not.toHaveBeenCalled();
+    await user.keyboard('3');
+    // Every leads.list query at once (no input): the board that opens and both totals
+    expect(mocks.reread).toHaveBeenCalledTimes(1);
+    expect(mocks.reread).toHaveBeenLastCalledWith();
+    await user.click(within(office).getByRole('button', { name: /^4相談の申込/ }));
+    await user.keyboard('5');
+    expect(mocks.reread).toHaveBeenCalledTimes(3);
+    // The boards of figures do not read the leads again
+    await user.keyboard('1');
+    await user.keyboard('2');
+    await user.keyboard('8');
+    expect(mocks.reread).toHaveBeenCalledTimes(3);
+  });
+
+  it('calls the prospects that were won 成約 and the deals\' amount 受注額, as the analytics page does (#1253)', async () => {
+    mocks.withDeals = true;
+    const { user, office } = await enterMarketing();
+    const sources = within(office).getByRole('region', { name: '流入元ボード' });
+    expect(within(sources).getByRole('columnheader', { name: '成約' })).toBeInTheDocument();
+    expect(within(sources).getByRole('columnheader', { name: '受注額' })).toBeInTheDocument();
+    expect(within(sources).queryByRole('columnheader', { name: '受注' })).not.toBeInTheDocument();
+    // The agencies' table of the campaign board counts prospects too
+    await user.keyboard('8');
+    const campaigns = within(office).getByRole('region', { name: '施策ボード' });
+    expect(within(campaigns).getByRole('columnheader', { name: '成約' })).toBeInTheDocument();
+    expect(within(campaigns).queryByRole('columnheader', { name: '受注' })).not.toBeInTheDocument();
+    // The last stage of the progress board keeps the funnel's name
+    await user.keyboard('2');
+    const progress = within(office).getByRole('region', { name: '進み具合ボード' });
+    expect(within(progress).getByRole('row', { name: /^受注/ })).toBeInTheDocument();
   });
 
   it('says on the source board how its SQL differs from the progress board (#1246)', async () => {
@@ -722,10 +784,13 @@ describe('the marketing room', () => {
 
   it('keeps the meaning of every number key whichever board is on the wall', async () => {
     const { user, office } = await enterMarketing();
-    const pressed = () =>
-      within(office)
-        .getAllByRole('button', { pressed: true })
-        .map((button) => button.textContent);
+    // What is read out: the count's copy for the eye is hidden from it
+    const spoken = (button: HTMLElement) => {
+      const copy = button.cloneNode(true) as HTMLElement;
+      for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+      return copy.textContent;
+    };
+    const pressed = () => within(office).getAllByRole('button', { pressed: true }).map(spoken);
     for (const [key, label] of [
       ['7', '7すべて'],
       ['2', '2進み具合'],

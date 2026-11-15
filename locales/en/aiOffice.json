@@ -294,6 +294,7 @@
             "all": "All"
           },
           "leadCount": "{count, number}",
+          "leadCountSpoken": "{count, plural, one {# prospect} other {# prospects}}",
           "period": "Prospects created in the last {days} days: {count}",
           "periodOnly": "Prospects created in the last {days} days",
           "loading": "Loading",
