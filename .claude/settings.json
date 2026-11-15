@@ -69,7 +69,9 @@
       "Bash(git push -u origin main)",
       "Bash(git push -u origin main *)",
       "Bash(git push origin HEAD:main)",
-      "Bash(git push origin HEAD:main *)"
+      "Bash(git push origin HEAD:main *)",
+      "Bash(pkill *)",
+      "Bash(killall *)"
     ]
   },
   "hooks": {
