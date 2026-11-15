@@ -181,7 +181,7 @@ export function stageView(
     size: ScreenSize;
     zoom: number;
     pan: ScreenPoint;
-    /** Where the chosen employee is, for the floor */
+    /** Where the chosen employee is right now: for the floor, and for a scene with an opening */
     followed: FloorPoint | null;
     /** What the scene is about, for the other scenes */
     subject: FloorPoint | null;
@@ -192,7 +192,9 @@ export function stageView(
   if (stage === 'world' || !subject) {
     return { target: viewTarget(zoom, followed), pxPerUnit: pxPerUnit(size, zoom), pan, size };
   }
-  const through = opening ? openingView(subject, opening, size) : null;
+  // Through an opening the employee itself is shown, also while it is still on its way to where
+  // its status puts it (the subject): never an empty opening
+  const through = opening ? openingView(followed ?? subject, opening, size) : null;
   if (through) return through;
   const frame = STAGE_FRAMES[stage];
   const scale = pxPerUnit(size, frame.close, HOME_CLOSE_UP);

@@ -232,15 +232,12 @@ function CameraRig({
   ]);
 
   useFrame((_, delta) => {
-    const followed = follow();
     const goal = stageView(stage, {
       size: { w: size.width, h: size.height },
       zoom,
       pan,
-      followed,
-      // Through an opening the employee itself is shown, also while it is still on its way to
-      // where its status puts it: never an empty opening
-      subject: opening && followed ? followed : subject,
+      followed: follow(),
+      subject,
       opening,
     });
     const from = shown.current;

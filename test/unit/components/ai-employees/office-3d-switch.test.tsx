@@ -219,6 +219,11 @@ describe('the switch to the 3D floor', () => {
     expect(
       within(office).getByRole('region', { name: 'AIセールスのカスタマイズ' })
     ).toBeInTheDocument();
+    // The customization shows its 2D picture again: there is no 3D robot to look at (#1148)
+    expect(within(office).queryByTestId('studio-opening')).not.toBeInTheDocument();
+    expect(
+      within(office).getByRole('img', { name: 'AIセールスのプレビュー' }).querySelector('svg')
+    ).not.toBeNull();
     errors.mockRestore();
   });
 
@@ -398,6 +403,48 @@ describe('the switch to the 3D floor', () => {
     expect(mocks.scene?.events).toEqual({ marketer: 'hired' });
     await user.keyboard('1');
     expect(mocks.scene?.events).toEqual({ marketer: 'hired' });
+  });
+
+  it('says in the staff list that a new employee is glad, for a while (#1148)', async () => {
+    const user = userEvent.setup();
+    const office3d = (employees: (typeof sales)[]) => (
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <OfficeImmersive
+          organizationId="660e8400-e29b-41d4-a716-446655440000"
+          companyName="テスト商事"
+          presidentName="山田 太郎"
+          employees={employees}
+          canManage
+          onExit={vi.fn()}
+        />
+      </NextIntlClientProvider>
+    );
+    const view = render(office3d([sales]));
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.keyboard('v');
+    await screen.findByTestId('floor-3d');
+    const row = (name: RegExp) =>
+      within(
+        within(office).getByRole('heading', { name: '社員名簿' }).parentElement as HTMLElement
+      ).getByRole('button', { name });
+    // Nobody is glad about nothing
+    expect(row(/AIセールス/)).not.toHaveTextContent('喜んでいます');
+
+    await user.click(row(/マーケター/));
+    await user.keyboard('e');
+    await user.keyboard('1');
+    await user.keyboard('1');
+    // The office reads the staff again: the new employee is there, in training
+    const marketer = {
+      ...sales,
+      id: '770e8400-e29b-41d4-a716-446655440002',
+      role: 'marketer' as const,
+      name: 'AIマーケター',
+    };
+    view.rerender(office3d([sales, marketer as unknown as typeof sales]));
+    expect(row(/AIマーケター/)).toHaveTextContent('喜んでいます');
+    expect(row(/AIセールス/)).not.toHaveTextContent('喜んでいます');
   });
 
   it('shows a call back from a rest as something that happened (#1148)', async () => {

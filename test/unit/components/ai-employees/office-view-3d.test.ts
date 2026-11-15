@@ -285,6 +285,27 @@ describe('openingView (#1148)', () => {
     // The floor never looks through an opening
     expect(stageView('world', { ...base, opening })).toEqual(stageView('world', base));
   });
+
+  it('keeps the employee in the opening while it is still on its way to its place', () => {
+    const size = { w: 1440, h: 900 };
+    const opening = { x: 24, y: 80, w: 416, h: 470 };
+    // Called back from its rest: the status already puts it at its desk, it is in the corridor
+    const onTheWay = { x: 9.5, y: 7.2 };
+    const view = stageView('studio', {
+      size,
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      followed: onTheWay,
+      subject,
+      opening,
+    });
+    expect(view).toEqual(openingView(onTheWay, opening, size));
+    // Without an opening (the 2D picture) the scene is about where the status puts it, as before
+    expect(
+      stageView('studio', { size, zoom: 1, pan: { x: 0, y: 0 }, followed: onTheWay, subject })
+        .target
+    ).toEqual(subject);
+  });
 });
 
 describe('easeView', () => {
