@@ -654,10 +654,21 @@ describe('the marketing room', () => {
   it('links the boards of figures to the analytics page of the normal view, and closes the office', async () => {
     const { user, office, onExit } = await enterMarketing();
     const link = within(office).getByRole('link', { name: '通常の表示の分析で開く' });
-    expect(link).toHaveAttribute('href', '/ja/analytics');
+    // The source board: the sources tab, over the room's period (#1216)
+    expect(link).toHaveAttribute('href', '/ja/analytics?tab=sources&range=30d');
     link.addEventListener('click', (event) => event.preventDefault());
     await user.click(link);
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('links the progress board to the funnel of the analytics page, over the same period (#1216)', async () => {
+    const { user, office } = await enterMarketing();
+    await user.keyboard('2');
+    const board = within(office).getByRole('region', { name: '進み具合ボード' });
+    expect(within(board).getByRole('link', { name: '通常の表示の分析で開く' })).toHaveAttribute(
+      'href',
+      '/ja/analytics?tab=funnel&range=30d'
+    );
   });
 
   it('says which board is on the wall from the panel that stays, at every change', async () => {
@@ -1195,9 +1206,10 @@ describe('the campaign board (#1201)', () => {
     const { user, board, onExit } = await enterCampaigns();
     const qr = within(board).getByRole('link', { name: '通常の表示の QR キャンペーンで開く' });
     expect(qr).toHaveAttribute('href', '/ja/settings/qr-campaigns');
+    // The agencies' table of the analytics page is on the sources tab (#1216)
     expect(within(board).getByRole('link', { name: '通常の表示の分析で開く' })).toHaveAttribute(
       'href',
-      '/ja/analytics'
+      '/ja/analytics?tab=sources&range=30d'
     );
     qr.addEventListener('click', (event) => event.preventDefault());
     await user.click(qr);

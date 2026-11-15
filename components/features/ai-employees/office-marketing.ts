@@ -7,6 +7,7 @@
  * Every figure comes from the analytics API as it is (decision 2026-11-13-office-is-the-base: no
  * API is added for a room). Pure functions only.
  */
+import { type AnalyticsTab, analyticsPageHref } from '@/lib/features/analytics/page-query';
 import type {
   AcquisitionCostRow,
   AcquisitionCostSummary,
@@ -42,6 +43,19 @@ export const MARKETING_RANGE_DAYS = 30;
  */
 export const MARKETING_FIGURE_BOARDS = ['sources', 'funnel', 'campaigns'] as const;
 export type MarketingFigureBoard = (typeof MARKETING_FIGURE_BOARDS)[number];
+
+/** The tab of the analytics page (normal view) that shows the figures of a board */
+const ANALYTICS_TAB_OF: Record<MarketingFigureBoard, AnalyticsTab> = {
+  sources: 'sources',
+  funnel: 'funnel',
+  // The agencies' table is on the sources tab; the QR campaigns have their own page
+  campaigns: 'sources',
+};
+
+/** The analytics page at the figures of a board, over the room's period (#1216) */
+export function boardAnalyticsHref(board: MarketingFigureBoard): string {
+  return analyticsPageHref({ tab: ANALYTICS_TAB_OF[board], range: MARKETING_RANGE });
+}
 
 /** What the president can ask the room for: a board of figures, or a view of the lead board */
 export type MarketingChoice = MarketingFigureBoard | LeadBoardView;
