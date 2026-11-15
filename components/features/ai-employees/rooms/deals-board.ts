@@ -21,11 +21,11 @@ export type DealBoardColumn = DealBoardData['columns'][number];
 export type BoardDeal = DealBoardColumn['deals'][number];
 
 /** What the deal board can show */
-export const DEAL_BOARD_VIEWS = ['thisWeek', 'noNextAction', 'mine', 'all'] as const;
+export const DEAL_BOARD_VIEWS = ['soon', 'noNextAction', 'mine', 'all'] as const;
 export type DealBoardView = (typeof DEAL_BOARD_VIEWS)[number];
 
-/** The view the board opens on: what has to move by the end of this week */
-export const DEAL_BOARD_FIRST_VIEW: DealBoardView = 'thisWeek';
+/** The view the board opens on: what has to move within a week, with what is already late */
+export const DEAL_BOARD_FIRST_VIEW: DealBoardView = 'soon';
 
 /**
  * Rows of the board per page: what fits on the wall without scrolling on a screen 768px high,
@@ -56,7 +56,10 @@ export function dealBoardInput(
   return { organizationId, owner, closedWithinDays: 0 };
 }
 
-/** The Sunday that ends the week (Monday to Sunday) of a Japan calendar day ('YYYY-MM-DD') */
+/**
+ * The Sunday that ends the week (Monday to Sunday) of a Japan calendar day ('YYYY-MM-DD'): for
+ * the "next Monday" of the due days
+ */
 export function endOfWeek(today: string): string {
   const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
   return addDays(today, weekday === 0 ? 0 : 7 - weekday);
@@ -80,23 +83,46 @@ export function dealMoveDay(deal: Pick<BoardDeal, 'nextTask' | 'expectedCloseOn'
   return days.length === 0 ? null : days.reduce((first, day) => (day < first ? day : first));
 }
 
-/** Whether a deal's expected close date falls by the end of this week (or has passed) */
-export function closesThisWeek(deal: Pick<BoardDeal, 'expectedCloseOn'>, today: string): boolean {
-  return deal.expectedCloseOn !== null && deal.expectedCloseOn <= endOfWeek(today);
+/** Days ahead the board looks for what has to move: the same on every day of the week */
+export const MOVE_HORIZON_DAYS = 7;
+
+/**
+ * The last day of "within a week", from a Japan calendar day ('YYYY-MM-DD'): the same weekday of
+ * the week after. Not the end of the calendar week (#1205): that looked seven days ahead on a
+ * Monday and one on a Sunday, so the start of the following week went unseen on a Friday, and a
+ * next action set for "next Monday" left the view at once.
+ */
+export function moveHorizon(today: string): string {
+  return addDays(today, MOVE_HORIZON_DAYS);
 }
 
-/** Whether a deal has to move by the end of this week (what is already late counts) */
-export function movesThisWeek(
+/** Whether a deal's expected close date falls within a week (or has passed) */
+export function closesSoon(deal: Pick<BoardDeal, 'expectedCloseOn'>, today: string): boolean {
+  return deal.expectedCloseOn !== null && deal.expectedCloseOn <= moveHorizon(today);
+}
+
+/** Whether a deal has to move within a week (what is already late counts) */
+export function movesSoon(
   deal: Pick<BoardDeal, 'nextTask' | 'expectedCloseOn'>,
   today: string
 ): boolean {
   const day = dealMoveDay(deal);
-  return day !== null && day <= endOfWeek(today);
+  return day !== null && day <= moveHorizon(today);
+}
+
+/** Whether the day a deal had to move by has passed: what the president acts on first */
+export function isOverdue(
+  deal: Pick<BoardDeal, 'nextTask' | 'expectedCloseOn'>,
+  today: string
+): boolean {
+  const day = dealMoveDay(deal);
+  return day !== null && day < today;
 }
 
 /**
- * The deals a view shows. "This week" lists the earliest day first; the others keep the order of
- * the stages. "Mine" is everything of a board read for the user's own deals.
+ * The deals a view shows. "Within a week" lists the earliest day first (so what is late leads),
+ * and the larger amount first among those of one day; the others keep the order of the stages.
+ * "Mine" is everything of a board read for the user's own deals.
  */
 export function dealsOfView(
   view: DealBoardView,
@@ -104,10 +130,14 @@ export function dealsOfView(
   today: string
 ): BoardDeal[] {
   const deals = openDeals(columns);
-  if (view === 'thisWeek') {
+  if (view === 'soon') {
     return deals
-      .filter((deal) => movesThisWeek(deal, today))
-      .sort((a, b) => (dealMoveDay(a) ?? '').localeCompare(dealMoveDay(b) ?? ''));
+      .filter((deal) => movesSoon(deal, today))
+      .sort(
+        (a, b) =>
+          (dealMoveDay(a) ?? '').localeCompare(dealMoveDay(b) ?? '') ||
+          (b.amount ?? 0) - (a.amount ?? 0)
+      );
   }
   if (view === 'noNextAction') return deals.filter((deal) => !deal.hasOpenTask);
   return deals;
@@ -119,7 +149,10 @@ export interface DealReport {
   open: number;
   /** Their amounts added up, in yen */
   amount: number;
-  thisWeek: number;
+  /** Past the day they had to move by */
+  overdue: number;
+  /** To move within a week, not counting what is already late */
+  soon: number;
   noNextAction: number;
 }
 
@@ -129,7 +162,8 @@ export function dealReport(columns: readonly DealBoardColumn[], today: string): 
   return {
     open: stages.reduce((sum, stage) => sum + stage.count, 0),
     amount: stages.reduce((sum, stage) => sum + stage.amount, 0),
-    thisWeek: deals.filter((deal) => movesThisWeek(deal, today)).length,
+    overdue: deals.filter((deal) => isOverdue(deal, today)).length,
+    soon: deals.filter((deal) => movesSoon(deal, today) && !isOverdue(deal, today)).length,
     noNextAction: deals.filter((deal) => !deal.hasOpenTask).length,
   };
 }
@@ -197,41 +231,40 @@ export function dealActionOfKey(key: string): DealFileAction | null {
   return actionOfKey(DEAL_KEYS, key);
 }
 
-/** The kind of the answer carried out last over a deal file, while it stands (not undone) */
-export type DealFileLast = 'moved' | 'done' | 'added';
+/** The kinds of answers of a deal file that are carried out with a key and close after it */
+export type DealAnswerKind = 'moved' | 'done';
 
 /**
- * Whether an answer over a deal file is carried out right now. After an answer, the answers of
- * its kind are closed until it is undone or the file is opened again, so the same key pressed
- * once too often never moves the deal two stages or marks the following next action unseen; the
- * other kinds stay open, so a next action is marked, a new one set and the deal moved on in one
- * sitting. A next action that was just set is not marked as done by the next key either. The undo
+ * Whether an answer over a deal file is carried out right now. An answer closes the answers of
+ * its kind for as long as the file is open: once the deal was moved, it is not moved again, and
+ * once a next action was marked (or a new one set), none is marked again, whatever was answered
+ * in between. So keys pressed in a row never move the deal two stages, and never mark a next
+ * action that came up unseen. The other kind stays open, so a next action is marked, a new one
+ * set and the deal moved on in one sitting. Undoing an answer opens its kind again. The undo
  * takes back the last answer only, while there is something to take back (a move that handed the
  * lead off is not: the handoff sheet went out; a next action that was typed is changed, not
- * undone).
+ * undone), and never over a deal that is closed by now.
  */
 export function dealActionOpen(
   action: DealFileAction,
   state: {
     canEdit: boolean;
     busy: boolean;
-    /** The answer carried out last and not undone */
-    last: DealFileLast | null;
-    /** That answer can be taken back */
-    undoable: boolean;
+    /** The kinds answered since the file was opened, and not undone */
+    closed: ReadonlySet<DealAnswerKind>;
+    /** The last answer can be taken back */
+    canUndo: boolean;
     stage: DealStage;
     /** The deal's lead has an open next action */
     hasTask: boolean;
   }
 ): boolean {
-  if (state.busy || !state.canEdit) return false;
-  if (action === 'undo') return state.last !== null && state.undoable;
-  if ((action === 'advance' || action === 'back') && state.last === 'moved') return false;
-  if (action === 'done' && state.last !== null && state.last !== 'moved') return false;
-  if (action === 'advance') return stageAfter(state.stage) !== null;
-  if (action === 'back') return stageBefore(state.stage) !== null;
-  if (action === 'done') return state.hasTask;
-  return isOpenStage(state.stage);
+  if (state.busy || !state.canEdit || !isOpenStage(state.stage)) return false;
+  if (action === 'undo') return state.canUndo;
+  if (action === 'advance') return !state.closed.has('moved') && stageAfter(state.stage) !== null;
+  if (action === 'back') return !state.closed.has('moved') && stageBefore(state.stage) !== null;
+  if (action === 'done') return !state.closed.has('done') && state.hasTask;
+  return true;
 }
 
 /** The due days a next action is given most often, offered beside the date field */

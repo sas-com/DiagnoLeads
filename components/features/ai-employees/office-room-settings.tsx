@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef } from 'react';
 import { FOCUS, PANEL } from './office-hud';
 import type { RoomKeys } from './office-lead-file';
-import { ShelfBackButton } from './office-reception-parts';
+import { GUIDE_PANEL, ShelfBackButton, ShelfName } from './office-reception-parts';
 import { ROOM_BOARD, ROOM_FRAME, RoomGuideHeader, RoomGuideLine } from './office-room-parts';
 import { nextRow, roomGuide } from './office-rooms';
 import { SETTINGS_DOORS } from './rooms/reception';
@@ -69,9 +69,11 @@ export function OfficeRoomSettings({
 
   return (
     <div className={ROOM_FRAME}>
-      <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
+      <div className={cn(PANEL, GUIDE_PANEL)}>
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         <div tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
+          {/* Read out with the report: the focus comes here when the shelf opens */}
+          <ShelfName shelf="settings" />
           <RoomGuideLine>
             {t(`guide.${roomGuide(status)}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
@@ -82,11 +84,11 @@ export function OfficeRoomSettings({
 
       <section aria-label={tShelf('board')} className={ROOM_BOARD}>
         <header className="border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
-          <h2 className="text-xl font-bold">{tShelf('board')}</h2>
+          <h2 className="text-xl font-bold">{tShelf('heading')}</h2>
         </header>
         <ul
           ref={listRef}
-          className="grid min-h-0 flex-1 content-start gap-2 overflow-y-auto px-5 py-5 md:grid-cols-2"
+          className="grid min-h-0 max-w-xl flex-1 content-start gap-2 overflow-y-auto px-5 py-5"
         >
           {SETTINGS_DOORS.map((door) => (
             <li key={door.name}>

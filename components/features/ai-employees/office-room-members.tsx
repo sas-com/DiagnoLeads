@@ -12,7 +12,13 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type FormEvent, type MutableRefObject, useEffect, useId, useRef, useState } from 'react';
 import { CAP, FOCUS, PANEL } from './office-hud';
-import { BOARD_MESSAGE, DOOR_LINK, ShelfBackButton } from './office-reception-parts';
+import {
+  BOARD_MESSAGE,
+  DOOR_LINK,
+  GUIDE_PANEL,
+  ShelfBackButton,
+  ShelfName,
+} from './office-reception-parts';
 import type { RoomKeys } from './office-room-contract';
 import {
   ROOM_BOARD,
@@ -99,6 +105,7 @@ export function OfficeRoomMembers({
   const fieldRef = useRef<HTMLInputElement>(null);
   const fieldId = useId();
   const noteId = useId();
+  const errorId = useId();
   // The field of the revoking, open or not; what was typed in it; and what came of it
   const [revoking, setRevoking] = useState(false);
   const [typed, setTyped] = useState('');
@@ -196,21 +203,27 @@ export function OfficeRoomMembers({
                   count: members.data.total,
                   waiting: invited.waiting,
                 })
-              : tShelf('report', { count: members.data.total });
+              : // Said, not only shown on the board: who listens does not see it
+                tShelf('report', { count: members.data.total }) +
+                (invited.state === 'error' ? tShelf('invitationsError') : '');
   const more = members.data ? members.data.total - members.data.members.length : 0;
 
   return (
     <div className={ROOM_FRAME}>
-      <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
+      <div className={cn(PANEL, GUIDE_PANEL)}>
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
+          {/* Read out with the report: the focus comes here when the shelf opens */}
+          <ShelfName shelf="members" />
           <RoomGuideLine>
             {t(`guide.${roomGuide(status)}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
           <p className="text-base leading-relaxed font-medium" aria-live="polite">
             {report}
           </p>
-          <p className="text-sm text-[#d8d2c4]">{tShelf('readOnly')}</p>
+          <p className="text-sm text-[#d8d2c4]">
+            {tShelf(invited.state === 'hidden' ? 'readOnlyMember' : 'readOnly')}
+          </p>
         </div>
         {revoking ? (
           // The room says what is wrong in its own words: the browser's own check would only hold
@@ -235,7 +248,8 @@ export function OfficeRoomMembers({
               value={typed}
               maxLength={320}
               autoComplete="off"
-              aria-describedby={noteId}
+              aria-invalid={(refused && !named) || undefined}
+              aria-describedby={refused && !named ? `${noteId} ${errorId}` : noteId}
               onChange={(event) => {
                 setTyped(event.target.value);
                 setRefused(false);
@@ -243,7 +257,7 @@ export function OfficeRoomMembers({
               className={FIELD}
             />
             {refused && !named && (
-              <p role="alert" className="text-sm font-bold text-[#fca5a5]">
+              <p id={errorId} role="alert" className="text-sm font-bold text-[#fca5a5]">
                 <AlertTriangle className="mr-1.5 inline h-4 w-4 align-[-2px]" aria-hidden="true" />
                 {tShelf('revoke.mismatch')}
               </p>
@@ -263,7 +277,15 @@ export function OfficeRoomMembers({
               {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               {tShelf('revoke.confirm')}
             </button>
-            <ShelfBackButton onBack={close} closed={busy} label={tShelf('revoke.back')} />
+            <ShelfBackButton
+              onBack={() => {
+                close();
+                // The button goes away with the field: the focus goes to the report, not nowhere
+                reportRef.current?.focus();
+              }}
+              closed={busy}
+              label={tShelf('revoke.back')}
+            />
           </form>
         ) : (
           <>
@@ -298,36 +320,9 @@ export function OfficeRoomMembers({
           </output>
         ) : (
           <div className="grid min-h-0 flex-1 content-start gap-x-8 gap-y-6 overflow-y-auto px-5 py-5 md:grid-cols-2">
-            <div className="min-w-0 space-y-3">
-              <h3 className={CAP}>{tShelf('members', { count: members.data.total })}</h3>
-              <ul className="space-y-1">
-                {members.data.members.map((member) => (
-                  <li
-                    key={member.id}
-                    className="flex items-start justify-between gap-3 border-b border-[#f5f1e8]/10 py-2 text-sm"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-base font-bold">
-                        {member.user.name || member.user.email}
-                      </span>
-                      {member.user.name && (
-                        <span className="block truncate text-xs text-[#d8d2c4]">
-                          {member.user.email}
-                        </span>
-                      )}
-                    </span>
-                    <span className="shrink-0 rounded-full border border-[#d8d2c4] px-2.5 py-0.5 text-xs text-[#d8d2c4]">
-                      {roleLabel(member.role)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {more > 0 && (
-                <p className="text-sm text-[#d8d2c4]">{tShelf('more', { count: more })}</p>
-              )}
-            </div>
-
-            <div className="min-w-0 space-y-3">
+            {/* First in the reading order (the one thing done here is about the invitations); on the
+                right on a wide screen */}
+            <div className="min-w-0 space-y-3 md:order-last">
               <h3 className={CAP}>{tShelf('invitations')}</h3>
               {invited.state === 'hidden' ? (
                 <p className="text-sm text-[#d8d2c4]">{tShelf('invitationsHidden')}</p>
@@ -365,6 +360,34 @@ export function OfficeRoomMembers({
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+            <div className="min-w-0 space-y-3">
+              <h3 className={CAP}>{tShelf('members', { count: members.data.total })}</h3>
+              <ul className="space-y-1">
+                {members.data.members.map((member) => (
+                  <li
+                    key={member.id}
+                    className="flex items-start justify-between gap-3 border-b border-[#f5f1e8]/10 py-2 text-sm"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-base font-bold">
+                        {member.user.name || member.user.email}
+                      </span>
+                      {member.user.name && (
+                        <span className="block text-xs break-all text-[#d8d2c4]">
+                          {member.user.email}
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 rounded-full border border-[#d8d2c4] px-2.5 py-0.5 text-xs text-[#d8d2c4]">
+                      {roleLabel(member.role)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {more > 0 && (
+                <p className="text-sm text-[#d8d2c4]">{tShelf('more', { count: more })}</p>
               )}
             </div>
           </div>

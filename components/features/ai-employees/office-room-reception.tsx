@@ -12,6 +12,7 @@ import { useTranslations } from 'next-intl';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
 import { CAP, PANEL } from './office-hud';
 import type { RoomKeys } from './office-lead-file';
+import { GUIDE_PANEL } from './office-reception-parts';
 import { OfficeRoomDue } from './office-room-due';
 import { MEMBERS_SHELF_MAX, OfficeRoomMembers } from './office-room-members';
 import {
@@ -142,9 +143,21 @@ export function OfficeRoomReception({
   const memberCount = members.data?.total ?? null;
   const aboutDue = dueLine(dueKnown);
   const aboutMembers = membersLine(memberCount, invited);
-  const reading = dueKnown.state === 'reading' || (!members.data && !members.isError);
+  // Said once, when all three are known: a sentence that grows as each arrives is read out anew
+  const reading =
+    dueKnown.state === 'reading' ||
+    (!members.data && !members.isError) ||
+    invited.state === 'reading';
   const roleTitle = tOffice(`roles.${role}.title`);
-  const unread = <span className="text-sm text-[#d8d2c4]">{tDesk('figures.unread')}</span>;
+  const unread = (
+    <span className="text-sm font-normal text-[#d8d2c4]">{tDesk('figures.unread')}</span>
+  );
+  const readingFigure = (
+    <>
+      <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+      <span className="sr-only">{tDesk('reading')}</span>
+    </>
+  );
 
   return (
     <div ref={rootRef} className="contents">
@@ -174,7 +187,7 @@ export function OfficeRoomReception({
       ) : (
         <div className={ROOM_FRAME}>
           {/* Whose room this is, what the general affairs stand at, and which shelf to open */}
-          <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
+          <div className={cn(PANEL, GUIDE_PANEL)}>
             <RoomGuideHeader {...guideProps} />
             <div tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
               <RoomGuideLine>
@@ -184,7 +197,7 @@ export function OfficeRoomReception({
                 })}
               </RoomGuideLine>
               <p className="text-base leading-relaxed font-medium" aria-live="polite">
-                {reading && !aboutDue && !aboutMembers
+                {reading
                   ? tDesk('reading')
                   : [
                       aboutDue &&
@@ -197,6 +210,12 @@ export function OfficeRoomReception({
                           count: memberCount ?? 0,
                           waiting: invited.state === 'ready' ? invited.waiting : 0,
                         }),
+                      // Said, not left out: who listens does not see the board
+                      // Only when there is no figure at all: a refetch that failed keeps the last one
+                      memberCount === null && members.isError && tDesk('members.unread'),
+                      memberCount !== null &&
+                        invited.state === 'error' &&
+                        tDesk('members.invitationsUnread'),
                       tDesk('ask'),
                     ]
                       .filter(Boolean)
@@ -228,13 +247,11 @@ export function OfficeRoomReception({
               <div className="space-y-1">
                 <dt className={CAP}>{tDesk('figures.due')}</dt>
                 <dd className="text-3xl font-bold tabular-nums">
-                  {dueKnown.state === 'ready' ? (
-                    tDesk('figures.dueValue', { count: dueKnown.total })
-                  ) : dueKnown.state === 'reading' ? (
-                    <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
-                  ) : (
-                    unread
-                  )}
+                  {dueKnown.state === 'ready'
+                    ? tDesk('figures.dueValue', { count: dueKnown.total })
+                    : dueKnown.state === 'reading'
+                      ? readingFigure
+                      : unread}
                 </dd>
                 {dueKnown.state === 'ready' &&
                   dueKnown.overdue !== null &&
@@ -247,13 +264,11 @@ export function OfficeRoomReception({
               <div className="space-y-1">
                 <dt className={CAP}>{tDesk('figures.members')}</dt>
                 <dd className="text-3xl font-bold tabular-nums">
-                  {memberCount !== null ? (
-                    tDesk('figures.membersValue', { count: memberCount })
-                  ) : members.isError ? (
-                    unread
-                  ) : (
-                    <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
-                  )}
+                  {memberCount !== null
+                    ? tDesk('figures.membersValue', { count: memberCount })
+                    : members.isError
+                      ? unread
+                      : readingFigure}
                 </dd>
               </div>
               <div className="space-y-1">
@@ -262,7 +277,7 @@ export function OfficeRoomReception({
                   {invited.state === 'ready' ? (
                     tDesk('figures.invitationsValue', { count: invited.waiting })
                   ) : invited.state === 'reading' ? (
-                    <Loader2 className="h-6 w-6 animate-spin" aria-hidden="true" />
+                    readingFigure
                   ) : invited.state === 'hidden' ? (
                     <span className="text-sm font-normal text-[#d8d2c4]">
                       {tDesk('figures.invitationsHidden')}

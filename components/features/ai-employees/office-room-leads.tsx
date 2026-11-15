@@ -26,6 +26,8 @@ import {
   UNSET_SOURCE,
   figureState,
   isLeadBoardView,
+  isLeadCountView,
+  leadCountInput,
   marketingChoiceKey,
   marketingChoiceOfKey,
   marketingReport,
@@ -65,6 +67,7 @@ export function OfficeRoomLeads({
   keysRef,
   onOpenLead,
   onFileOpenChange,
+  onBusyChange,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -79,6 +82,8 @@ export function OfficeRoomLeads({
   onOpenLead: () => void;
   /** Told when a file opens or closes: while one is open, Esc closes it, not the room */
   onFileOpenChange: (open: boolean) => void;
+  /** Told while a record of the customer file is being saved: the office keeps the room open */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tRoom = useTranslations('aiOffice.immersive.room.marketing');
@@ -110,6 +115,12 @@ export function OfficeRoomLeads({
   const cost = trpc.analytics.getAcquisitionCost.useQuery(period);
   const funnelState = figureState(funnel);
   const costState = figureState(cost);
+  // What waits for somebody, on the choices that show it (#1246): totals of the lead list, read
+  // when the room opens. The API scopes them to the organization and checks the permission.
+  const waiting = {
+    needsAction: trpc.leads.list.useQuery(leadCountInput('needsAction', organizationId, now)),
+    consultation: trpc.leads.list.useQuery(leadCountInput('consultation', organizationId, now)),
+  };
   // The campaign board reads its own figures, and only once it is asked for (#1201)
   const onCampaigns = { enabled: choice === 'campaigns' };
   const campaigns = trpc.distribution.listCampaigns.useQuery({ organizationId }, onCampaigns);
@@ -197,6 +208,7 @@ export function OfficeRoomLeads({
         keysRef={fileKeys}
         onClose={() => setOpen(null)}
         onOpenDetail={onOpenLead}
+        onBusyChange={onBusyChange}
       />
     );
   }
@@ -296,7 +308,19 @@ export function OfficeRoomLeads({
                   pressed={option === choice}
                   onClick={() => choose(option)}
                 >
-                  {tRoom(`leadViews.${option}`)}
+                  {/* The count stays in one piece: on a narrow chip it goes under the name
+                      before the name is broken */}
+                  <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
+                      {tRoom(`leadViews.${option}`)}
+                    </span>
+                    {/* How many wait there; nothing while it is not read (never a zero instead) */}
+                    {isLeadCountView(option) && waiting[option].data && (
+                      <span className="ml-auto whitespace-nowrap text-xs tabular-nums">
+                        {tRoom('leadCount', { count: waiting[option].data.total })}
+                      </span>
+                    )}
+                  </span>
                 </RoomChoiceButton>
               </li>
             ))}

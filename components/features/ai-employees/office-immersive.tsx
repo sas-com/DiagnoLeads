@@ -917,11 +917,13 @@ export function OfficeImmersive({
               {/* The floor guide: every place of the work. A room is entered; a door opens a page */}
               <nav
                 aria-label={t('floorGuide')}
-                className="absolute inset-x-0 bottom-32 flex flex-wrap justify-center gap-2 px-6 lg:top-5 lg:bottom-auto"
+                // Between the side panels (HUD_SIDES), never over them (#1234): where the places
+                // do not fit in one row they wrap there
+                className="absolute inset-x-0 bottom-32 pointer-events-none flex flex-wrap justify-center gap-1.5 px-6 *:pointer-events-auto lg:top-5 lg:right-[21.5rem] lg:bottom-auto lg:left-[19.5rem] lg:px-0"
               >
                 {FLOOR_PLACES.map((place) => {
                   const look = cn(
-                    'flex min-h-11 items-center gap-2.5 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-3.5 text-left text-sm hover:bg-[rgba(36,44,64,0.95)]',
+                    'flex min-h-11 items-center gap-2 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-2.5 text-left text-sm whitespace-nowrap hover:bg-[rgba(36,44,64,0.95)] min-[1900px]:gap-2.5 min-[1900px]:px-3.5',
                     FOCUS
                   );
                   const label = {
@@ -937,7 +939,11 @@ export function OfficeImmersive({
                       className={look}
                     >
                       <PlaceLabel {...label} />
-                      <DoorOpen className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                      {/* A room needs no mark where the row is tight: a door keeps its arrow */}
+                      <DoorOpen
+                        className="hidden h-4 w-4 text-[#e9cf9a] min-[1600px]:block"
+                        aria-hidden="true"
+                      />
                     </button>
                   ) : (
                     <Link key={place} href={doorHref(place)} onClick={leave} className={look}>
@@ -950,9 +956,11 @@ export function OfficeImmersive({
               </nav>
 
               {/* The actions */}
-              <div className="absolute inset-x-0 bottom-6 flex flex-col items-center">
+              {/* The row spans the screen only to centre the bar: it lets the pointer through to
+                  the staff list under its ends (#1234) */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-6 flex flex-col items-center">
                 {/* Three groups: the employee, the view, the way out */}
-                <div className="flex gap-5">
+                <div className="pointer-events-auto flex gap-5">
                   <div className="flex gap-1.5">
                     <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
                       <MessageCircle className="h-6 w-6" aria-hidden="true" />
@@ -1261,7 +1269,8 @@ function PlaceLabel({ hotkey, name, work }: { hotkey: string; name: string; work
     <>
       <span className={KEY}>{hotkey}</span>
       <span className="font-bold">{name}</span>
-      <span className="text-[#d8d2c4]">{work}</span>
+      {/* Shown where the row has room for it; always read out */}
+      <span className="sr-only text-[#d8d2c4] min-[1900px]:not-sr-only">{work}</span>
     </>
   );
 }
