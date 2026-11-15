@@ -293,6 +293,7 @@
             "mine": "自分の担当",
             "all": "すべて"
           },
+          "leadCount": "{count, number} 件",
           "period": "過去{days}日に登録された見込み客・{count} 件",
           "periodOnly": "過去{days}日に登録された見込み客",
           "loading": "読み込んでいます",
@@ -329,7 +330,8 @@
             "back": "流入元ボードに戻る",
             "openHintClosed": "下線の無い行（流入元の記録なしなど）は開けません。",
             "openDescription": "過去{days}日の見込み客を見込み客ボードに出します",
-            "closedRow": "（開けません）"
+            "closedRow": "（開けません）",
+            "sqlNote": "この表の SQL は、SQL と判定された見込み客の数です。進み具合ボードの SQL は、受注した見込み客も数えるので、数が合わないことがあります。"
           },
           "funnel": {
             "board": "進み具合ボード",

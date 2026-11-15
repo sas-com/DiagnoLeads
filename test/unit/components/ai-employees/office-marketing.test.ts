@@ -6,8 +6,11 @@ import {
   MARKETING_RANGE,
   MARKETING_RANGE_DAYS,
   UNSET_SOURCE,
+  LEAD_COUNT_VIEWS,
   figureState,
   isLeadBoardView,
+  isLeadCountView,
+  leadCountInput,
   leadBoardInputFor,
   marketingPeriodFromDay,
   openableSource,
@@ -348,5 +351,33 @@ describe('the QR campaigns of the campaign board (#1201)', () => {
 
   it('leaves the breakdown out while it is not read, instead of showing zeros', () => {
     expect(qrCampaignRows([campaign('a')], undefined)[0].breakdown).toBeNull();
+  });
+});
+
+describe('the totals on the choices of the lead board (#1246)', () => {
+  const now = new Date('2026-11-14T03:00:00Z');
+
+  it('are those of what waits: not started, and consultations', () => {
+    expect(LEAD_COUNT_VIEWS).toEqual(['needsAction', 'consultation']);
+    for (const view of LEAD_BOARD_VIEWS) {
+      expect(isLeadCountView(view)).toBe((LEAD_COUNT_VIEWS as readonly string[]).includes(view));
+    }
+  });
+
+  it('ask leads.list for one row of the same view, not bound to the period of the report', () => {
+    const needsAction = leadCountInput('needsAction', ORG_ID, now);
+    expect(needsAction).toMatchObject({
+      organizationId: ORG_ID,
+      status: ['new'],
+      limit: 1,
+      offset: 0,
+    });
+    expect(needsAction.createdFromDay).toBeUndefined();
+    const consultation = leadCountInput('consultation', ORG_ID, now);
+    expect(consultation).toMatchObject({ consultationRequested: true, limit: 1 });
+    expect(consultation.createdFromDay).toBeUndefined();
+    for (const view of LEAD_COUNT_VIEWS) {
+      expect(listLeadsSchema.safeParse(leadCountInput(view, ORG_ID, now)).success).toBe(true);
+    }
   });
 });
