@@ -285,6 +285,8 @@ export function OfficeBoardSources({
         <>
           <p>{uncosted > 0 ? tSources('uncosted', { count: uncosted }) : tSources('costed')}</p>
           {returns && <p>{tSources('returns')}</p>}
+          {/* The two boards count SQL differently (the API's own rules): said where it shows */}
+          <p>{tSources('sqlNote')}</p>
           {opens && (
             <p>
               {tSources('openHint', { days: MARKETING_RANGE_DAYS })}

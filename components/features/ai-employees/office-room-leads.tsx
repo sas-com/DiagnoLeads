@@ -26,6 +26,8 @@ import {
   UNSET_SOURCE,
   figureState,
   isLeadBoardView,
+  isLeadCountView,
+  leadCountInput,
   marketingChoiceKey,
   marketingChoiceOfKey,
   marketingReport,
@@ -113,6 +115,12 @@ export function OfficeRoomLeads({
   const cost = trpc.analytics.getAcquisitionCost.useQuery(period);
   const funnelState = figureState(funnel);
   const costState = figureState(cost);
+  // What waits for somebody, on the choices that show it (#1246): totals of the lead list, read
+  // when the room opens. The API scopes them to the organization and checks the permission.
+  const waiting = {
+    needsAction: trpc.leads.list.useQuery(leadCountInput('needsAction', organizationId, now)),
+    consultation: trpc.leads.list.useQuery(leadCountInput('consultation', organizationId, now)),
+  };
   // The campaign board reads its own figures, and only once it is asked for (#1201)
   const onCampaigns = { enabled: choice === 'campaigns' };
   const campaigns = trpc.distribution.listCampaigns.useQuery({ organizationId }, onCampaigns);
@@ -301,6 +309,12 @@ export function OfficeRoomLeads({
                   onClick={() => choose(option)}
                 >
                   {tRoom(`leadViews.${option}`)}
+                  {/* How many wait there; nothing while it is not read (never a zero instead) */}
+                  {isLeadCountView(option) && waiting[option].data && (
+                    <span className="ml-auto text-xs tabular-nums">
+                      {tRoom('leadCount', { count: waiting[option].data.total })}
+                    </span>
+                  )}
                 </RoomChoiceButton>
               </li>
             ))}
