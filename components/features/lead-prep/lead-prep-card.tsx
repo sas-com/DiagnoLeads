@@ -68,6 +68,13 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
   // Reading the card before an editing starts, and reading it again after a refusal
   const [reading, setReading] = useState<'start' | 'reload' | null>(null);
   const conflictRef = useRef<HTMLDivElement>(null);
+  // Set when the form was just (re)filled: its first field takes the focus once it is drawn
+  const [focusFirst, setFocusFirst] = useState(false);
+  useEffect(() => {
+    if (!focusFirst) return;
+    document.getElementById(`${id}-system`)?.focus();
+    setFocusFirst(false);
+  }, [focusFirst, id]);
   // The notice sits at the top of a long form and the save button at its foot: when a save is
   // refused, the notice is brought into view and takes the focus, so that it is seen and read out
   useEffect(() => {
@@ -126,8 +133,11 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
     setReading(null);
     // A read that failed still hands back the card from before (the query keeps it): only a
     // read that went through may fill the form
-    if (latest.isSuccess) fill(latest.data.card);
-    else toast.error(t('startError'));
+    if (latest.isSuccess) {
+      fill(latest.data.card);
+      // The button that was pressed is gone: the form's first field takes the focus
+      setFocusFirst(true);
+    } else toast.error(t('startError'));
   };
   // Read the card as it is now and start over from it: what was typed is dropped
   const reload = async () => {
@@ -138,7 +148,7 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
       fill(latest.data.card);
       toast.success(t('reloaded'));
       // The notice, which had the focus, is gone: the form's first field takes it
-      document.getElementById(`${id}-system`)?.focus();
+      setFocusFirst(true);
     } else toast.error(t('reloadError'));
   };
 
@@ -322,12 +332,13 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
               {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               {t('save')}
             </Button>
-            {/* Closed while a save is out: a form closed now would never show that it was refused */}
+            {/* Closed while a save is out (a form closed now would never show that it was
+                refused) and while the latest card is read (the read would open the form again) */}
             <Button
               type="button"
               size="sm"
               variant="outline"
-              disabled={save.isPending}
+              disabled={save.isPending || reading !== null}
               onClick={() => {
                 setForm(null);
                 setConflict(false);

@@ -7,7 +7,7 @@ export const officeArticle: HelpArticle = {
   summary:
     '組織で採用した AI社員の働きぶりを、バーチャルオフィスで見ます。AI社員はロボットの姿で、状態に合わせてフロアを移動します。管理者は空席から AI社員を採用し、名前の変更・休止・解雇ができます。',
   routes: ['/office'],
-  reviewedAt: '2026-11-14',
+  reviewedAt: '2026-11-15',
   blocks: [
     { type: 'h2', id: 'floor', text: 'フロアの見方' },
     {

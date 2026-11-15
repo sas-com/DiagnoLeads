@@ -273,6 +273,13 @@ describe('LeadPrepCard', () => {
     expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
   });
 
+  it('gives the focus to the first field when the form opens (#1225)', async () => {
+    mocks.result = { data: { card: savedCard, canEdit: true, draftSource }, isError: false };
+    renderCard();
+    await press('編集');
+    expect(screen.getByLabelText('推定した基幹システム')).toHaveFocus();
+  });
+
   it('shows a card saved empty as none, and still saves over that row with its date (#1225)', async () => {
     const emptyAt = new Date('2026-10-18T03:00:00Z');
     mocks.result = {
