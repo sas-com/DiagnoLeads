@@ -65,6 +65,7 @@ export function OfficeRoomLeads({
   keysRef,
   onOpenLead,
   onFileOpenChange,
+  onBusyChange,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -79,6 +80,8 @@ export function OfficeRoomLeads({
   onOpenLead: () => void;
   /** Told when a file opens or closes: while one is open, Esc closes it, not the room */
   onFileOpenChange: (open: boolean) => void;
+  /** Told while a record of the customer file is being saved: the office keeps the room open */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tRoom = useTranslations('aiOffice.immersive.room.marketing');
@@ -197,6 +200,7 @@ export function OfficeRoomLeads({
         keysRef={fileKeys}
         onClose={() => setOpen(null)}
         onOpenDetail={onOpenLead}
+        onBusyChange={onBusyChange}
       />
     );
   }

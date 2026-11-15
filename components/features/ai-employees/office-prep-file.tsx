@@ -2,7 +2,7 @@
 
 import { isImeKey } from '@/components/ui/ime';
 import type { DealCard } from '@/lib/features/deals/service';
-import { buildPrepDraft, hasDraftMaterial } from '@/lib/features/lead-prep/draft';
+import { buildPrepDraft, hasDraftMaterial, prepCardFilled } from '@/lib/features/lead-prep/draft';
 import { PREP_CHALLENGES, type PrepCardFields } from '@/lib/features/lead-prep/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,6 @@ import {
   prepActionOfKey,
   prepActionOpen,
   prepCardFields,
-  prepCardFilled,
   prepPartOfKey,
   samePrepCard,
   savedPrepCard,
@@ -34,6 +33,9 @@ type Outcome =
   // through, so the draft is still saved and can be undone again
   | { kind: 'drafted'; before: PrepCardFields; after: PrepCardFields; undoFailed?: boolean }
   | { kind: 'undone' }
+  // The server refused the draft: the card was saved in the moment after it was read.
+  // fillable: whether the card as it is now still has a field a draft could fill
+  | { kind: 'refused'; fillable: boolean }
   | { kind: 'failed' };
 
 /** A calendar day ('YYYY-MM-DD') as it is written on the board */
@@ -138,10 +140,11 @@ export function OfficePrepFile({
   const state = { canEdit, drafted, busy: working || rereading, fillable, stale };
 
   /**
-   * The card as the server holds it right now (#1221). `leadPrep.save` replaces the whole card
-   * and takes no condition, so an answer never starts from the card on the screen, which
-   * somebody may have changed on the lead's page since it was read: it reads the card again and
-   * works from that. What is left is the moment between this read and the save.
+   * The card as the server holds it right now (#1221). `leadPrep.save` replaces the whole card,
+   * so an answer never starts from the card on the screen, which somebody may have changed on
+   * the lead's page since it was read: it reads the card again and works from that. The save
+   * carries the `updatedAt` of that read (#1225), so a card saved in the moment between the read
+   * and the save is not written over either: the server refuses, and the file says so.
    */
   // Not tried again: while it runs, Esc and the way back are closed
   const readNow = () => utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false });
@@ -153,6 +156,39 @@ export function OfficePrepFile({
       shown.current = false;
     };
   }, []);
+
+  /** The card a draft would save from what the server holds now; null when nothing is to fill */
+  const draftOf = (fresh: Awaited<ReturnType<typeof readNow>>) => {
+    const now = prepCardFields(fresh.card);
+    const filled =
+      fresh.canEdit && fresh.draftSource && hasDraftMaterial(fresh.draftSource)
+        ? savedPrepCard(buildPrepDraft(now, fresh.draftSource, (key, values) => tAll(key, values)))
+        : null;
+    return filled && !samePrepCard(now, filled) ? filled : null;
+  };
+  /**
+   * The server refused a save (#1225): the card was saved from another screen in the moment
+   * after it was read. Before anything is said, the card is read once more, so that what the
+   * file says is true of the card as it is: it never says "ask again" over a card that has
+   * nothing left to fill, or "undo again" over a card whose content changed.
+   */
+  const afterRefusal = async (action: PrepFileAction) => {
+    setChecking(true);
+    try {
+      const fresh = await readNow();
+      if (!shown.current) return;
+      if (action === 'draft') setOutcome({ kind: 'refused', fillable: draftOf(fresh) !== null });
+      // The undo: when the content changed, the file says so by itself (stale); when only the
+      // date moved, the draft is still there and the undo can be asked for again
+      else setOutcome((kept) => (kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : kept));
+    } catch {
+      setOutcome((kept) =>
+        kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : { kind: 'failed' }
+      );
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const inFlight = useRef(false);
   const answer = async (action: PrepFileAction) => {
@@ -167,36 +203,44 @@ export function OfficePrepFile({
       const now = prepCardFields(fresh.card);
       if (action === 'draft') {
         // Only the fields that are empty right now are filled
-        const filled =
-          fresh.canEdit && fresh.draftSource && hasDraftMaterial(fresh.draftSource)
-            ? savedPrepCard(
-                buildPrepDraft(now, fresh.draftSource, (key, values) => tAll(key, values))
-              )
-            : null;
-        // Nothing left to fill (somebody filled it meanwhile): the file now shows why
-        if (!filled || samePrepCard(now, filled)) return;
+        const filled = draftOf(fresh);
+        // Nothing left to fill (somebody filled it meanwhile): the file now shows why, and what
+        // it said about an earlier answer no longer holds
+        if (!filled) {
+          setOutcome(null);
+          return;
+        }
         save.mutate(
-          { ...scope, card: filled },
+          // The row's own date, also for a card saved empty (which the file shows as none)
+          { ...scope, card: filled, expectedUpdatedAt: fresh.card?.updatedAt ?? null },
           {
             onSuccess: () => {
               setOutcome({ kind: 'drafted', before: now, after: filled });
               setPart('prep');
             },
-            onError: () => setOutcome({ kind: 'failed' }),
+            onError: (error) => {
+              if (error.data?.code === 'CONFLICT') void afterRefusal('draft');
+              else setOutcome({ kind: 'failed' });
+            },
           }
         );
       } else if (outcome?.kind === 'drafted') {
         // The card no longer says what the draft put there: the file now says so, nothing is sent
         if (!samePrepCard(now, outcome.after)) return;
         save.mutate(
-          { ...scope, card: outcome.before },
+          { ...scope, card: outcome.before, expectedUpdatedAt: fresh.card?.updatedAt ?? null },
           {
             onSuccess: () => setOutcome({ kind: 'undone' }),
-            // The draft is still there: keep it in hand, so the undo can be asked for again
-            onError: () =>
+            onError: (error) => {
+              if (error.data?.code === 'CONFLICT') {
+                void afterRefusal('undo');
+                return;
+              }
+              // The draft is still there: keep it in hand, so the undo can be asked for again
               setOutcome((kept) =>
                 kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : { kind: 'failed' }
-              ),
+              );
+            },
           }
         );
       }
@@ -272,7 +316,9 @@ export function OfficePrepFile({
           {prep.data && (
             <p className="text-sm leading-relaxed">{card ? t('prepReady') : t('prepNone')}</p>
           )}
-          {outcome && (
+          {/* While the card is read and saved, what an earlier answer said is not repeated */}
+          {working && <p className="text-base leading-relaxed font-medium">{t('checking')}</p>}
+          {outcome && !working && (
             <p className="text-base leading-relaxed font-medium">
               {outcome.kind === 'drafted'
                 ? stale
@@ -282,11 +328,15 @@ export function OfficePrepFile({
                     : t('drafted')
                 : outcome.kind === 'undone'
                   ? t('undone')
-                  : t('failed')}
+                  : outcome.kind === 'refused'
+                    ? outcome.fillable
+                      ? t('refused')
+                      : t('refusedNothing')
+                    : t('failed')}
             </p>
           )}
           {/* Why the draft is closed, to those who could ask for it */}
-          {canEdit && !drafted && !fillable && !state.busy && (
+          {canEdit && !drafted && !fillable && !state.busy && outcome?.kind !== 'refused' && (
             <p className="text-sm leading-relaxed text-[#d8d2c4]">
               {material ? t('nothingToFill') : t('noMaterial')}
             </p>
