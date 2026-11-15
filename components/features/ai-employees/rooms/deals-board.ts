@@ -202,9 +202,10 @@ export function stageBefore(stage: DealStage): OpenDealStage | null {
 
 /**
  * What a key of an open deal file does: move the deal on or back by one open stage, mark its next
- * action as done, open the field that sets a next action, or take the last answer back
+ * action as done, open the field that sets a next action, open the place where a contact is
+ * recorded, or take the last answer back
  */
-export type DealFileAction = 'advance' | 'back' | 'done' | 'add' | 'undo';
+export type DealFileAction = 'advance' | 'back' | 'done' | 'add' | 'contact' | 'undo';
 
 /** The answers of a deal file that are listed as choices, in the order of their keys */
 export const DEAL_FILE_CHOICES = [
@@ -212,6 +213,7 @@ export const DEAL_FILE_CHOICES = [
   'back',
   'done',
   'add',
+  'contact',
 ] as const satisfies readonly DealFileAction[];
 
 /**
@@ -223,6 +225,7 @@ export const DEAL_KEYS: Readonly<Record<DealFileAction, string>> = {
   back: '2',
   done: '3',
   add: '4',
+  contact: '5',
   undo: 'Z',
 };
 
@@ -243,7 +246,8 @@ export type DealAnswerKind = 'moved' | 'done';
  * set and the deal moved on in one sitting. Undoing an answer opens its kind again. The undo
  * takes back the last answer only, while there is something to take back (a move that handed the
  * lead off is not: the handoff sheet went out; a next action that was typed is changed, not
- * undone), and never over a deal that is closed by now.
+ * undone), and never over a deal that is closed by now. Opening the field of a next action or the
+ * place of a contact carries nothing out, so both stay open.
  */
 export function dealActionOpen(
   action: DealFileAction,

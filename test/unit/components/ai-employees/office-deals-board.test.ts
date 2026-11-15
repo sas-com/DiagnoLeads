@@ -244,12 +244,13 @@ describe('the keys of a deal file', () => {
   });
 
   it('are fixed: a number carries out, Z takes back, as over a customer file', () => {
-    expect(DEAL_FILE_CHOICES.map((choice) => DEAL_KEYS[choice])).toEqual(['1', '2', '3', '4']);
+    expect(DEAL_FILE_CHOICES.map((choice) => DEAL_KEYS[choice])).toEqual(['1', '2', '3', '4', '5']);
     expect(DEAL_KEYS.undo).toBe(FILE_KEYS.undo);
     expect(dealActionOfKey('1')).toBe('advance');
+    expect(dealActionOfKey('5')).toBe('contact');
     expect(dealActionOfKey('z')).toBe('undo');
     expect(dealActionOfKey('Z')).toBe('undo');
-    for (const key of ['5', 'Enter', 'Escape', 'ArrowDown']) expect(dealActionOfKey(key)).toBeNull();
+    for (const key of ['6', 'Enter', 'Escape', 'ArrowDown']) expect(dealActionOfKey(key)).toBeNull();
   });
 
   it('are closed at the ends of the open stages and without a next action to mark', () => {
@@ -276,8 +277,10 @@ describe('the keys of a deal file', () => {
     for (const choice of ['advance', 'back', 'done'] as const) {
       expect(dealActionOpen(choice, both)).toBe(false);
     }
-    // Setting a next action stays open: it is typed, never a key pressed once too often
+    // Setting a next action and recording a contact stay open: their keys only open a place,
+    // and what is carried out there is typed or chosen with a button
     expect(dealActionOpen('add', both)).toBe(true);
+    expect(dealActionOpen('contact', both)).toBe(true);
   });
 
   it('open a kind again once its answer was undone', () => {

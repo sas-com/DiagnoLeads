@@ -579,7 +579,7 @@
           "noNext": "It has no next action.",
           "moved": "Moved to \"{stage}\" (probability {probability}%). You can undo this if it was a mistake.",
           "movedHandedOff": "Moved to \"{stage}\" (probability {probability}%). The handoff sheet was sent to the technical team, so this move cannot be undone.",
-          "done": "Marked the next action \"{title}\" as done. You can undo this if it was a mistake.",
+          "done": "Marked the next action \"{title}\" as done. You can undo this if it was a mistake. Record what you did with 5.",
           "added": "Set the next action \"{title}\", due {date}. To change it, use the deal in the normal view.",
           "undone": "Undone.",
           "undoFailed": "The undo did not go through. The change still stands. Please try again.",
@@ -596,7 +596,8 @@
             "close": "Back to the board",
             "advanceSql": "Move on to \"{stage}\" (SQL decision first)",
             "advanceAsk": "Move on to \"{stage}\" (a word first)",
-            "doneNamed": "Mark \"{title}\" as done"
+            "doneNamed": "Mark \"{title}\" as done",
+            "contact": "Record a contact"
           },
           "sql": {
             "title": "SQL decision",
@@ -614,7 +615,8 @@
               "tomorrow": "Tomorrow",
               "in3Days": "In 3 days",
               "nextMonday": "Next Monday"
-            }
+            },
+            "keeps": "The next action \"{title}\" (due {date}) stays. If it is done, mark it with 3 first."
           },
           "stages": "Stages of the deal",
           "here": "Here now",
@@ -638,7 +640,14 @@
             "title": "Before moving on",
             "warning": "The first time this prospect moves on from qualification, the handoff sheet is sent to the technical team. A move that sent it cannot be undone.",
             "go": "Move on to \"{stage}\""
-          }
+          },
+          "contact": {
+            "title": "Record a contact",
+            "note": "Note (optional: what they answered, for instance)",
+            "pick": "Choose what you did, and it is recorded.",
+            "back": "Leave it and go back to the choices"
+          },
+          "contacted": "Recorded \"{kind}\". You can undo this if it was a mistake."
         },
         "reception": {
           "board": "General affairs counter",
