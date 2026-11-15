@@ -308,13 +308,19 @@ export function OfficeRoomLeads({
                   pressed={option === choice}
                   onClick={() => choose(option)}
                 >
-                  {tRoom(`leadViews.${option}`)}
-                  {/* How many wait there; nothing while it is not read (never a zero instead) */}
-                  {isLeadCountView(option) && waiting[option].data && (
-                    <span className="ml-auto text-xs tabular-nums">
-                      {tRoom('leadCount', { count: waiting[option].data.total })}
+                  {/* The count stays in one piece: on a narrow chip it goes under the name
+                      before the name is broken */}
+                  <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
+                      {tRoom(`leadViews.${option}`)}
                     </span>
-                  )}
+                    {/* How many wait there; nothing while it is not read (never a zero instead) */}
+                    {isLeadCountView(option) && waiting[option].data && (
+                      <span className="ml-auto whitespace-nowrap text-xs tabular-nums">
+                        {tRoom('leadCount', { count: waiting[option].data.total })}
+                      </span>
+                    )}
+                  </span>
                 </RoomChoiceButton>
               </li>
             ))}

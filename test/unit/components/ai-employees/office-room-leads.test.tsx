@@ -530,7 +530,7 @@ describe('the marketing room', () => {
     const { office } = await enterMarketing();
     expect(
       within(within(office).getByRole('region', { name: '流入元ボード' })).getByText(
-        'SQL は、SQL と判定された見込み客の数です。進み具合ボードの SQL は、受注した見込み客も数えます。'
+        'この表の SQL は、SQL と判定された見込み客の数です。進み具合ボードの SQL は、受注した見込み客も数えるので、数が合わないことがあります。'
       )
     ).toBeInTheDocument();
   });

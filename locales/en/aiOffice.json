@@ -293,7 +293,7 @@
             "mine": "Mine",
             "all": "All"
           },
-          "leadCount": "{count}",
+          "leadCount": "{count, number}",
           "period": "Prospects created in the last {days} days: {count}",
           "periodOnly": "Prospects created in the last {days} days",
           "loading": "Loading",
@@ -331,7 +331,7 @@
             "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened.",
             "openDescription": "Shows its prospects of the last {days} days on the lead board",
             "closedRow": " (cannot be opened)",
-            "sqlNote": "SQL counts the prospects judged SQL. The SQL of the progress board counts the prospects that were won too."
+            "sqlNote": "The SQL of this table counts the prospects judged SQL. The SQL of the progress board counts the prospects that were won too, so the two can differ."
           },
           "funnel": {
             "board": "Progress board",
