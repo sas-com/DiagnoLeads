@@ -210,6 +210,12 @@ export function OfficeRoomReception({
                           count: memberCount ?? 0,
                           waiting: invited.state === 'ready' ? invited.waiting : 0,
                         }),
+                      // Said, not left out: who listens does not see the board
+                      // Only when there is no figure at all: a refetch that failed keeps the last one
+                      memberCount === null && members.isError && tDesk('members.unread'),
+                      memberCount !== null &&
+                        invited.state === 'error' &&
+                        tDesk('members.invitationsUnread'),
                       tDesk('ask'),
                     ]
                       .filter(Boolean)
