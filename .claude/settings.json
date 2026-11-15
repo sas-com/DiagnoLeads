@@ -48,7 +48,14 @@
       "Bash(bun run test:e2e*)",
       "Bash(bunx drizzle-kit *)",
       "Bash(git fetch *--u*)",
-      "Edit(./node_modules/**)"
+      "Edit(./node_modules/**)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.claude/settings.local.json)",
+      "Edit(/.claude/hooks/**)",
+      "Edit(/.claude/agents/**)",
+      "Bash(gh pr merge *)",
+      "mcp__github__merge_pull_request",
+      "mcp__github__enable_pr_auto_merge"
     ],
     "deny": [
       "Read(./.env)",
