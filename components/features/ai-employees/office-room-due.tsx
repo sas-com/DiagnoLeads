@@ -81,6 +81,13 @@ export function OfficeRoomDue({
   const utils = trpc.useUtils();
   const reportRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLParagraphElement>(null);
+  // The focus goes to what was answered once it is shown: put there at once, the sentence that
+  // was there before would be read out, and the new one after it
+  const [answered, setAnswered] = useState(0);
+  useEffect(() => {
+    if (answered > 0) resultRef.current?.focus();
+  }, [answered]);
+  const focusResult = () => setAnswered((count) => count + 1);
   // The queue as it was when the room opened, where the president is in it, and what was done
   const [queue, setQueue] = useState<DueTaskView[] | null>(null);
   const [index, setIndex] = useState(0);
@@ -168,7 +175,7 @@ export function OfficeRoomDue({
     }
     // The answer is in the report: the focus goes there, off a button that is closed now
     // Only what was answered: the whole report would be read again from the shelf's name
-    resultRef.current?.focus();
+    focusResult();
   };
 
   // The room's keys: each one keeps its meaning, and one that is closed right now does nothing.

@@ -766,6 +766,22 @@ describe('the counter of the reception (#1196)', () => {
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
   });
 
+  it('puts the focus on what was answered, not on the whole report (#1236)', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('1');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 10)));
+    await user.keyboard('1');
+    const marked = within(office).getByText('済みにしました。間違えたときは、取り消せます。');
+    expect(marked).toHaveFocus();
+    await user.keyboard('2');
+    expect(within(office).getByText('3 件中 2 件目をお渡しします。')).toHaveFocus();
+    // The same after the field of the revoking was closed
+    await user.keyboard('{Escape}2');
+    await user.keyboard('1');
+    await user.keyboard('{Escape}');
+    expect(within(office).getByText('メンバーは 2 人、招待中は 1 件です。')).toHaveFocus();
+  });
+
   it('has no way back, to the counter or to the floor, while a mark is being saved (#1236)', async () => {
     const { user, office, refresh } = await enterCounter();
     await user.keyboard('1');

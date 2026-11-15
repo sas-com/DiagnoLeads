@@ -106,6 +106,13 @@ export function OfficeRoomMembers({
   const utils = trpc.useUtils();
   const reportRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLParagraphElement>(null);
+  // The focus goes to what was answered once it is shown: put there at once, the sentence that
+  // was there before would be read out, and the new one after it
+  const [answered, setAnswered] = useState(0);
+  useEffect(() => {
+    if (answered > 0) resultRef.current?.focus();
+  }, [answered]);
+  const focusResult = () => setAnswered((count) => count + 1);
   const fieldRef = useRef<HTMLInputElement>(null);
   const fieldId = useId();
   const noteId = useId();
@@ -163,7 +170,7 @@ export function OfficeRoomMembers({
           setOutcome({ kind: error.data?.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
         onSettled: () => {
           close();
-          resultRef.current?.focus();
+          focusResult();
         },
       }
     );
@@ -179,7 +186,7 @@ export function OfficeRoomMembers({
       event.preventDefault();
       if (!busy) {
         close();
-        resultRef.current?.focus();
+        focusResult();
       }
       return true;
     }
@@ -294,7 +301,7 @@ export function OfficeRoomMembers({
               onBack={() => {
                 close();
                 // The button goes away with the field: the focus goes to the report, not nowhere
-                resultRef.current?.focus();
+                focusResult();
               }}
               closed={busy}
               label={tShelf('revoke.back')}
