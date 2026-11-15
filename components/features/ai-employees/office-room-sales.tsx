@@ -426,7 +426,8 @@ export function OfficeRoomSales({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p>
               {board.data && total > 0 && tDealsRoom('range', { total, from, to })}
-              <span className="ml-3 text-xs">{tDealsRoom('openHint')}</span>
+              {/* Only where the foot has room for it on one line with the links and the pages */}
+              <span className="ml-3 hidden text-xs 2xl:inline">{tDealsRoom('openHint')}</span>
             </p>
             {/* What the room does not hold yet: a page of the normal view, a link away */}
             <nav aria-label={tDealsRoom('normalPages')} className="flex flex-wrap gap-x-4">
