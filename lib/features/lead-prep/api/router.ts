@@ -39,13 +39,22 @@ export const leadPrepRouter = router({
 
   save: organizationProcedure.input(savePrepCardSchema).mutation(async ({ ctx, input }) => {
     assertCan(ctx.ability, 'update');
+    // The fields are taken by name: the organization's input schema lets unknown ones through
     const saved = await savePrepCard(ctx.db, {
       organizationId: ctx.organization.id,
       leadId: input.leadId,
       userId: ctx.user.id,
       card: input.card,
+      expectedUpdatedAt: input.expectedUpdatedAt,
     });
-    if (!saved) throw notFound();
-    return { ok: true };
+    if (saved.status === 'not_found') throw notFound();
+    if (saved.status === 'conflict') {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'The prep card was changed by someone else. Reload it and try again.',
+      });
+    }
+    // The card's new updatedAt: what the same screen sends with its next save
+    return { ok: true, updatedAt: saved.updatedAt };
   }),
 });

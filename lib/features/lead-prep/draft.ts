@@ -109,3 +109,23 @@ export function buildPrepDraft(
 /** Ready for the meeting: the three first questions are written (the prep target of #156) */
 export const isPrepReady = (card: Pick<PrepCardFields, 'firstQuestions'>): boolean =>
   card.firstQuestions.filter((q) => q.trim()).length >= PREP_LIMITS.questions;
+
+/**
+ * Whether a prep card says anything: one saved empty is the same as none, on the lead's page and
+ * in the office alike (#1225). Undoing a draft for a lead that had no card leaves such a row
+ */
+export function prepCardFilled(card: {
+  estimatedSystem: string | null;
+  estimatedSystemBasis: string | null;
+  recentNews: string | null;
+  hypotheses: Partial<Record<string, string>>;
+  firstQuestions: readonly string[];
+}): boolean {
+  return Boolean(
+    card.estimatedSystem ||
+      card.estimatedSystemBasis ||
+      card.recentNews ||
+      Object.values(card.hypotheses).some(Boolean) ||
+      card.firstQuestions.length > 0
+  );
+}

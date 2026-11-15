@@ -122,23 +122,6 @@ export function prepPartOfKey(key: string): PrepFilePart | null {
   return PREP_FILE_PARTS[Number(key) - 1] ?? null;
 }
 
-/** Whether a prep card says anything: one saved empty is the same as none */
-export function prepCardFilled(card: {
-  estimatedSystem: string | null;
-  estimatedSystemBasis: string | null;
-  recentNews: string | null;
-  hypotheses: Partial<Record<string, string>>;
-  firstQuestions: readonly string[];
-}): boolean {
-  return Boolean(
-    card.estimatedSystem ||
-      card.estimatedSystemBasis ||
-      card.recentNews ||
-      Object.values(card.hypotheses).some(Boolean) ||
-      card.firstQuestions.length > 0
-  );
-}
-
 /** What the president can have done from a preparation file (#1212) */
 export type PrepFileAction = 'draft' | 'undo';
 

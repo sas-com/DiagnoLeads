@@ -787,10 +787,13 @@
             "drafted": "The empty fields of the prep card were filled from the Web diagnosis and the sales playbook, and saved. What was already written was kept. You can undo this.",
             "undone": "The draft was undone and the prep card is as it was.",
             "failed": "Sorry, that did not work. Please try again later.",
+            "refused": "The prep card was saved from another screen just before this save. The draft was not saved. You can ask for the draft again, from the latest card.",
             "undoFailed": "The draft could not be undone and is still saved. You can ask to undo it again.",
-            "changedSince": "The prep card was changed after the draft. Undoing would wipe what was written since, so it cannot be undone here. To change it, open the lead's page.",
+            "changedSince": "The prep card was saved from another screen after the draft. Undoing would wipe that, so it cannot be undone here. To change it, open the lead's page.",
             "noMaterial": "There is nothing to draft from for this customer (no Web diagnosis answers, no sales playbook).",
-            "nothingToFill": "The prep card has no empty field a draft could fill."
+            "nothingToFill": "The prep card has no empty field a draft could fill.",
+            "refusedNothing": "The prep card was saved from another screen just before this save. The draft was not saved. The latest card has no empty field a draft could fill.",
+            "checking": "Checking the prep card."
           }
         }
       },
