@@ -826,6 +826,21 @@ export const aiEmployees = pgTable(
      * and its work style. Read through resolveAiEmployeeProfile, which fills what is missing
      */
     profile: jsonb('profile').$type<Record<string, unknown>>().default({}).notNull(),
+    /**
+     * The grade (#1190, decision 2026-11-14-training-room-grows-employees): 0 in training (the
+     * onboarding is not approved yet), 1 on probation, 2 full member, 3 lead, 4 ace. It sets how
+     * much the employee is trusted to do; only the president raises it
+     */
+    level: integer('level').default(0).notNull(),
+    /** When the president approved the onboarding (#1189) */
+    onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
+    /** When the level last changed: the days at the level count from here */
+    levelChangedAt: timestamp('level_changed_at', { withTimezone: true }),
+    /**
+     * What the president expects of the employee (#1189): a short plain text the employee reads
+     * at its onboarding, as data. Empty when nothing was written
+     */
+    policy: text('policy').default('').notNull(),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
@@ -833,6 +848,8 @@ export const aiEmployees = pgTable(
   (table) => [
     uniqueIndex('ai_employees_organization_role_unique').on(table.organizationId, table.role),
     check('ai_employees_status_check', sql`${table.status} IN ('active', 'paused')`),
+    check('ai_employees_level_check', sql`${table.level} BETWEEN 0 AND 4`),
+    check('ai_employees_policy_check', sql`char_length(${table.policy}) <= 400`),
   ]
 );
 
@@ -885,6 +902,190 @@ export const aiEmployeeRuns = pgTable(
 );
 
 export type AiEmployeeRun = typeof aiEmployeeRuns.$inferSelect;
+
+/**
+ * AI Employee Sessions (#1188, Epic #1187)
+ * One piece of work of an AI employee as a Claude agent: its onboarding or a review. The
+ * conversation with Claude is kept here, appended to and never rewritten, and moved on one call
+ * of Claude at a time (a function stops at 30 seconds). An organization's own words and the
+ * employee's notes may be in it, never a lead or a person: only the managers of the AI employees
+ * read it, through the training room.
+ */
+export const aiEmployeeSessions = pgTable(
+  'ai_employee_sessions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => aiEmployees.id, { onDelete: 'cascade' }),
+    /** 'onboarding' | 'review' */
+    kind: text('kind').notNull(),
+    /**
+     * 'running' moves on; 'waiting' waits for the president's answer to what the employee handed
+     * in; 'succeeded', 'failed' and 'cancelled' are over
+     */
+    status: text('status').default('running').notNull(),
+    /** The Messages API conversation (Anthropic.MessageParam[]), appended to only */
+    messages: jsonb('messages').$type<unknown[]>().default([]).notNull(),
+    /** What the employee handed in (the onboarding report, the self-review), checked by zod */
+    report: jsonb('report').$type<Record<string, unknown>>(),
+    /** Calls of Claude made so far */
+    steps: integer('steps').default(0).notNull(),
+    model: text('model'),
+    inputTokens: integer('input_tokens').default(0).notNull(),
+    outputTokens: integer('output_tokens').default(0).notNull(),
+    cacheReadTokens: integer('cache_read_tokens').default(0).notNull(),
+    cacheWriteTokens: integer('cache_write_tokens').default(0).notNull(),
+    /** Short code of how it ended or why it stopped, never free text (like ai_employee_runs) */
+    resultCode: text('result_code'),
+    /** While a step runs: no second step of the same session starts before this */
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    startedBy: uuid('started_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('ai_employee_sessions_employee_created_idx').on(table.employeeId, table.createdAt),
+    // One open piece of work per employee at a time
+    uniqueIndex('ai_employee_sessions_one_open')
+      .on(table.employeeId)
+      .where(sql`${table.status} IN ('running', 'waiting')`),
+    check('ai_employee_sessions_kind_check', sql`${table.kind} IN ('onboarding', 'review')`),
+    check(
+      'ai_employee_sessions_status_check',
+      sql`${table.status} IN ('running', 'waiting', 'succeeded', 'failed', 'cancelled')`
+    ),
+    check(
+      'ai_employee_sessions_result_code_check',
+      sql`${table.resultCode} IS NULL OR ${table.resultCode} ~ '^[a-z_]{1,40}$'`
+    ),
+  ]
+);
+
+export type AiEmployeeSession = typeof aiEmployeeSessions.$inferSelect;
+
+/**
+ * AI Employee Memories (#1188)
+ * The notes an AI employee keeps under /memories with Claude's memory tool: what it understood
+ * of its role, its company and its goals. The employee writes them; a manager can read, fix and
+ * delete them in the training room. Never a person's data: the writes are checked first.
+ */
+export const aiEmployeeMemories = pgTable(
+  'ai_employee_memories',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => aiEmployees.id, { onDelete: 'cascade' }),
+    /** '/memories/role.md' (MEMORY_PATH in lib/features/ai-employees/agent/memory.ts) */
+    path: text('path').notNull(),
+    content: text('content').default('').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('ai_employee_memories_employee_path_unique').on(table.employeeId, table.path),
+    check(
+      'ai_employee_memories_path_check',
+      sql`${table.path} ~ '^/memories(/[a-z0-9][a-z0-9_-]{0,47}){1,2}\\.(md|txt)$'`
+    ),
+    check('ai_employee_memories_content_check', sql`char_length(${table.content}) <= 4000`),
+  ]
+);
+
+export type AiEmployeeMemory = typeof aiEmployeeMemories.$inferSelect;
+
+/**
+ * AI Employee Memory Versions (#1188)
+ * A copy of a note after each change (content null: deleted), with who changed it: the employee
+ * (in which session) or a manager. To follow and undo what was written.
+ */
+export const aiEmployeeMemoryVersions = pgTable(
+  'ai_employee_memory_versions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => aiEmployees.id, { onDelete: 'cascade' }),
+    path: text('path').notNull(),
+    content: text('content'),
+    /** 'agent' | 'user' */
+    changedBy: text('changed_by').notNull(),
+    sessionId: uuid('session_id'),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('ai_employee_memory_versions_employee_created_idx').on(table.employeeId, table.createdAt),
+    // Named explicitly: the generated name is longer than PostgreSQL's 63-character limit
+    foreignKey({
+      name: 'ai_employee_memory_versions_session_fk',
+      columns: [table.sessionId],
+      foreignColumns: [aiEmployeeSessions.id],
+    }).onDelete('set null'),
+    check(
+      'ai_employee_memory_versions_changed_by_check',
+      sql`${table.changedBy} IN ('agent', 'user')`
+    ),
+  ]
+);
+
+/**
+ * AI Employee Reviews (#1190)
+ * The monthly review of an AI employee: the facts of the period counted from the records, what
+ * they recommend (promote, keep, narrow), the employee's self-review (in its session) and the
+ * president's decision. A narrowing is made at once (the safe side); a promotion waits for the
+ * president.
+ */
+export const aiEmployeeReviews = pgTable(
+  'ai_employee_reviews',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => aiEmployees.id, { onDelete: 'cascade' }),
+    sessionId: uuid('session_id').references(() => aiEmployeeSessions.id, {
+      onDelete: 'set null',
+    }),
+    periodStart: timestamp('period_start', { withTimezone: true }).notNull(),
+    periodEnd: timestamp('period_end', { withTimezone: true }).notNull(),
+    /** The counted facts (ReviewFacts in lib/features/ai-employees/grading.ts) */
+    facts: jsonb('facts').$type<Record<string, unknown>>().notNull(),
+    /** 'promote' | 'keep' | 'narrow' */
+    recommendation: text('recommendation').notNull(),
+    levelBefore: integer('level_before').notNull(),
+    /** Set when decided (a narrowing is decided when the review opens) */
+    levelAfter: integer('level_after'),
+    /** 'open' waits for the president; 'decided' is over */
+    status: text('status').default('open').notNull(),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('ai_employee_reviews_employee_created_idx').on(table.employeeId, table.createdAt),
+    check(
+      'ai_employee_reviews_recommendation_check',
+      sql`${table.recommendation} IN ('promote', 'keep', 'narrow')`
+    ),
+    check('ai_employee_reviews_status_check', sql`${table.status} IN ('open', 'decided')`),
+  ]
+);
+
+export type AiEmployeeReview = typeof aiEmployeeReviews.$inferSelect;
 
 /**
  * Lead Hearings

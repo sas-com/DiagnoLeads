@@ -281,6 +281,13 @@
       "when": 1794578049281,
       "tag": "0039_ai_employees",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794665124865,
+      "tag": "0040_training_room",
+      "breakpoints": true
     }
   ]
 }
