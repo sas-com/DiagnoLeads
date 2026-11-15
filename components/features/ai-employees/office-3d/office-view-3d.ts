@@ -120,11 +120,12 @@ export interface ScreenRect {
 }
 
 /**
- * What an opening has to hold: a robot with what it wears on its head (and the badge of an
- * employee that sleeps or is stuck, a little higher), and its arms at its sides. In floor units.
- * Close enough that the neighbour at the next seat stays at the edge.
+ * What an opening has to hold, in floor units: a robot as the 3D office builds it (about 2.75
+ * tall and 2 wide with its arms at its sides, `ROBOT_SCALE` in robot-3d.tsx) with what it wears
+ * on its head, and the badge of an employee that sleeps or is stuck, which floats up to 3.6 over
+ * the floor. Close enough that the neighbour at the next seat stays at the edge.
  */
-export const OPENING_SUBJECT = { height: 2.9, width: 1.9 };
+export const OPENING_SUBJECT = { height: 3.6, width: 2.4 };
 
 /** The share of an opening that its subject fills: the rest is air around it */
 export const OPENING_FILL = 0.88;
