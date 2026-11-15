@@ -102,9 +102,9 @@ test.describe('Authentication', () => {
 
       // The owner invites the address from the members page; the dialog shows the link to pass on.
       // The owner loads three admin pages (the AI office after sign-in, the members page and its
-      // reload at the end), each reading the session once: 3 of the 5 session reads a minute that
-      // the proxy allows an address (#519). One more read per page would fail this test with 429
-      // at times, so keep that in mind when adding page loads here before #519 is fixed
+      // reload at the end), each reading the session once. The proxy counts session reads per
+      // address like other API reads (100 a minute since #519; it was 5 before, which this test
+      // used to come close to)
       await login(page, TEST_USERS.owner);
       await page.goto('/ja/settings/members');
       await page.getByRole('button', { name: members.inviteButton, exact: true }).click();
