@@ -2,7 +2,8 @@
 
 import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
-import { FOCUS, KEY } from './office-hud';
+import { CAP, FOCUS, KEY } from './office-hud';
+import type { ReceptionShelf } from './rooms/reception';
 
 /** The way back from a shelf of the reception to its counter (#1196): Esc, or this button */
 export function ShelfBackButton({
@@ -35,6 +36,16 @@ export function ShelfBackButton({
     </button>
   );
 }
+
+/** Which shelf is open, over its guide: the numbers mean something else on each level (#1226) */
+export function ShelfName({ shelf }: { shelf: ReceptionShelf }) {
+  const t = useTranslations('aiOffice.immersive.room.reception');
+  return <p className={CAP}>{t(`shelves.${shelf}`)}</p>;
+}
+
+/** The guide panel of the reception: scrolls inside itself on a low screen instead of overflowing */
+export const GUIDE_PANEL =
+  'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:max-h-full lg:w-[26rem] lg:overflow-y-auto';
 
 /** A message in the middle of a board: nothing to show, or it could not be read */
 export const BOARD_MESSAGE = 'm-auto max-w-md px-6 text-center text-base leading-relaxed';
