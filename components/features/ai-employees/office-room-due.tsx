@@ -82,13 +82,7 @@ export function OfficeRoomDue({
   const [index, setIndex] = useState(0);
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set());
   const [justDone, setJustDone] = useState<string | null>(null);
-  // Marking is closed for a moment after the shelf opened: the key that opened it at the counter
-  // is the key that marks here, and pressed twice it would mark the first one unseen (#1226)
   const [armed, setArmed] = useState(false);
-  useEffect(() => {
-    const timer = setTimeout(() => setArmed(true), DUE_ARM_MS);
-    return () => clearTimeout(timer);
-  }, []);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const due = trpc.leadFollowUp.dueTasks.useQuery({
@@ -100,6 +94,16 @@ export function OfficeRoomDue({
   useEffect(() => {
     if (loaded) setQueue((current) => current ?? loaded.items);
   }, [loaded]);
+  // Marking is closed for a moment after the first one is shown: the key that opened the shelf at
+  // the counter is the key that marks here, and pressed twice it would mark the first one unseen
+  // (#1226). Counted from when the queue is there, not from when the shelf opened: a queue that
+  // arrives late must still be seen first.
+  const queued = queue !== null;
+  useEffect(() => {
+    if (!queued) return;
+    const timer = setTimeout(() => setArmed(true), DUE_ARM_MS);
+    return () => clearTimeout(timer);
+  }, [queued]);
 
   const refresh = () => {
     void utils.leadFollowUp.tasks.invalidate();

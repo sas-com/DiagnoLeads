@@ -219,7 +219,7 @@ export function OfficeRoomMembers({
             {report}
           </p>
           <p className="text-sm text-[#d8d2c4]">
-            {tShelf(mayRevoke ? 'readOnly' : 'readOnlyMember')}
+            {tShelf(invited.state === 'hidden' ? 'readOnlyMember' : 'readOnly')}
           </p>
         </div>
         {revoking ? (
