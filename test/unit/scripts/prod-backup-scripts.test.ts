@@ -49,6 +49,20 @@ describe('production backup scripts', () => {
     );
   });
 
+  it('withdraw the anon and authenticated grants after everything is restored (#1184)', () => {
+    const restore = read('scripts/prod-restore-to.sh');
+    const prepare = restore.indexOf('supabase/prepare.sql');
+    expect(prepare).toBeGreaterThan(restore.indexOf('CREATE TABLE "site_visit_salts"'));
+    expect(read('scripts/supabase/prepare.sql')).toContain(
+      'REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;'
+    );
+    // and stops when a grant is still left, before telling the owner it is done
+    const check = restore.indexOf("grantee in ('anon', 'authenticated')");
+    expect(check).toBeGreaterThan(prepare);
+    expect(restore.indexOf('exit 1', check)).toBeGreaterThan(check);
+    expect(restore.indexOf('exit 1', check)).toBeLessThan(restore.indexOf('echo "Restored'));
+  });
+
   it('recreate the table only after the dump is restored', () => {
     const restore = read('scripts/prod-restore-to.sh');
     expect(restore.indexOf('CREATE TABLE "site_visit_salts"')).toBeGreaterThan(

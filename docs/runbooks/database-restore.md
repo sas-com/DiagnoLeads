@@ -49,10 +49,13 @@
    - `public` に表が1つでもあれば止まる（本番に流してしまわないため）
    - 拡張機能（ltree・vector・pgcrypto・uuid-ossp）は `extensions` スキーマに自動で入れる
    - 控えに入っていない `site_visit_salts` は、空の表として自動で作り直す（その日のソルトはその日だけ使うので、失うものはない）
+   - 最後に `scripts/supabase/prepare.sql` を流し、`anon`・`authenticated` の権限を取り消す（`--no-privileges` で戻した表には、Supabase の既定でこの2つの全権限が付き、新しいプロジェクトの anon キーで Data API から読み書きできてしまうため）。`public` の表にこの2つの権限が残っていれば止まる（#1184）
    - 途中で止まったら、そのプロジェクトには続けて流さない。新しいプロジェクトを作り直して、最初からやり直す
+   - 流し終えたら、管理画面で新しいプロジェクトの **Data API を無効にする**（オーナー。`docs/deployment-guide.md` の Supabase の節と同じ。アプリは Data API を使わない）
 4. **CMS を使っていたら**：`cms/migrations/sql/` の SQL を、新しいプロジェクトの SQL Editor で流す（控えに cms は入っていない）
 5. **読み取り専用のユーザーを作り直す**：`~/diagnoleads-prod-db/setup-prod-ro.sh` の手順で `dl_readonly` を作り、連番の読み取り（`GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle`）も付ける。そのあと `site_visit_salts` を `dl_readonly` から読めなくする（`docs/site-visits.md` の「`dl_readonly` の権限」）。読めるままだと鍵が漏れたときに訪問者を突き合わせられ、控えのスクリプトはこの表を外しているので、読めるままでも止まらず気づけない。`select has_table_privilege('dl_readonly', 'public.site_visit_salts', 'SELECT');` が `false` になることを確かめる
 6. **接続先を切り替える**（オーナー）：Vercel の Production の `DATABASE_URL`（ほかに DB の接続文字列を使う変数があればそれも）を新しいプロジェクトに替えて、再デプロイする
+7. **毎日の控えの接続先を替える**（オーナー）：`~/.config/diagnoleads/prod-ro.env` の `PROD_RO_DATABASE_URL` を、新しいプロジェクトの `dl_readonly` の接続文字列に替える（権限 600 のまま）。`bash ~/diagnoleads-prod-db/prod-dump.sh --now` で書き出し、`bash scripts/prod-dump-verify.sh` の件数が新しいプロジェクトと合うことを確かめる。替えないと、古いプロジェクトは調べ終わるまで残すので（5章の6）、控えはエラーを出さずに古い DB を書き出し続け、次の事故のときに戻せる控えが無い（#1184）
 
 ## 5. 戻した後
 

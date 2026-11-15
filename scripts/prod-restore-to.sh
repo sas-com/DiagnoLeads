@@ -49,5 +49,16 @@ ALTER TABLE "site_visit_salts" ENABLE ROW LEVEL SECURITY;
 COMMIT;
 SQL
 fi
+
+# The restore ran with --no-privileges, so Supabase's default grants gave anon and authenticated
+# full access to every table in public, reachable through the Data API with the new project's anon
+# key. Withdraw them as for a fresh project (docs/deployment-guide.md), then make sure none is left
+# (#1184). Turning the Data API off stays a step in the dashboard (runbook, section 4).
+psql_ < "$(dirname "$0")/supabase/prepare.sql"
+left="$(echo "select count(*) from information_schema.role_table_grants where table_schema = 'public' and grantee in ('anon', 'authenticated');" | psql_)"
+if [ "$left" != "0" ]; then
+  echo "anon or authenticated still holds $left privileges on tables in public. Do not switch to this project." >&2
+  exit 1
+fi
 unset TARGET_URL
 echo "Restored $(basename "$DUMP"). Next: section 4 of docs/runbooks/database-restore.md."
