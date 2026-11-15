@@ -439,6 +439,18 @@
 - **教訓**: キーで送る・閉じる欄を作るときは、`components/common/form-controls.ts` の判定を使う。自分で `event.key === 'Enter'` を見ない。Radix の部品の Esc とブラウザのイベントは `components/ui/ime.ts`（`isImeKey`・`ignoreImeEscape`）を使う。Dialog・Sheet・AlertDialog・Popover は既定で対応済み（PR #1010・#1062）。この学びのあとも、#969・#1012・#1063 で同じ不具合が出た
   - 2026-11-14（#1140、PR #1141）：入力欄の無い画面でも当てはまる。出社の画面は `DialogPrimitive` を直接使い、Esc と数字のキーを自分で受けていたので、「既定で対応済み」の部品を通らなかった。`onKeyDown` の最初で `isImeKey(event.nativeEvent)`、`onEscapeKeyDown` を `ignoreImeEscape` で包む。キーを子の部品へ渡すときは、`key` だけを抜き出した作り物ではなく、ブラウザのイベントを渡す（子でも `isImeKey` を見られる）。#1129 の検査（`test/unit/components/ime-key-guard.test.ts`）は、Enter・Esc を見る行の上10行以内に確認があることを求める
 
+### [UI] DB の接続が無い環境でも、出社の画面の部屋は仮のデータで描画して確かめられる
+- **日付**: 2026-11-14
+- **状況**: クラウドのセッションには DB の接続が無く、開発サーバーでログインできない。営業フロアの部屋（PR #1207・#1217・#1224）は、3本とも「ブラウザでは未確認」のままマージした。レビューの指摘「高さ 768px で 8 行が入るか」は手計算の見積もりしか無く、先送りが続いた
+- **原因**: 「画面を見るには、アプリ全体を動かす必要がある」と思い込んでいた。部屋の部品が外から受け取るのは、tRPC の問い合わせ・next-intl の文言・next/link・next/navigation・next/dynamic だけ
+- **解決策**: リポジトリの中に一時的なフォルダを作り（コミットしない。終わったら消す）、vite（vitest と一緒に入っている）で `OfficeImmersive` だけを描画した
+  - `vite.config.mjs`：`@vitejs/plugin-react`、`css.postcss.plugins` に `@tailwindcss/postcss`、`define: { 'process.env': {} }`。alias は、`@/lib/trpc/client` → 仮のデータを返すファイル、`next/link`・`next/navigation`・`next/dynamic` → 数行の代わり、`@/` → リポジトリの根（個別の alias を先に書く）
+  - 入口：`@/app/globals.css` を読み、`NextIntlClientProvider`（`mergeMessageFiles(MESSAGE_FILES.ja)`）で包む。仮のデータは作った名前だけにする（実在の顧客の値を使わない）
+  - tRPC の代わりは、Proxy で「どの手続きでも `useQuery`・`useMutation`・`invalidate` を返す」形にし、見たい問い合わせだけに仮のデータを返す
+  - Playwright（入っている Chromium）で、`出社する` を押し、部屋の鍵を押して、`1366x768`・`1920x1080` などで撮る。`getBoundingClientRect` で頭・足・行の高さを測る。`locale: 'ja-JP'` にしないと、日付の欄が米国の書き方で出る
+- **結果**: 8行は 768px で入らないことが分かり、6行に直した。折れていた文（受注予定日の超過）も見つけて短くした。画面のエラーは無かった
+- **教訓**: 画面の変更を「ブラウザでは未確認」のまま出す前に、部品だけを仮のデータで描画できないかを考える。見積もりで行数や高さを決めず、測ってから決める。確かめられるのは見た目と配置・キーの動きまでで、API とのつながり・権限・実データでの量は確かめられないので、PR にはそう書く
+
 ### [UI] 「ほかの人が書き換えていたら止める」は、画面が読み直す経路までたどって確かめる
 - **日付**: 2026-11-14
 - **状況**: 開発室の準備ファイルに、事前調査カードの下書きと取り消しを足した（#1212、PR #1220）。保存はカードを丸ごと置き換える（`leadPrep.save`）ので、「下書きのあとにカードが書き換えられていたら、取り消しを閉じる」を入れ、テストも通した。マージのあとの読み取り専用のレビューで、本番ではほぼ働かないと分かった（#1221）

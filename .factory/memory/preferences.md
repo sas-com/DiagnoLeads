@@ -59,7 +59,7 @@
 | パッケージマネージャー | bun |
 | Node.js vs Bun | Bun優先 |
 | npm scripts | bun run 形式 |
-| テスト実行 | 全テスト通過を確認してからコミット |
+| テスト実行 | コミット前は `bun run verify` が通ってから（変えたファイルに関係するテスト。追えない変更では全テスト）。全テストは CI の必須の検査が流す（決定 `2026-11-12-verify-changed-before-commit`） |
 
 ---
 

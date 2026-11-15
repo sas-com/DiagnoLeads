@@ -127,3 +127,10 @@ export function invitationNamed<Invitation extends { email: string }>(
   if (!address) return null;
   return invitations.find((invitation) => asRead(invitation.email) === address) ?? null;
 }
+
+/**
+ * How long marking is closed after the shelf of what is due opened (#1226). The counter opens the
+ * shelf with the key that marks one as done in it: pressed twice in a row, the second press would
+ * mark the first one before it was seen.
+ */
+export const DUE_ARM_MS = 400;
