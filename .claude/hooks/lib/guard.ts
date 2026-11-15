@@ -6,6 +6,18 @@
  */
 import { statSync } from 'node:fs';
 import { basename, isAbsolute, relative, resolve } from 'node:path';
+import {
+  claudeConfigFinding,
+  configPathsTouched,
+  inlineScriptNamesConfig,
+  isClaudeConfigPath,
+  isCommandFlag,
+  isMergeCommand,
+  isMergeTool,
+  mergeFinding,
+  nestedShellFinding,
+  programWords,
+} from './protect';
 
 /** deny blocks the call; ask lets the user decide, with the message as the reason */
 export type GuardDecision = 'deny' | 'ask';
@@ -37,18 +49,24 @@ export function displayPath(root: string, filePath: string): string {
   return (inside ? rel : absolute).replaceAll('\\', '/');
 }
 
-/** The first rule the tool call breaks, or null when it may run */
+/**
+ * The rule the tool call breaks, or null when it may run. A refusal wins over a question: a call
+ * the user would be asked about is still read to the end, so a secret written into a guard file
+ * is refused and not offered for confirmation.
+ */
 export function evaluateToolCall(
   toolName: string,
   toolInput: Record<string, unknown>,
   root: string,
   linkCount: LinkCount = fileLinkCount
 ): Finding | null {
+  let question: Finding | null = isMergeTool(toolName) ? mergeFinding() : null;
   if (EDIT_TOOLS.has(toolName)) {
     const target = toolInput.file_path ?? toolInput.notebook_path;
     if (typeof target === 'string' && target) {
       const finding = checkEditPath(target, root, linkCount);
-      if (finding) return finding;
+      if (finding?.decision === 'deny') return finding;
+      question ??= finding;
     }
   }
   if (toolName === 'Read' || toolName === 'Grep') {
@@ -57,13 +75,14 @@ export function evaluateToolCall(
   }
   if (toolName === 'Bash' && typeof toolInput.command === 'string') {
     const finding = checkBashCommand(toolInput.command, root, linkCount);
-    if (finding) return finding;
+    if (finding?.decision === 'deny') return finding;
+    question ??= finding;
   }
   // The allow marker is for test fixtures in files, never for what goes to GitHub or a shell
   const labels = findSecrets(newContentOf(toolName, toolInput).join('\n'), {
     allowMarker: EDIT_TOOLS.has(toolName),
   });
-  return labels.length ? secretFinding(labels) : null;
+  return labels.length ? secretFinding(labels) : question;
 }
 
 const ENV_FILE = /^\.env(\..+)?$/;
@@ -135,6 +154,8 @@ export function checkEditPath(
         '`.env*` は編集しない（本番の接続情報やキーが入っていることがある）。変数を足すときは `.env.example` に名前と説明だけを書き、値はオーナーが Vercel と手元に設定する。',
     };
   }
+  // Claude's own guards: the user decides (#1209)
+  if (isClaudeConfigPath(path)) return claudeConfigFinding(path);
   return null;
 }
 
@@ -438,6 +459,7 @@ const QUIET_FLAG =
 // May name a secret env file without printing it
 const SAFE_WITH_ENV = new Set(['source', '.', 'set', 'ls', 'test', '[', '[[', 'wc', 'stat']);
 const INTERPRETERS = /^(python3?|node|bun|deno|ruby|perl|php)$/;
+const SHELLS = new Set(['bash', 'sh', 'zsh', 'dash']);
 const SCRIPT_FLAGS = new Set(['-c', '-e', '-p', '--eval', '--print']);
 
 export function isRedirection(word: string): boolean {
@@ -592,19 +614,41 @@ function grepFileWords(words: string[]): string[] {
 /**
  * A shell command that would read or print a secret `.env*` file, or write node_modules or the
  * lockfile behind Bun's back. A command naming a secret env file is refused unless it only
- * loads, lists, counts or tests it, or copies one env file to another.
+ * loads, lists, counts or tests it, or copies one env file to another. Changing Claude's own
+ * guards and merging a pull request are the user's call (./protect.ts): the question is kept
+ * until the whole line was read, since a refusal further on wins over it.
  */
 export function checkBashCommand(
   command: string,
   root: string,
-  linkCount: LinkCount = fileLinkCount
+  linkCount: LinkCount = fileLinkCount,
+  depth = 0
 ): Finding | null {
-  for (const words of splitShell(command)) {
+  if (depth > 4) return nestedShellFinding();
+  const commands = splitShell(command);
+  let question: Finding | null = inlineScriptNamesConfig(command, commands)
+    ? claudeConfigFinding('コマンドの中のスクリプト')
+    : null;
+  for (const words of commands) {
     const start = words.findIndex((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w));
     if (start === -1) continue;
     const commandWords = words.slice(start);
     const program = basename(commandWords[0] ?? '');
     const sub = commandWords[1] ?? '';
+
+    // `bash -lc '…'`, also behind `timeout 60` or `env X=1`: the script is a line of its own
+    const run = programWords(commandWords);
+    if (SHELLS.has(basename(run[0] ?? ''))) {
+      const flag = run.findIndex(isCommandFlag);
+      const script = flag === -1 ? '' : (run[flag + 1] ?? '');
+      const finding = script ? checkBashCommand(script, root, linkCount, depth + 1) : null;
+      if (finding?.decision === 'deny') return finding;
+      question ??= finding;
+    }
+    // All the words: in `x=$(gh pr merge 1)` the gh is part of the leading assignment
+    if (isMergeCommand(words)) question ??= mergeFinding();
+    const touched = configPathsTouched(basename(run[0] ?? ''), run)[0];
+    if (touched) question ??= claudeConfigFinding(touched);
 
     // A grep pattern may mention .env.local (searching docs for the name); its files may not
     const envWords = GREP_PROGRAMS.has(program) ? grepFileWords(commandWords) : commandWords;
@@ -626,8 +670,9 @@ export function checkBashCommand(
     for (const target of writeTargets(program, commandWords)) {
       if (isSecretEnvFile(basename(target))) continue;
       const finding = checkEditPath(target, root, linkCount);
-      if (finding) return finding;
+      if (finding?.decision === 'deny') return finding;
+      question ??= finding;
     }
   }
-  return null;
+  return question;
 }
