@@ -136,7 +136,26 @@ export function OfficeBoardLeads({
       className={ROOM_BOARD}
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
-        <div className="flex items-baseline gap-4">
+        {/* One step deeper than the board it came from: the way back comes first, on its own
+            line, wherever the rest wraps */}
+        {back && (
+          <p className="basis-full">
+            <button
+              type="button"
+              onClick={back.onBack}
+              className={cn(
+                'inline-flex min-h-11 items-center gap-2 text-sm font-bold hover:text-white',
+                FOCUS
+              )}
+            >
+              <span aria-hidden="true" className={KEY}>
+                Esc
+              </span>
+              {back.label}
+            </button>
+          </p>
+        )}
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
           <h2 className="text-xl font-bold">{t('board')}</h2>
           {/* Read out when the view changes: the board answers the choice on the left */}
           <output className="block text-sm text-[#d8d2c4]">
@@ -144,21 +163,6 @@ export function OfficeBoardLeads({
             {list.data && !turning && `・${t('count', { count: total })}`}
           </output>
         </div>
-        {back && (
-          <button
-            type="button"
-            onClick={back.onBack}
-            className={cn(
-              'inline-flex min-h-11 items-center gap-2 text-sm font-bold hover:text-white',
-              FOCUS
-            )}
-          >
-            <span aria-hidden="true" className={KEY}>
-              Esc
-            </span>
-            {back.label}
-          </button>
-        )}
         <p className="flex items-center gap-2 text-xs text-[#d8d2c4]">
           <span className={KEY}>↑</span>
           <span className={KEY}>↓</span>

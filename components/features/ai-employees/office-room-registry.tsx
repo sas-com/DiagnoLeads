@@ -17,7 +17,7 @@ import type { OfficeRoom } from './office-rooms';
  * The rooms built before the contract are handed its props under the names they already take.
  */
 export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomProps>>> = {
-  marketing: ({ organizationId, guide, keysRef, onLeaveOffice, onFileOpenChange }) =>
+  marketing: ({ organizationId, guide, keysRef, onLeaveOffice, onFileOpenChange, onBusyChange }) =>
     guide && (
       <OfficeRoomLeads
         organizationId={organizationId}
@@ -28,6 +28,7 @@ export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomPro
         keysRef={keysRef}
         onOpenLead={onLeaveOffice}
         onFileOpenChange={onFileOpenChange}
+        onBusyChange={onBusyChange}
       />
     ),
   sales: OfficeRoomSales,

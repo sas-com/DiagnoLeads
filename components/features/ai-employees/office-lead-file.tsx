@@ -57,6 +57,7 @@ export function OfficeLeadFile({
   keysRef,
   onClose,
   onOpenDetail,
+  onBusyChange,
 }: {
   organizationId: string;
   lead: BoardLead;
@@ -69,6 +70,8 @@ export function OfficeLeadFile({
   onClose: () => void;
   /** The lead's page is opened in the normal view: the office closes */
   onOpenDetail: () => void;
+  /** Told while a record is being saved (the office keeps the room open), and when it is over */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room.file');
   const tLeads = useTranslations('aiOffice.immersive.room.leads');
@@ -110,6 +113,11 @@ export function OfficeLeadFile({
       ),
   });
   const busy = record.isPending || remove.isPending;
+  // The office closes its own way to the floor meanwhile, like the file closes Esc (#1205)
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const canEdit = contacts.data?.canEdit === true;
   const recorded = outcome?.kind === 'recorded';
   const state = { canEdit, recorded, busy };
@@ -165,7 +173,7 @@ export function OfficeLeadFile({
       minute: '2-digit',
     });
   const latest = contacts.data?.recent[0];
-  const report =
+  const settled =
     outcome?.kind === 'recorded'
       ? outcome.undoFailed
         ? t('undoFailed')
@@ -185,6 +193,9 @@ export function OfficeLeadFile({
                     total: contacts.data.total,
                   })
                 : t('noContact');
+  // While a request is out, the report says so: Esc and the way back do nothing until its
+  // answer is there, and the president is told why (#1227)
+  const report = record.isPending ? t('saving') : remove.isPending ? t('undoing') : settled;
   const company = lead.company || tLeads('noCompany');
   const marks = lead.mqlLevel === 'interest' ? 2 : lead.mqlLevel === 'fit' ? 1 : 0;
 
@@ -377,9 +388,14 @@ export function OfficeLeadFile({
           <p className="text-xs">{t('detailHint')}</p>
           <Link
             href={`/${locale}/leads/${lead.id}`}
-            onClick={onOpenDetail}
+            // Closed while saving, like the way back: leaving would hide the answer
+            aria-disabled={busy || undefined}
+            onClick={(event) => {
+              if (busy) event.preventDefault();
+              else onOpenDetail();
+            }}
             className={cn(
-              'inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white',
+              'inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white aria-disabled:cursor-wait aria-disabled:opacity-60',
               FOCUS
             )}
           >

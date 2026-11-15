@@ -1220,6 +1220,11 @@ export const leadPrepCards = pgTable(
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    /**
+     * Also the token that tells concurrent edits apart (#1225): a save only goes through with the
+     * value it read. Always written from a JS date (milliseconds); a value written by the
+     * database's now() (microseconds) would never match again
+     */
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

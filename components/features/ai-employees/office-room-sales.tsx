@@ -30,7 +30,7 @@ import {
   DEAL_BOARD_PAGE_SIZE,
   DEAL_BOARD_VIEWS,
   type DealBoardView,
-  closesThisWeek,
+  closesSoon,
   dealBoardInput,
   dealBoardOwner,
   dealBoardPage,
@@ -38,6 +38,7 @@ import {
   dealBoardViewOfKey,
   dealReport,
   dealsOfView,
+  moveHorizon,
   openDeals,
   stageTotals,
 } from './rooms/deals-board';
@@ -116,9 +117,11 @@ export function OfficeRoomSales({
   const opened =
     open === null
       ? null
-      : ([...(everyone.data?.columns ?? []), ...(own.data?.columns ?? [])]
-          .flatMap((column) => column.deals)
-          .find((deal) => deal.id === open.id) ?? null);
+      : // Among the open deals only: one closed today is still on the board's last columns, and
+        // takes no answers either (an undo would put a won deal back into an open stage)
+        ([...openDeals(everyone.data?.columns ?? []), ...openDeals(own.data?.columns ?? [])].find(
+          (deal) => deal.id === open.id
+        ) ?? null);
   // A deal the boards no longer hold (deleted, closed elsewhere) is shown as it was when opened,
   // and takes no answers: its stage may be another by now
   const shown = opened ?? open;
@@ -238,7 +241,8 @@ export function OfficeRoomSales({
                   : tDealsRoom(everyone.data?.truncated ? 'reportTruncated' : 'report', {
                       open: report.open,
                       amount: formatYen(report.amount, locale) ?? '',
-                      thisWeek: report.thisWeek,
+                      overdue: report.overdue,
+                      soon: report.soon,
                       noNextAction: report.noNextAction,
                     })}
           </p>
@@ -273,7 +277,9 @@ export function OfficeRoomSales({
               <h2 className="text-xl font-bold">{tDealsRoom('board')}</h2>
               {/* Read out when the view changes: the board answers the choice on the left */}
               <output className="block text-sm text-[#d8d2c4]">
-                {tDealsRoom(`views.${view}`)}
+                {tDealsRoom(`views.${view}`, {
+                  date: formatDealDate(moveHorizon(today || '2000-01-01')),
+                })}
                 {board.data && `・${tDealsRoom('count', { count: total })}`}
               </output>
             </div>
@@ -397,14 +403,20 @@ export function OfficeRoomSales({
                           {tDealsRoom('noNextAction')}
                         </span>
                       )}
-                      {/* Why a deal without a near next action has to move this week */}
-                      {deal.expectedCloseOn && closesThisWeek(deal, today) && (
-                        <span className="text-[#d8d2c4] tabular-nums">
-                          {tDealsRoom('closesOn', { date: formatDealDate(deal.expectedCloseOn) })}
-                          {deal.expectedCloseOn < today && (
-                            <span className="ml-2 font-bold text-[#fca5a5]">
-                              {tDealsRoom('closeLate')}
-                            </span>
+                      {/* Why a deal without a near next action has to move within the week */}
+                      {deal.expectedCloseOn && closesSoon(deal, today) && (
+                        <span className="whitespace-nowrap text-[#d8d2c4] tabular-nums">
+                          {/* A passed day is named by its word, in the place of the label: both
+                              with the full date do not fit the column */}
+                          {deal.expectedCloseOn < today ? (
+                            <>
+                              <span className="mr-2 font-bold text-[#fca5a5]">
+                                {tDealsRoom('closeLate')}
+                              </span>
+                              {formatDealDate(deal.expectedCloseOn)}
+                            </>
+                          ) : (
+                            tDealsRoom('closesOn', { date: formatDealDate(deal.expectedCloseOn) })
                           )}
                         </span>
                       )}
