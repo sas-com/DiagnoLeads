@@ -5,6 +5,7 @@ import {
   emotionOf,
   expressionOf,
   gestureScale,
+  postureOf,
 } from '@/components/features/ai-employees/office-3d/office-emotion';
 import {
   CORRIDOR_LANE,
@@ -220,5 +221,34 @@ describe('expressionOf and gestureScale', () => {
     expect(gestureScale('polite')).toBe(1);
     expect(Math.max(...scales)).toBe(gestureScale('spirited'));
     expect(Math.min(...scales)).toBe(gestureScale('brisk'));
+  });
+});
+
+describe('postureOf (#1159)', () => {
+  const calm = { walking: false, emotion: 'focused' as const };
+
+  it('reaches for the keyboard only while working at the desk', () => {
+    expect(postureOf('working', calm).reaching).toBe(true);
+    for (const status of ['idle', 'training', 'paused', 'attention'] as const) {
+      expect(postureOf(status, calm).reaching).toBe(false);
+    }
+  });
+
+  it('lets the arms go on the way to the desk and while the president talks to it', () => {
+    expect(postureOf('working', { walking: true, emotion: 'focused' }).reaching).toBe(false);
+    // Turned to the president, its back to the desk: no typing in the air
+    expect(postureOf('working', { walking: false, emotion: 'attentive' }).reaching).toBe(false);
+    // A cheer after a run that succeeded does not take the hands off the keyboard for good
+    expect(postureOf('working', { walking: false, emotion: 'proud' }).reaching).toBe(true);
+  });
+
+  it('wears the mortarboard as long as it is in training, whatever it feels', () => {
+    for (const emotion of EMOTIONS) {
+      expect(postureOf('training', { walking: false, emotion }).capped).toBe(true);
+      expect(postureOf('training', { walking: true, emotion }).capped).toBe(true);
+    }
+    for (const status of ['working', 'idle', 'paused', 'attention'] as const) {
+      expect(postureOf(status, calm).capped).toBe(false);
+    }
   });
 });

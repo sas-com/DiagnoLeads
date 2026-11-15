@@ -13,7 +13,13 @@ import { CanvasTexture, ExtrudeGeometry, type Group, SRGBColorSpace, Shape } fro
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { STATUS_LIGHT, shade, tint } from '../office-prims';
 import { ROBOT_SHELL_COLORS, ROLE_GEARS, robotAccent } from '../office-robot';
-import { type EmoteIcon, type Emotion, expressionOf, gestureScale } from './office-emotion';
+import {
+  type EmoteIcon,
+  type Emotion,
+  expressionOf,
+  gestureScale,
+  postureOf,
+} from './office-emotion';
 
 const DARK = '#1f2937';
 const VISOR = '#111827';
@@ -234,6 +240,7 @@ export function Robot3D({
   const leftArm = useRef<Group>(null);
   const rightArm = useRef<Group>(null);
   const expression = expressionOf(emotion);
+  const posture = postureOf(status, { walking, emotion });
   const gesture = gestureScale(tone);
   const off = status === 'paused';
   const coat = ROBOT_SHELL_COLORS[look.shell];
@@ -263,7 +270,7 @@ export function Robot3D({
     // (with less motion the arm stays raised, without waving)
     const wave = emotion === 'happy' || emotion === 'proud' ? -2.2 + Math.sin(t * 9) * 0.35 : 0;
     // At work: both arms reach forward to the keyboard, and the hands tap a little
-    const reach = status === 'working' && !walking ? -1.05 : 0;
+    const reach = posture.reaching ? -1.05 : 0;
     const tap = reach ? Math.sin(t * 11) * 0.06 : 0;
     if (leftArm.current) leftArm.current.rotation.x = reach ? reach + tap : swing;
     if (rightArm.current) {
@@ -293,8 +300,7 @@ export function Robot3D({
   const chest = usePlate(0.4, 0.34, 0.08, 0.03);
   const emblem = useEmblem(role, accent);
   const faceZ = look.head === 'round' ? 0.31 : 0.345;
-  // By the status, not by the feeling of the moment: it keeps its cap on while it is spoken to
-  const studying = status === 'training';
+  const studying = posture.capped;
   const headTop = look.head === 'dome' ? 0.5 : 0.36;
   const beaconY = look.antenna === 'none' ? headTop + 0.07 : headTop + 0.3;
 
