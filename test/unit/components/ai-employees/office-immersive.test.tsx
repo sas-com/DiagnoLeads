@@ -277,6 +277,20 @@ describe('OfficeImmersive', () => {
     expect(marker.style.visibility).toBe('visible');
   });
 
+  it('lets the pointer through the rows that only centre the bar and the floor guide (#1234)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    // Both rows span the screen: without this they lie over the last rows of the staff list
+    const bar = within(office).getByRole('button', { name: /^近づく/ }).parentElement
+      ?.parentElement as HTMLElement;
+    expect(bar.className).toContain('pointer-events-auto');
+    expect(bar.parentElement?.className).toContain('pointer-events-none');
+    const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
+    expect(guide.className).toContain('pointer-events-none');
+    expect(guide.className).toContain('*:pointer-events-auto');
+  });
+
   it('groups the actions of the bar: the employee, the view, the way out (#1183)', async () => {
     const user = userEvent.setup();
     const { office } = renderOffice();

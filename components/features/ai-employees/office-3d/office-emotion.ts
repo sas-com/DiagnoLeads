@@ -90,3 +90,26 @@ const GESTURE_SCALES: Readonly<Record<AiTone, number>> = {
 export function gestureScale(tone: AiTone): number {
   return GESTURE_SCALES[tone];
 }
+
+/** What the body of an employee does beyond its feeling: only what its real status says */
+export interface Posture {
+  /** Both arms reach forward to the keyboard */
+  reaching: boolean;
+  /** The mortarboard of someone who studies is on the head */
+  capped: boolean;
+}
+
+/**
+ * The posture of an employee. It reaches for its keyboard while it works at its desk: not on
+ * the way there, and not while it is turned to the president who talks to it. It wears the
+ * mortarboard as long as it is in training, whatever it feels at the moment.
+ */
+export function postureOf(
+  status: Exclude<DeskStatus, 'vacant'>,
+  { walking, emotion }: { walking: boolean; emotion: Emotion }
+): Posture {
+  return {
+    reaching: status === 'working' && !walking && emotion !== 'attentive',
+    capped: status === 'training',
+  };
+}

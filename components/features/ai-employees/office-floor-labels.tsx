@@ -28,8 +28,8 @@ export const TAG_DROP = 12;
 
 /** How tall a robot stands, in floor units: the name of a room keeps off it */
 export const FIGURE_HEIGHT = 3;
-/** The robots of the 3D floor are built smaller than the drawn ones */
-export const FIGURE_HEIGHT_3D = 2.5;
+/** The robots of the 3D floor stand as tall as the drawn ones (ROBOT_SCALE in robot-3d.tsx) */
+export const FIGURE_HEIGHT_3D = 3;
 
 /** The mark over the chosen employee: how far over its head, and its size on the screen */
 const MARKER_LIFT = 0.35;
