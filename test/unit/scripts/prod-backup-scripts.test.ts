@@ -49,18 +49,34 @@ describe('production backup scripts', () => {
     );
   });
 
-  it('withdraw the anon and authenticated grants after everything is restored (#1184)', () => {
+  it('withdraw the anon and authenticated grants before and after the restore (#1184)', () => {
     const restore = read('scripts/prod-restore-to.sh');
-    const prepare = restore.indexOf('supabase/prepare.sql');
-    expect(prepare).toBeGreaterThan(restore.indexOf('CREATE TABLE "site_visit_salts"'));
     expect(read('scripts/supabase/prepare.sql')).toContain(
       'REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;'
     );
-    // and stops when a grant is still left, before telling the owner it is done
-    const check = restore.indexOf("grantee in ('anon', 'authenticated')");
-    expect(check).toBeGreaterThan(prepare);
-    expect(restore.indexOf('exit 1', check)).toBeGreaterThan(check);
-    expect(restore.indexOf('exit 1', check)).toBeLessThan(restore.indexOf('echo "Restored'));
+    // Found before the URL is asked for, so a copied script stops before writing anything
+    expect(restore.indexOf('[ -r "$PREPARE" ]')).toBeGreaterThan(-1);
+    expect(restore.indexOf('[ -r "$PREPARE" ]')).toBeLessThan(restore.indexOf('read -rsp'));
+
+    const run = 'psql_ < "$PREPARE"';
+    const first = restore.indexOf(run);
+    const last = restore.lastIndexOf(run);
+    // Before the restore, so a restore that stops halfway leaves no table open to the Data API
+    expect(first).toBeGreaterThan(-1);
+    expect(first).toBeLessThan(restore.indexOf('pg_restore -d "$TARGET_URL"'));
+    // and again after the salt table, for whatever is left
+    expect(last).toBeGreaterThan(restore.indexOf('CREATE TABLE "site_visit_salts"'));
+  });
+
+  it('stop when anon or authenticated can still use something in public (#1184)', () => {
+    const restore = read('scripts/prod-restore-to.sh');
+    const check = restore.indexOf("has_table_privilege('anon'");
+    // Effective privileges (through PUBLIC too), tables and sequences, after the last withdrawal
+    expect(check).toBeGreaterThan(restore.lastIndexOf('psql_ < "$PREPARE"'));
+    expect(restore).toContain("has_sequence_privilege('anon'");
+    const stop = restore.indexOf('exit 1', check);
+    expect(stop).toBeGreaterThan(check);
+    expect(stop).toBeLessThan(restore.indexOf('echo "Restored'));
   });
 
   it('recreate the table only after the dump is restored', () => {
