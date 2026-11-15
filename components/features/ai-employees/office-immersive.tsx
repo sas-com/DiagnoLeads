@@ -919,7 +919,7 @@ export function OfficeImmersive({
                 aria-label={t('floorGuide')}
                 // Between the side panels (HUD_SIDES), never over them (#1234): where the places
                 // do not fit in one row they wrap there
-                className="absolute inset-x-0 bottom-32 flex flex-wrap justify-center gap-1.5 px-6 lg:top-5 lg:right-[21.5rem] lg:bottom-auto lg:left-[19.5rem] lg:px-0"
+                className="absolute inset-x-0 bottom-32 pointer-events-none flex flex-wrap justify-center gap-1.5 px-6 *:pointer-events-auto lg:top-5 lg:right-[21.5rem] lg:bottom-auto lg:left-[19.5rem] lg:px-0"
               >
                 {FLOOR_PLACES.map((place) => {
                   const look = cn(
@@ -956,9 +956,11 @@ export function OfficeImmersive({
               </nav>
 
               {/* The actions */}
-              <div className="absolute inset-x-0 bottom-6 flex flex-col items-center">
+              {/* The row spans the screen only to centre the bar: it lets the pointer through to
+                  the staff list under its ends (#1234) */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-6 flex flex-col items-center">
                 {/* Three groups: the employee, the view, the way out */}
-                <div className="flex gap-5">
+                <div className="pointer-events-auto flex gap-5">
                   <div className="flex gap-1.5">
                     <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
                       <MessageCircle className="h-6 w-6" aria-hidden="true" />
