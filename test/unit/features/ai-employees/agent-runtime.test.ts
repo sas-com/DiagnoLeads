@@ -94,6 +94,16 @@ describe('runTools', () => {
     expect(String(bad.results[0]?.content)).toContain('goals');
   });
 
+  it('refuses a report that holds contact details', () => {
+    const ran = runTools(
+      'onboarding',
+      [toolUse('r', ONBOARDING_REPORT_TOOL, { ...REPORT, questions: ['taro@example.com に連絡しますか'] })],
+      new Map()
+    );
+    expect(ran.report).toBeNull();
+    expect(ran.results[0]).toMatchObject({ is_error: true });
+  });
+
   it('refuses a tool it does not offer, and the other kind of report', () => {
     const ran = runTools(
       'review',

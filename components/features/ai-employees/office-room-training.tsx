@@ -141,12 +141,19 @@ export function OfficeRoomTraining({
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new read of the room asks for the next step
   useEffect(() => {
-    if (!running || !canManage || stalled === running || stepping.current) return;
+    if (!running || !canManage || !agentEnabled || stalled === running || stepping.current) {
+      return;
+    }
     stepping.current = true;
     advance
       .mutateAsync({ organizationId, sessionId: running })
       .then(async (outcome) => {
         const delay = nextStepDelay(outcome.state);
+        // Switched off, paused, over: the room stops asking until the president goes on
+        if (delay === null) {
+          if (mounted.current) setStalled(running);
+          return;
+        }
         if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
       })
       .catch((error: unknown) => {
@@ -158,7 +165,7 @@ export function OfficeRoomTraining({
         stepping.current = false;
         if (mounted.current) void refresh();
       });
-  }, [running, canManage, stalled, training.dataUpdatedAt]);
+  }, [running, canManage, agentEnabled, stalled, training.dataUpdatedAt]);
 
   const closeField = () => {
     setField(null);
@@ -562,42 +569,67 @@ export function OfficeRoomTraining({
             </span>
             {stalled === session.id &&
               action({ onClick: () => setStalled(null), children: t('actions.resume') })}
-          </div>
-        )}
-        {canManage && review && (step === 'waiting' || step === 'open') && (
-          <div className="flex flex-wrap items-center gap-3">
-            {review.recommendation === 'promote' &&
-              review.levelBefore < 4 &&
-              (confirmPromote
-                ? action({
-                    main: true,
-                    onClick: () =>
-                      decide.mutate(
-                        {
-                          organizationId,
-                          reviewId: review.id,
-                          decision: 'promote',
-                          fromLevel: review.levelBefore as 1 | 2 | 3,
-                        },
-                        { onSettled: () => setConfirmPromote(false) }
-                      ),
-                    children: t('actions.confirmPromote', {
-                      level: levelName((review.levelBefore + 1) as AiEmployeeLevel),
-                    }),
-                  })
-                : action({
-                    main: true,
-                    onClick: () => setConfirmPromote(true),
-                    children: t('actions.promote'),
-                  }))}
             {action({
-              main: review.recommendation !== 'promote',
-              onClick: () =>
-                decide.mutate({ organizationId, reviewId: review.id, decision: 'keep' }),
-              children: t('actions.keep'),
+              onClick: () => cancel.mutate({ organizationId, sessionId: session.id }),
+              children: t('actions.cancel'),
             })}
           </div>
         )}
+        {canManage &&
+          review &&
+          (step === 'waiting' || step === 'open') &&
+          (confirmPromote && review.recommendation === 'promote' && review.levelBefore < 4 ? (
+            // A promotion asks once more, in new buttons with the way back first: the same key or
+            // click pressed twice on one place never raises the grade (decision
+            // 2026-11-14-training-room-grows-employees)
+            <div key="confirm-promotion" className="space-y-3 border border-[#e9cf9a] px-4 py-3">
+              <p className="text-base">
+                {t('review.confirmPromote', {
+                  name: selected.name,
+                  level: levelName((review.levelBefore + 1) as AiEmployeeLevel),
+                })}
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {action({
+                  autoFocus: true,
+                  onClick: () => setConfirmPromote(false),
+                  children: t('actions.cancelPromote'),
+                })}
+                {action({
+                  main: true,
+                  onClick: () =>
+                    decide.mutate(
+                      {
+                        organizationId,
+                        reviewId: review.id,
+                        decision: 'promote',
+                        fromLevel: review.levelBefore as 1 | 2 | 3,
+                      },
+                      { onSettled: () => setConfirmPromote(false) }
+                    ),
+                  children: t('actions.confirmPromote', {
+                    level: levelName((review.levelBefore + 1) as AiEmployeeLevel),
+                  }),
+                })}
+              </div>
+            </div>
+          ) : (
+            <div key="decide-review" className="flex flex-wrap items-center gap-3">
+              {review.recommendation === 'promote' &&
+                review.levelBefore < 4 &&
+                action({
+                  main: true,
+                  onClick: () => setConfirmPromote(true),
+                  children: t('actions.promote'),
+                })}
+              {action({
+                main: review.recommendation !== 'promote',
+                onClick: () =>
+                  decide.mutate({ organizationId, reviewId: review.id, decision: 'keep' }),
+                children: t('actions.keep'),
+              })}
+            </div>
+          ))}
       </>
     );
   }
@@ -700,16 +732,21 @@ export function OfficeRoomTraining({
 
   function action({
     main = false,
+    autoFocus = false,
     onClick,
     children,
   }: {
     main?: boolean;
+    /** Takes the focus when it appears (the way back of a confirmation) */
+    autoFocus?: boolean;
     onClick: () => void;
     children: ReactNode;
   }) {
     return (
       <button
         type="button"
+        // biome-ignore lint/a11y/noAutofocus: the way back of a confirmation takes the focus, so a key pressed twice does not confirm
+        autoFocus={autoFocus}
         aria-disabled={busy || undefined}
         onClick={() => {
           if (!busy) {
@@ -775,8 +812,8 @@ function ReportView({
           <div key={label} className="space-y-1">
             <h3 className={CAP}>{label}</h3>
             <ul className="list-disc space-y-1 pl-5 text-base">
-              {items.map((item) => (
-                <li key={item}>{item}</li>
+              {items.map((item, index) => (
+                <li key={`${index}-${item}`}>{item}</li>
               ))}
             </ul>
           </div>

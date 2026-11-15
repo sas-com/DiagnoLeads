@@ -6,11 +6,19 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import type { AiEmployeeSessionKind } from '../types/training';
+import { refusedNoteContent } from './memory';
 
 export const ONBOARDING_REPORT_TOOL = 'submit_onboarding_report';
 export const REVIEW_REPORT_TOOL = 'submit_self_review';
 
-const line = (max: number) => z.string().trim().min(1).max(max);
+/** A line of a report: like the notes, never a person's contact details or a secret */
+const line = (max: number) =>
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(max)
+    .refine((value) => refusedNoteContent(value) === null, 'contact details or a secret');
 
 /** The onboarding report: who the employee is, what it understood, its goals and its questions */
 export const onboardingReportSchema = z.object({

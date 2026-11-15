@@ -861,7 +861,8 @@
             "not_due": "The next review can be held from {date}.",
             "writing": "Writing its self-review",
             "selfReview": "Self-review",
-            "nextGoals": "Goals for the next 30 days"
+            "nextGoals": "Goals for the next 30 days",
+            "confirmPromote": "{name} will be raised to {level} and trusted with more. Are you sure?"
           },
           "facts": {
             "period": "Period",
@@ -907,7 +908,8 @@
             "confirmPromote": "Raise to {level} (confirm)",
             "keep": "Keep",
             "editPolicy": "Write or fix",
-            "savePolicy": "Save"
+            "savePolicy": "Save",
+            "cancelPromote": "Do not raise"
           },
           "errors": {
             "not_found": "Not found. Please enter the room again.",

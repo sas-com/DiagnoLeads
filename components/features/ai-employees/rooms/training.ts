@@ -104,6 +104,8 @@ export function reviewStep(
 
 /** The session the screen moves on while the room is open, if any */
 export function runningSession(employee: TrainingEmployeeView): string | null {
+  // A paused employee does not work: its session waits until it is resumed
+  if (employee.status === 'paused') return null;
   return employee.session?.status === 'running' ? employee.session.id : null;
 }
 

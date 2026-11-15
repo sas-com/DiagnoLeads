@@ -861,7 +861,8 @@
             "not_due": "次の評価面談は {date} から始められます。",
             "writing": "自己評価を書いています",
             "selfReview": "自己評価",
-            "nextGoals": "次の30日の目標"
+            "nextGoals": "次の30日の目標",
+            "confirmPromote": "{name}を{level}に上げます。任せる範囲が広がります。よろしいですか。"
           },
           "facts": {
             "period": "期間",
@@ -907,7 +908,8 @@
             "confirmPromote": "{level}に上げる（確定）",
             "keep": "据え置く",
             "editPolicy": "書く・直す",
-            "savePolicy": "保存する"
+            "savePolicy": "保存する",
+            "cancelPromote": "やめる"
           },
           "errors": {
             "not_found": "見つかりませんでした。部屋に入り直してください。",

@@ -236,6 +236,64 @@ describe('OfficeRoomTraining', () => {
     ]);
   });
 
+  it('never raises the grade by pressing the same button twice: the confirmation opens on the way back', async () => {
+    const user = userEvent.setup();
+    const review = {
+      id: 'r2',
+      sessionId: null,
+      periodStart: '2026-10-01',
+      periodEnd: '2026-11-01',
+      facts: {
+        daysEmployed: 90,
+        daysAtLevel: 40,
+        runs: 30,
+        succeededRuns: 30,
+        failedRuns: 0,
+        processed: 100,
+        failureRate: 0,
+        proposals: { answered: 30, approved: 30 },
+      },
+      recommendation: 'promote',
+      levelBefore: 1,
+      levelAfter: null,
+      status: 'open',
+      decidedAt: null,
+      createdAt: '2026-11-01',
+    };
+    const { press } = renderRoom([employee({ level: 1, onboardedAt: '2026-08-01', review })]);
+    press('3');
+    screen.getByRole('button', { name: '昇格を承認する' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'やめる' })).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(mocks.calls).toEqual([]);
+    expect(screen.getByRole('button', { name: '昇格を承認する' })).toBeInTheDocument();
+  });
+
+  it('stops asking for steps once the agents are switched off or the employee was paused', async () => {
+    mocks.advance.mockResolvedValue({ state: 'disabled' });
+    const running = {
+      session: { id: 's5', kind: 'onboarding', status: 'running', report: null, resultCode: null, steps: 1 },
+    };
+    renderRoom([employee(running)]);
+    await waitFor(() => expect(mocks.advance).toHaveBeenCalledTimes(1));
+    // The room reads its records again once, and asks no more
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mocks.advance).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: '続ける' })).toBeInTheDocument();
+  });
+
+  it('asks nothing while switched off, nor for a paused employee', async () => {
+    const running = {
+      session: { id: 's6', kind: 'onboarding', status: 'running', report: null, resultCode: null, steps: 1 },
+    };
+    renderRoom([employee(running)], { agentEnabled: false });
+    renderRoom([employee({ ...running, status: 'paused' })]);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mocks.advance).not.toHaveBeenCalled();
+  });
+
   it('moves a running session on by itself while the room is open', async () => {
     renderRoom([
       employee({

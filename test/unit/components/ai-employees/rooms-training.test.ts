@@ -66,6 +66,10 @@ describe('the steps of a running session', () => {
   it('are asked for at once while running, a moment later when held, never once over', () => {
     expect(runningSession({ ...base, session: session('onboarding', 'running') })).toBe('s');
     expect(runningSession({ ...base, session: session('onboarding', 'waiting') })).toBeNull();
+    // A paused employee's session waits until it is resumed
+    expect(
+      runningSession({ ...base, status: 'paused', session: session('onboarding', 'running') })
+    ).toBeNull();
     expect(nextStepDelay('running')).toBe(0);
     expect(nextStepDelay('busy')).toBe(3_000);
     expect(nextStepDelay('retry')).toBe(3_000);
