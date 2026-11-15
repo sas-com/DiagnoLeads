@@ -10,7 +10,7 @@ import {
   DEAL_FILE_CHOICES,
   DEAL_KEYS,
   type DealBoardColumn,
-  closesThisWeek,
+  closesSoon,
   dealActionOfKey,
   dealActionOpen,
   dealBoardInput,
@@ -23,7 +23,9 @@ import {
   dealsOfView,
   dueShortcuts,
   endOfWeek,
-  movesThisWeek,
+  isOverdue,
+  moveHorizon,
+  movesSoon,
   openDeals,
   stageAfter,
   stageBefore,
@@ -76,8 +78,8 @@ const COLUMNS = [
 ];
 
 describe('the views of the deal board', () => {
-  it('open on what has to move this week, and are chosen by the number keys', () => {
-    expect(DEAL_BOARD_FIRST_VIEW).toBe('thisWeek');
+  it('open on what has to move within a week, and are chosen by the number keys', () => {
+    expect(DEAL_BOARD_FIRST_VIEW).toBe('soon');
     expect(DEAL_BOARD_VIEWS.map((_, index) => dealBoardViewOfKey(String(index + 1)))).toEqual([
       ...DEAL_BOARD_VIEWS,
     ]);
@@ -114,11 +116,30 @@ describe('the views of the deal board', () => {
     ).toBe('2026-11-12');
   });
 
-  it('count a deal for this week up to Sunday, with what is already late', () => {
-    expect(movesThisWeek(late, TODAY)).toBe(true);
-    expect(movesThisWeek(sunday, TODAY)).toBe(true);
-    expect(movesThisWeek(monday, TODAY)).toBe(false);
-    expect(movesThisWeek(idle, TODAY)).toBe(false);
+  it('look seven days ahead on every day of the week, not to the end of the calendar week', () => {
+    expect(moveHorizon(TODAY)).toBe('2026-11-20');
+    // A Sunday sees as far as a Monday does
+    expect(moveHorizon('2026-11-15')).toBe('2026-11-22');
+    expect(moveHorizon('2026-11-16')).toBe('2026-11-23');
+    expect(moveHorizon('2026-12-28')).toBe('2027-01-04');
+  });
+
+  it('count a deal for the week ahead, with what is already late', () => {
+    expect(movesSoon(late, TODAY)).toBe(true);
+    expect(movesSoon(sunday, TODAY)).toBe(true);
+    // Next Monday is in sight on a Friday
+    expect(movesSoon(monday, TODAY)).toBe(true);
+    expect(movesSoon(deal('a', { nextTask: task('2026-11-20') }), TODAY)).toBe(true);
+    expect(movesSoon(deal('a', { nextTask: task('2026-11-21') }), TODAY)).toBe(false);
+    expect(movesSoon(idle, TODAY)).toBe(false);
+  });
+
+  it('tell what is past its day: before today, not today', () => {
+    expect(isOverdue(late, TODAY)).toBe(true);
+    expect(isOverdue(deal('a', { nextTask: task(TODAY) }), TODAY)).toBe(false);
+    expect(isOverdue(deal('a', { expectedCloseOn: '2026-11-12' }), TODAY)).toBe(true);
+    expect(isOverdue(sunday, TODAY)).toBe(false);
+    expect(isOverdue(idle, TODAY)).toBe(false);
   });
 
   it('list the open deals only, in the order of the stages', () => {
@@ -132,10 +153,11 @@ describe('the views of the deal board', () => {
     expect(dealsOfView('mine', COLUMNS, TODAY)).toHaveLength(4);
   });
 
-  it('show this week’s deals earliest first, and those without a next action', () => {
-    expect(dealsOfView('thisWeek', COLUMNS, TODAY).map((entry) => entry.id)).toEqual([
+  it('show the deals of the week ahead earliest first, and those without a next action', () => {
+    expect(dealsOfView('soon', COLUMNS, TODAY).map((entry) => entry.id)).toEqual([
       'late',
       'sunday',
+      'monday',
     ]);
     expect(dealsOfView('noNextAction', COLUMNS, TODAY).map((entry) => entry.id)).toEqual([
       'sunday',
@@ -143,17 +165,39 @@ describe('the views of the deal board', () => {
     ]);
   });
 
+  it('put the larger amount first among the deals of one day', () => {
+    const small = deal('small', { amount: 100, nextTask: task('2026-11-14') });
+    const large = deal('large', { amount: 900, nextTask: task('2026-11-14') });
+    const unknown = deal('unknown', { amount: null, nextTask: task('2026-11-14') });
+    const earlier = deal('earlier', { amount: 1, nextTask: task('2026-11-13') });
+    const columns = [column('discovery', [small, unknown, large, earlier])];
+    expect(dealsOfView('soon', columns, TODAY).map((entry) => entry.id)).toEqual([
+      'earlier',
+      'large',
+      'small',
+      'unknown',
+    ]);
+  });
+
   it('report what the board holds: the stages’ totals, and the listed deals for the rest', () => {
+    // What is late is counted apart from what is still ahead
     expect(dealReport(COLUMNS, TODAY)).toEqual({
       open: 4,
       amount: 4_000_000,
-      thisWeek: 2,
+      overdue: 1,
+      soon: 2,
       noNextAction: 2,
     });
     // A long board lists fewer deals than its stages count
     const long = [column('discovery', [late], 700)];
-    expect(dealReport(long, TODAY)).toMatchObject({ open: 700, amount: 700_000_000, thisWeek: 1 });
-    expect(dealReport([], TODAY)).toEqual({ open: 0, amount: 0, thisWeek: 0, noNextAction: 0 });
+    expect(dealReport(long, TODAY)).toMatchObject({ open: 700, amount: 700_000_000, overdue: 1 });
+    expect(dealReport([], TODAY)).toEqual({
+      open: 0,
+      amount: 0,
+      overdue: 0,
+      soon: 0,
+      noNextAction: 0,
+    });
   });
 
   it('give every open stage its totals, in sales order, also when the board has no column', () => {
@@ -185,7 +229,9 @@ describe('the views of the deal board', () => {
 });
 
 describe('the keys of a deal file', () => {
-  const open = { canEdit: true, busy: false, last: null, undoable: false, hasTask: true };
+  const none: ReadonlySet<'moved' | 'done'> = new Set();
+  const open = { canEdit: true, busy: false, closed: none, canUndo: false, hasTask: true };
+  const proposal = { ...open, stage: 'proposal' as const };
 
   it('move by one open stage, and never to an outcome', () => {
     expect(stageAfter('qualification')).toBe('discovery');
@@ -207,56 +253,72 @@ describe('the keys of a deal file', () => {
   });
 
   it('are closed at the ends of the open stages and without a next action to mark', () => {
-    expect(dealActionOpen('advance', { ...open, stage: 'proposal' })).toBe(true);
+    expect(dealActionOpen('advance', proposal)).toBe(true);
     expect(dealActionOpen('advance', { ...open, stage: 'negotiation' })).toBe(false);
     expect(dealActionOpen('back', { ...open, stage: 'qualification' })).toBe(false);
     expect(dealActionOpen('back', { ...open, stage: 'discovery' })).toBe(true);
-    expect(dealActionOpen('done', { ...open, stage: 'discovery' })).toBe(true);
-    expect(dealActionOpen('done', { ...open, stage: 'discovery', hasTask: false })).toBe(false);
-    expect(dealActionOpen('add', { ...open, stage: 'discovery', hasTask: false })).toBe(true);
-    expect(dealActionOpen('undo', { ...open, stage: 'discovery' })).toBe(false);
+    expect(dealActionOpen('done', proposal)).toBe(true);
+    expect(dealActionOpen('done', { ...proposal, hasTask: false })).toBe(false);
+    expect(dealActionOpen('add', { ...proposal, hasTask: false })).toBe(true);
+    expect(dealActionOpen('undo', proposal)).toBe(false);
   });
 
-  it('close the answers of the kind just given, and leave the others open', () => {
-    const moved = { ...open, stage: 'proposal' as const, last: 'moved' as const, undoable: true };
+  it('close a kind once it was answered, whatever is answered in between', () => {
+    const moved = { ...proposal, closed: new Set(['moved'] as const), canUndo: true };
     expect(dealActionOpen('advance', moved)).toBe(false);
     expect(dealActionOpen('back', moved)).toBe(false);
     expect(dealActionOpen('done', moved)).toBe(true);
     expect(dealActionOpen('add', moved)).toBe(true);
     expect(dealActionOpen('undo', moved)).toBe(true);
 
-    const done = { ...moved, last: 'done' as const };
-    // The following next action is not marked unseen by the same key
+    // 1 then 3: the deal is not moved a second stage, and no further next action is marked
+    const both = { ...proposal, closed: new Set(['moved', 'done'] as const), canUndo: true };
+    for (const choice of ['advance', 'back', 'done'] as const) {
+      expect(dealActionOpen(choice, both)).toBe(false);
+    }
+    // Setting a next action stays open: it is typed, never a key pressed once too often
+    expect(dealActionOpen('add', both)).toBe(true);
+  });
+
+  it('open a kind again once its answer was undone', () => {
+    const done = { ...proposal, closed: new Set(['done'] as const) };
     expect(dealActionOpen('done', done)).toBe(false);
     expect(dealActionOpen('advance', done)).toBe(true);
-    expect(dealActionOpen('add', done)).toBe(true);
-    expect(dealActionOpen('undo', done)).toBe(true);
+    expect(dealActionOpen('done', { ...done, closed: none })).toBe(true);
   });
 
-  it('do not mark a next action that was just set, and have nothing to take back then', () => {
-    const added = { ...open, stage: 'proposal' as const, last: 'added' as const };
-    expect(dealActionOpen('done', added)).toBe(false);
-    expect(dealActionOpen('advance', added)).toBe(true);
-    expect(dealActionOpen('add', added)).toBe(true);
-    expect(dealActionOpen('undo', added)).toBe(false);
-    // A move that handed the lead off: nothing to take back either
-    expect(dealActionOpen('undo', { ...added, last: 'moved' })).toBe(false);
+  it('take the last answer back only while there is something to take back', () => {
+    const moved = { ...proposal, closed: new Set(['moved'] as const) };
+    // A move that handed the lead off, or a next action that was typed
+    expect(dealActionOpen('undo', { ...moved, canUndo: false })).toBe(false);
+    expect(dealActionOpen('undo', { ...moved, canUndo: true })).toBe(true);
   });
 
-  it('are all closed while an answer is on its way, and to who may not change deals', () => {
-    const moved = { ...open, stage: 'proposal' as const, last: 'done' as const, undoable: true };
-    for (const action of [...DEAL_FILE_CHOICES, 'undo'] as const) {
-      expect(dealActionOpen(action, { ...moved, busy: true })).toBe(false);
-      expect(dealActionOpen(action, { ...moved, canEdit: false })).toBe(false);
+  it('take nothing over a deal that is closed by now, not even the undo of a move', () => {
+    const closed = { ...open, closed: new Set(['moved'] as const), canUndo: true };
+    for (const stage of ['won', 'lost'] as const) {
+      for (const action of [...DEAL_FILE_CHOICES, 'undo'] as const) {
+        expect(dealActionOpen(action, { ...closed, stage })).toBe(false);
+      }
     }
   });
 
-  it('tell a deal that closes by Sunday, or should have closed already', () => {
-    expect(closesThisWeek(sunday, TODAY)).toBe(true);
-    expect(closesThisWeek(won, TODAY)).toBe(true);
-    expect(closesThisWeek(deal('a', { expectedCloseOn: '2026-11-16' }), TODAY)).toBe(false);
-    expect(closesThisWeek(idle, TODAY)).toBe(false);
+  it('are all closed while an answer is on its way, and to who may not change deals', () => {
+    const answered = { ...proposal, closed: new Set(['done'] as const), canUndo: true };
+    for (const action of [...DEAL_FILE_CHOICES, 'undo'] as const) {
+      expect(dealActionOpen(action, { ...answered, busy: true })).toBe(false);
+      expect(dealActionOpen(action, { ...answered, canEdit: false })).toBe(false);
+    }
   });
+
+  it('tell a deal that closes within the week, or should have closed already', () => {
+    expect(closesSoon(sunday, TODAY)).toBe(true);
+    expect(closesSoon(won, TODAY)).toBe(true);
+    expect(closesSoon(deal('a', { expectedCloseOn: '2026-11-20' }), TODAY)).toBe(true);
+    expect(closesSoon(deal('a', { expectedCloseOn: '2026-11-21' }), TODAY)).toBe(false);
+    expect(closesSoon(idle, TODAY)).toBe(false);
+  });
+});
 
 describe('the due days offered beside the date of a next action', () => {
   it('are tomorrow, in three days and the Monday after this week', () => {
@@ -272,5 +334,4 @@ describe('the due days offered beside the date of a next action', () => {
     expect(dueShortcuts('2026-11-16').at(-1)).toEqual({ key: 'nextMonday', day: '2026-11-23' });
     expect(dueShortcuts('2026-11-15').at(-1)).toEqual({ key: 'nextMonday', day: '2026-11-16' });
   });
-});
 });
