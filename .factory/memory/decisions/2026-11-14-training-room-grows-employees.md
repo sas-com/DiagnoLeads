@@ -6,7 +6,7 @@ title: "研修室を AI社員を育てる場所（オンボーディング・評
 status: active
 superseded_by: []
 issues: [1187, 1188, 1189, 1190, 1191, 1114]
-paths: ["lib/features/ai-employees/office.ts", "lib/features/ai-employees/service.ts", "components/features/ai-employees/office-rooms.ts"]
+paths: ["lib/features/ai-employees/office.ts", "lib/features/ai-employees/training.ts", "lib/features/ai-employees/grading.ts", "lib/features/ai-employees/types/levels.ts", "lib/features/ai-employees/agent/**", "components/features/ai-employees/office-rooms.ts"]
 ---
 
 ### [Architecture] 研修室を AI社員を育てる場所（オンボーディング・評価面談・昇格）にする。鍵6で入り、エージェントは Messages API と自前のループ・Claude Sonnet 5.5・等級は4段階で昇格は社長の承認（Epic #1187）
@@ -34,3 +34,14 @@ paths: ["lib/features/ai-employees/office.ts", "lib/features/ai-employees/servic
   - 本番では、法務部門・情報システム部門の確認（#1114 の10）が済むまで、エージェントを環境変数のスイッチで止めておく。止まっている間、画面は「準備中」と書き、AI社員がしていないことをしたように見せない
   - 昇格のように任される範囲を広げる操作は、数字のキーだけでは通さない（決定 `2026-11-14-office-entry-same-site-only` の b と同じ考え方）
   - 実績は DB の事実だけから数える。エージェントの自己申告や作りごとの経験値を、等級の判定に使わない
+- **実装で決めたこと**（#1188〜#1190、PR #1239）:
+  - 研修中（`deskStatus` の `training`）は「オンボーディングを社長が承認していない、または役割の仕事が準備中」。等級（`ai_employees.level`）は研修室の API（`aiEmployees.training`）だけが返し、`OfficeEmployee` には足さない
+  - 1回の要求で進めるのは「Claude の呼び出し1回＋道具の実行」だけ。会話は追記だけで、assistant の内容は受け取ったまま（思考のブロックを含めて）残す。行の鍵（`locked_until`、40秒）と段の数を1文の UPDATE で取る
+  - 報告の道具は強制できない（`tool_choice` の any・tool はこのモデルで 400）ので、`strict: true` で出して指示文で求める。報告なしで止まったら促しを足し、2回までで `no_report` として終える
+  - 上限：1セッション12回の呼び出し（失敗した呼び出しも数える）・出力4万トークン。1回の呼び出しは `max_tokens` 4,000・effort `low`・待ち25秒（`lib/features/ai/service.ts` の `AGENT_CALL_TIMEOUT_MS`）。呼ぶ前に `consumeAiCalls` を1回分通す
+  - 拒否（`refusal`）は別のモデルに切り替えず、`refused` で終える（切り替えると、思考のブロックを読めないモデルに会話を渡すことになる）。社長はやり直せる
+  - 記憶の道具は公式のページの返し方に合わせ、パスは `/memories/<名前>.md`（1段のフォルダまで）、1ファイル4,000字・20ファイル・合計3万字。メールアドレス・電話番号・鍵らしい文字列は書かせない。社長が直した・消したノートも版に残す
+  - 社長の方針と訂正は、閉じられない区切り（`<president_policy>`・`<president_correction>`）の中のデータとして渡す。オンボーディングで読ませるのは職務記述書と方針だけ（リードも営業の手引きも読ませない）
+  - 評価面談：最初の面談はオンボーディングの承認の直後から、そのあとは30日ごと。実績は `ai_employee_runs` の事実だけで数え、提案の採用率は提案の記録ができるまで「記録なし」（その間は昇格を推薦しない）。昇格の基準（`PROMOTION_BARS`）と絞る基準（`NARROWING_BAR`）は**暫定**で、数字はオーナーに確かめる
+  - 承認・昇格・方針の変更・自動で絞った等級は監査ログ（`resource: 'ai_employee'`、`metadata.event`）に残す。昇格は社長が見た等級（`fromLevel`）からだけ上げ、二重の送信では上がらない
+  - 機能のスイッチは環境変数 `AI_EMPLOYEE_AGENT_ENABLED`（`'true'` のときだけ）。メンバーは研修室で等級と面談の数字だけを見られ、ノート・報告・方針は管理者だけが見る

@@ -43,6 +43,11 @@ export const env = createEnv({
     // "true" requires a verified address to accept an invitation (#128); anything else but
     // "false" fails at start, so a mistyped value cannot leave it off unnoticed
     INVITE_REQUIRE_VERIFIED_EMAIL: z.enum(['true', 'false']).optional(),
+
+    // "true" lets the AI employees work as Claude agents (onboarding, reviews; #1188). Off until
+    // the legal and information systems departments have agreed (#1114); anything else but
+    // "false" fails at start
+    AI_EMPLOYEE_AGENT_ENABLED: z.enum(['true', 'false']).optional(),
   },
 
   /**
@@ -74,6 +79,7 @@ export const env = createEnv({
     TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
     TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
     INVITE_REQUIRE_VERIFIED_EMAIL: process.env.INVITE_REQUIRE_VERIFIED_EMAIL,
+    AI_EMPLOYEE_AGENT_ENABLED: process.env.AI_EMPLOYEE_AGENT_ENABLED,
 
     // Client
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,

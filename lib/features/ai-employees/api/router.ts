@@ -7,13 +7,35 @@
  */
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
+import { advanceSession } from '../agent/runtime';
 import { dismissEmployee, getOffice, hireEmployee, listRuns, updateEmployee } from '../service';
+import {
+  type TrainingFailure,
+  answerOnboarding,
+  cancelSession,
+  decideReview,
+  editNote,
+  getTraining,
+  setPolicy,
+  startOnboarding,
+  startReview,
+} from '../training';
 import {
   employeeScopeSchema,
   hireAiEmployeeSchema,
   officeScopeSchema,
   updateAiEmployeeSchema,
 } from '../types/schemas';
+import {
+  answerOnboardingSchema,
+  decideReviewSchema,
+  editMemorySchema,
+  sessionScopeSchema,
+  setPolicySchema,
+  startOnboardingSchema,
+  startReviewSchema,
+  trainingScopeSchema,
+} from '../types/training';
 
 const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'AI employee not found' });
 
@@ -33,6 +55,27 @@ function assertCanManage(can: boolean) {
       message: 'You do not have permission to manage the AI employees',
     });
   }
+}
+
+/**
+ * A refusal of the training room as an error the screen can name: the message is the failure's
+ * code (TrainingFailure), never free text
+ */
+function trainingError(failure: TrainingFailure): TRPCError {
+  const code =
+    failure === 'not_found'
+      ? 'NOT_FOUND'
+      : failure === 'agent_disabled'
+        ? 'PRECONDITION_FAILED'
+        : failure === 'invalid_note'
+          ? 'BAD_REQUEST'
+          : 'CONFLICT';
+  return new TRPCError({ code, message: failure });
+}
+
+function unwrap<T>(result: { ok: true; value: T } | { ok: false; failure: TrainingFailure }): T {
+  if (!result.ok) throw trainingError(result.failure);
+  return result.value;
 }
 
 export const aiEmployeesRouter = router({
@@ -83,6 +126,133 @@ export const aiEmployeesRouter = router({
     });
     if (!updated) throw notFound();
     return updated;
+  }),
+
+  /**
+   * The training room (Epic #1187). Anyone who may look into the office sees the grades and the
+   * reviews' counts; the notes, the reports and the policy are for the managers only, like the
+   * actions that follow
+   */
+  training: organizationProcedure.input(trainingScopeSchema).query(async ({ ctx }) => {
+    assertCanRead(ctx.ability.can('read', 'Analytics'));
+    const canManage = ctx.ability.can('update', 'Settings');
+    const training = await getTraining(ctx.db, { organizationId: ctx.organization.id });
+    return {
+      agentEnabled: training.agentEnabled,
+      canManage,
+      employees: canManage
+        ? training.employees
+        : training.employees.map((employee) => ({
+            ...employee,
+            policy: '',
+            notes: [],
+            session: employee.session && { ...employee.session, report: null },
+          })),
+    };
+  }),
+
+  setPolicy: organizationProcedure.input(setPolicySchema).mutation(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    return unwrap(
+      await setPolicy(ctx.db, {
+        organizationId: ctx.organization.id,
+        employeeId: input.employeeId,
+        policy: input.policy,
+        userId: ctx.user.id,
+      })
+    );
+  }),
+
+  startOnboarding: organizationProcedure
+    .input(startOnboardingSchema)
+    .mutation(async ({ ctx, input }) => {
+      assertCanManage(ctx.ability.can('update', 'Settings'));
+      return unwrap(
+        await startOnboarding(ctx.db, {
+          organizationId: ctx.organization.id,
+          organizationName: ctx.organization.name,
+          employeeId: input.employeeId,
+          userId: ctx.user.id,
+          locale: input.locale,
+        })
+      );
+    }),
+
+  /** One step of a running session: the screen asks again while it says `running` */
+  advance: organizationProcedure.input(sessionScopeSchema).mutation(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    const outcome = await advanceSession(ctx.db, {
+      organizationId: ctx.organization.id,
+      sessionId: input.sessionId,
+      userId: ctx.user.id,
+    });
+    if (!outcome) throw trainingError('not_found');
+    return outcome;
+  }),
+
+  answerOnboarding: organizationProcedure
+    .input(answerOnboardingSchema)
+    .mutation(async ({ ctx, input }) => {
+      assertCanManage(ctx.ability.can('update', 'Settings'));
+      return unwrap(
+        await answerOnboarding(ctx.db, {
+          organizationId: ctx.organization.id,
+          sessionId: input.sessionId,
+          userId: ctx.user.id,
+          answer: input.answer,
+          correction: input.answer === 'correct' ? input.correction : undefined,
+        })
+      );
+    }),
+
+  cancelSession: organizationProcedure
+    .input(sessionScopeSchema)
+    .mutation(async ({ ctx, input }) => {
+      assertCanManage(ctx.ability.can('update', 'Settings'));
+      return unwrap(
+        await cancelSession(ctx.db, {
+          organizationId: ctx.organization.id,
+          sessionId: input.sessionId,
+        })
+      );
+    }),
+
+  startReview: organizationProcedure.input(startReviewSchema).mutation(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    return unwrap(
+      await startReview(ctx.db, {
+        organizationId: ctx.organization.id,
+        employeeId: input.employeeId,
+        userId: ctx.user.id,
+        locale: input.locale,
+      })
+    );
+  }),
+
+  decideReview: organizationProcedure.input(decideReviewSchema).mutation(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    return unwrap(
+      await decideReview(ctx.db, {
+        organizationId: ctx.organization.id,
+        reviewId: input.reviewId,
+        userId: ctx.user.id,
+        decision: input.decision,
+        fromLevel: input.decision === 'promote' ? input.fromLevel : undefined,
+      })
+    );
+  }),
+
+  editNote: organizationProcedure.input(editMemorySchema).mutation(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    return unwrap(
+      await editNote(ctx.db, {
+        organizationId: ctx.organization.id,
+        employeeId: input.employeeId,
+        path: input.path,
+        content: input.content,
+        userId: ctx.user.id,
+      })
+    );
   }),
 
   dismiss: organizationProcedure.input(employeeScopeSchema).mutation(async ({ ctx, input }) => {
