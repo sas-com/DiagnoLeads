@@ -648,19 +648,19 @@
             "withInvitations": " Members: {count}. Pending invitations: {waiting}."
           },
           "choices": {
-            "due": "Take what is due",
+            "due": "Take what is due today",
             "members": "See members and invitations",
-            "settings": "Open the settings shelf"
+            "settings": "Choose a settings page"
           },
           "figures": {
-            "due": "Due by today",
+            "due": "Due today",
             "dueValue": "{count}",
             "overdueValue": "{count} overdue",
             "members": "Members",
             "membersValue": "{count}",
             "invitations": "Pending invitations",
             "invitationsValue": "{count}",
-            "expiredValue": "{count} more expired",
+            "expiredValue": "{count} more whose link has expired",
             "invitationsHidden": "Only admins and owners can see invitations.",
             "unread": "Could not be read"
           },
@@ -673,12 +673,12 @@
             "readOnly": "Inviting, roles and removing a member are on the members page of the normal view.",
             "members": "Members ({count})",
             "more": "There are {count} more. Please check them in the normal view.",
-            "invitations": "Pending invitations",
+            "invitations": "Invitations sent (expired ones included)",
             "invitationsHidden": "Only admins and owners can see invitations.",
             "invitationsError": "The invitations could not be read.",
-            "noInvitations": "No pending invitations.",
+            "noInvitations": "No invitation is waiting to be accepted.",
             "expires": "Expires: {date}",
-            "expired": "Expired",
+            "expired": "Link expired",
             "open": "Open members in the normal view",
             "revoke": {
               "choice": "Revoke an invitation",
@@ -687,16 +687,22 @@
               "label": "Type the email address of the invitation to revoke",
               "confirm": "Revoke this invitation",
               "mismatch": "That is not the address of a pending invitation.",
-              "back": "Back to the shelf",
+              "back": "Give up and go back to the shelf",
               "done": "The invitation to {email} was revoked.",
-              "gone": "That invitation was already revoked or accepted. The list was read again.",
+              "gone": "That invitation was already revoked, or the person has joined. The list was read again.",
               "failed": "Sorry, it could not be revoked. Please try again in a while."
-            }
+            },
+            "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles."
           },
           "settingsShelf": {
             "board": "Settings shelf",
             "report": "This is the settings shelf. Choose a page; it opens in the normal view.",
             "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view."
+          },
+          "shelves": {
+            "due": "What is due",
+            "members": "Members and invitations",
+            "settings": "Settings"
           }
         },
         "door": "opens a page",
