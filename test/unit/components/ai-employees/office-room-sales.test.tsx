@@ -261,7 +261,7 @@ describe('the sales floor', () => {
     const { office, board } = await enterSalesFloor();
     const report = within(office).getByText(/開いている商談は 4 件/);
     expect(report).toHaveTextContent(
-      '開いている商談は 4 件、金額の合計は ￥4,000,000 です。今週中に動かすものは 2 件、次の行動が決まっていないものは 2 件あります。'
+      '開いている商談は 4 件、金額の合計は ￥4,000,000 です。期限を過ぎたものは 1 件、1週間以内に動かすものは 2 件、次の行動が決まっていないものは 2 件あります。'
     );
     expect(
       within(office).getByText('セールスは空席です。数字は記録から読み上げています。')
@@ -277,13 +277,14 @@ describe('the sales floor', () => {
     ]);
   });
 
-  it('opens on what has to move this week, earliest first, and switches the view with the number keys', async () => {
+  it('opens on what has to move within a week, earliest first, and switches the view with the number keys', async () => {
     const { user, board } = await enterSalesFloor();
     const names = () =>
       within(board)
         .getAllByRole('button', { name: /見本の商談/ })
         .map((row) => row.textContent?.match(/見本の商談\d/)?.[0]);
-    expect(names()).toEqual(['見本の商談2', '見本の商談3']);
+    // What is late leads; the next action due in a week (the 20th) is still in sight
+    expect(names()).toEqual(['見本の商談2', '見本の商談3', '見本の商談4']);
     expect(within(board).getByRole('button', { name: /見本の商談2/ })).toHaveTextContent(
       '2026/11/10期限切れ見本の次の行動2'
     );
@@ -304,7 +305,7 @@ describe('the sales floor', () => {
     mocks.deals = [];
     const { board, office } = await enterSalesFloor();
     expect(within(office).getByText('開いている商談はありません。')).toBeInTheDocument();
-    expect(within(board).getByText('今週中に動かす商談はありません。')).toBeInTheDocument();
+    expect(within(board).getByText('1週間以内に動かす商談はありません。')).toBeInTheDocument();
   });
 
   it('shows no deals to who may not read them', async () => {
@@ -344,12 +345,20 @@ describe('the sales floor', () => {
     );
   });
 
+  it('names a passed expected close date by its word, before the date', async () => {
+    mocks.deals[2].expectedCloseOn = '2026-11-08';
+    const { board } = await enterSalesFloor();
+    expect(within(board).getByRole('button', { name: /見本の商談3/ })).toHaveTextContent(
+      '次の行動なし予定日超過2026/11/08'
+    );
+  });
+
   it('does not report counts it cannot count when the board lists only a part of the deals', async () => {
     mocks.truncated = true;
     const { office } = await enterSalesFloor();
     const report = within(office).getByText(/開いている商談は 4 件/);
     expect(report).toHaveTextContent('通常の表示の商談で確かめてください');
-    expect(report).not.toHaveTextContent('今週中に動かすものは 2 件');
+    expect(report).not.toHaveTextContent('1週間以内に動かすものは 2 件');
   });
 
   it('moves over the rows with the arrow keys and opens the focused one with Enter', async () => {
@@ -571,6 +580,87 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.added).toHaveLength(0);
   });
 
+  it('does not move the deal a second stage, nor mark a second next action, with other answers in between', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    await user.keyboard('1');
+    await user.keyboard('3');
+    // The move is closed for as long as the file is open, not only right after it
+    await user.keyboard('1');
+    await user.keyboard('2');
+    expect(mocks.moves).toHaveLength(1);
+    // And so is marking: the next action that came up was not seen before the key
+    await user.keyboard('3');
+    expect(mocks.marks).toHaveLength(1);
+    expect(choice(office, /「条件の調整」へ進める/)).toHaveAttribute('aria-disabled', 'true');
+    // Z takes back the last answer (the mark) and opens its kind again; the move stays closed
+    await user.keyboard('z');
+    expect(mocks.marks.at(-1)).toMatchObject({ done: false });
+    await user.keyboard('1');
+    expect(mocks.moves).toHaveLength(1);
+    await user.keyboard('3');
+    expect(mocks.marks.at(-1)).toMatchObject({ done: true });
+  });
+
+  it('names the next action its key marks', async () => {
+    const { office } = await openFile('見本の商談2');
+    expect(choice(office, /「見本の次の行動2」を済みにする/)).toHaveTextContent('3');
+  });
+
+  it('keeps the answer before when a later one fails, with its undo and its closed keys', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    await user.keyboard('1');
+    mocks.fail = true;
+    await user.keyboard('3');
+    expect(
+      within(office).getByText(
+        'すみません、いまの答えはうまくいきませんでした。その前の答えは、そのまま残っています。'
+      )
+    ).toBeInTheDocument();
+    mocks.fail = false;
+    // The move still stands: not made twice, and still undone with Z
+    await user.keyboard('1');
+    expect(mocks.moves).toHaveLength(1);
+    await user.keyboard('z');
+    expect(mocks.moves.at(-1)).toMatchObject({ stage: 'discovery', probability: 20 });
+  });
+
+  it('says before a deal leaves 見極め that the handoff sheet goes out, also when the SQL decision is made', async () => {
+    mocks.deals[0].leadSqlDecision = 'qualified';
+    const { user, office } = await openFile('見本の商談1');
+    expect(choice(office, /「課題の確認」へ進める（先に確認）/)).toHaveTextContent('1');
+    await user.keyboard('1');
+    expect(mocks.moves).toHaveLength(0);
+    const question = within(office).getByRole('region', { name: '進める前の確認' });
+    expect(document.activeElement).toBe(question);
+    expect(question).toHaveTextContent(
+      '技術担当に引き継ぎ書が送られます。送られた移動は、取り消せません。'
+    );
+    // No number key and no Enter answers it
+    await user.keyboard('1{Enter}');
+    expect(mocks.moves).toHaveLength(0);
+    await user.click(within(question).getByRole('button', { name: '「課題の確認」へ進める' }));
+    // The SQL decision was made before: none is sent with the move
+    expect(mocks.moves).toEqual([
+      { organizationId: ORG_ID, dealId: mocks.deals[0].id, stage: 'discovery' },
+    ]);
+  });
+
+  it('says the same before the SQL decision is asked for', async () => {
+    const { user, office } = await openFile('見本の商談1');
+    await user.keyboard('1');
+    expect(within(office).getByRole('region', { name: 'SQL判定' })).toHaveTextContent(
+      '技術担当に引き継ぎ書が送られます。'
+    );
+  });
+
+  it('moves a deal on from a later stage with its key alone', async () => {
+    const { user } = await openFile('見本の商談3');
+    await user.keyboard('1');
+    expect(mocks.moves).toEqual([
+      { organizationId: ORG_ID, dealId: mocks.deals[2].id, stage: 'negotiation' },
+    ]);
+  });
+
   it('keeps an answer in hand when its undo fails, to be undone again', async () => {
     const { user, office } = await openFile('見本の商談2');
     await user.keyboard('3');
@@ -680,7 +770,16 @@ describe('a deal file on the sales floor', () => {
   it('keeps the file and the room open while an answer is being saved', async () => {
     mocks.pending = true;
     const { user, office, file } = await openFile('見本の商談2');
-    // Every answer waits, and so do the ways back: Esc, the file's own, and the office's
+    // It says so, every answer waits, and so do the ways out: Esc, the file's own, the
+    // office's, and the link to the deal's page
+    expect(
+      within(office).getByText('保存しています。終わるまで、このファイルは閉じません。')
+    ).toBeInTheDocument();
+    const detail = within(file).getByRole('link', { name: '通常の表示で商談を開く' });
+    expect(detail).toHaveAttribute('aria-disabled', 'true');
+    mocks.left.mockClear();
+    await user.click(detail);
+    expect(mocks.left).not.toHaveBeenCalled();
     expect(choice(office, /「提案」へ進める/)).toHaveAttribute('aria-disabled', 'true');
     expect(choice(office, /ボードに戻る/)).toHaveAttribute('aria-disabled', 'true');
     const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });

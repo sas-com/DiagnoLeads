@@ -19,6 +19,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import {
   type FormEvent,
+  type MouseEvent,
   type MutableRefObject,
   type ReactNode,
   useEffect,
@@ -33,6 +34,7 @@ import {
   type BoardDeal,
   DEAL_FILE_CHOICES,
   DEAL_KEYS,
+  type DealAnswerKind,
   type DealFileAction,
   dealActionOfKey,
   dealActionOpen,
@@ -63,11 +65,13 @@ type Outcome =
     }
   | { kind: 'done'; taskId: string; title: string; undoFailed?: boolean }
   | { kind: 'added'; title: string; dueOn: string }
-  | { kind: 'undone' }
-  | { kind: 'failed' };
+  | { kind: 'undone' };
 
-/** What is open in place of the choices: the SQL decision of the lead, or a new next action */
-type Matter = 'sql' | 'add';
+/**
+ * What is open in place of the choices: the SQL decision of the lead or, when that is made, the
+ * word about the handoff, before the deal leaves 見極め; or a new next action
+ */
+type Matter = 'sql' | 'handoff' | 'add';
 
 // The field of the office: the same by day and by night (the office follows the clock, not the
 // theme), like the fields of the conversation (office-talk-staff.tsx)
@@ -149,6 +153,10 @@ export function OfficeDealFile({
   const dueId = useId();
   const sqlTitleId = useId();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // The kinds answered since the file was opened and not undone: closed until then
+  const [closedKinds, setClosedKinds] = useState<ReadonlySet<DealAnswerKind>>(new Set());
+  // The last answer did not go through: said in the report, over the answer that still stands
+  const [failedNow, setFailedNow] = useState(false);
   const [matter, setMatter] = useState<Matter | null>(null);
   const [title, setTitle] = useState('');
   const [dueOn, setDueOn] = useState(() => addDays(today, 1));
@@ -158,18 +166,23 @@ export function OfficeDealFile({
   // A move reads the deals, the leads and the activity again, as in the normal view
   const { update } = useDealMutations({ toastErrors: false });
   // The next actions: the same queries the lead's card refreshes (lead-next-actions-card.tsx)
-  const refreshTasks = () => {
-    void utils.leadFollowUp.tasks.invalidate();
-    void utils.leadFollowUp.dueTasks.invalidate({ organizationId });
-    void utils.deals.board.invalidate({ organizationId });
-  };
-  const markTask = trpc.leadFollowUp.updateTask.useMutation({ onSuccess: refreshTasks });
+  // Waited for, like a move: the answer counts as saved once the board was read again, so the
+  // next action that comes up is the one the president sees before a key marks it
+  const refreshTasks = () =>
+    Promise.all([
+      utils.leadFollowUp.tasks.invalidate(),
+      utils.leadFollowUp.dueTasks.invalidate({ organizationId }),
+      utils.deals.board.invalidate({ organizationId }),
+    ]);
+  const markTask = trpc.leadFollowUp.updateTask.useMutation({ onSuccess: () => refreshTasks() });
   const addTask = trpc.leadFollowUp.createTask.useMutation({
     onSuccess: (_saved, input) => {
       setOutcome({ kind: 'added', title: input.title, dueOn: input.dueOn });
+      // The next action just set is not marked by the next key
+      closeKind('done');
       setMatter(null);
       setTitle('');
-      refreshTasks();
+      return refreshTasks();
     },
   });
 
@@ -178,19 +191,14 @@ export function OfficeDealFile({
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
   }, [busy, onBusyChange]);
-  // The answer that stands: its kind closes the answers of that kind (see dealActionOpen)
-  const last =
-    outcome?.kind === 'moved' || outcome?.kind === 'done' || outcome?.kind === 'added'
-      ? outcome.kind
-      : null;
-  const acted = last !== null;
+  const acted = outcome?.kind === 'moved' || outcome?.kind === 'done' || outcome?.kind === 'added';
   const undoable =
     outcome?.kind === 'done' || (outcome?.kind === 'moved' && moveIsUndoable(outcome));
   const state = {
     canEdit,
     busy,
-    last,
-    undoable,
+    closed: closedKinds,
+    canUndo: undoable,
     stage: deal.stage,
     hasTask: deal.nextTask !== null,
   };
@@ -200,20 +208,31 @@ export function OfficeDealFile({
   const taskTitle = deal.nextTask ? (deal.nextTask.title ?? tTasks('nextMeetingTitle')) : null;
   const leadLabel = deal.company || deal.leadName || '';
 
-  const failed = () => setOutcome({ kind: 'failed' });
+  const closeKind = (kind: DealAnswerKind) =>
+    setClosedKinds((current) => new Set(current).add(kind));
+  const openKind = (kind: DealAnswerKind) =>
+    setClosedKinds((current) => {
+      const next = new Set(current);
+      next.delete(kind);
+      return next;
+    });
+  // An answer that failed changes nothing: the one before it still stands, with its undo
+  const failed = () => setFailedNow(true);
   const moveTo = (to: OpenDealStage, sqlDecision?: 'qualified') => {
     const from = { stage: deal.stage as OpenDealStage, probability: deal.probability };
     update.mutate(
       { organizationId, dealId: deal.id, stage: to, ...(sqlDecision ? { sqlDecision } : {}) },
       {
-        onSuccess: (saved) =>
+        onSuccess: (saved) => {
           setOutcome({
             kind: 'moved',
             from,
             to,
             probability: saved.probability,
             handedOff: saved.handedOff,
-          }),
+          });
+          closeKind('moved');
+        },
         onError: failed,
       }
     );
@@ -223,16 +242,21 @@ export function OfficeDealFile({
     setOutcome((current) =>
       current?.kind === 'moved' || current?.kind === 'done'
         ? { ...current, undoFailed: true }
-        : { kind: 'failed' }
+        : current
     );
-  const undone = () => setOutcome({ kind: 'undone' });
+  const undone = (kind: DealAnswerKind) => {
+    setOutcome({ kind: 'undone' });
+    openKind(kind);
+  };
 
   const answer = (action: DealFileAction) => {
     if (matter || !dealActionOpen(action, state)) return;
+    setFailedNow(false);
     if (action === 'advance' && next) {
-      // The exit of 見極め is the SQL decision: asked first, in the place of the choices
-      if (skipsSqlDecision(deal.stage, next, deal.leadSqlDecision)) {
-        setMatter('sql');
+      // Leaving 見極め is asked about first, in the place of the choices: the SQL decision is its
+      // exit, and the first move on sends the handoff sheet, which no undo takes back
+      if (deal.stage === 'qualification') {
+        setMatter(skipsSqlDecision(deal.stage, next, deal.leadSqlDecision) ? 'sql' : 'handoff');
         return;
       }
       moveTo(next);
@@ -242,7 +266,13 @@ export function OfficeDealFile({
       const taskId = deal.nextTask.id;
       markTask.mutate(
         { organizationId, id: taskId, done: true },
-        { onSuccess: () => setOutcome({ kind: 'done', taskId, title: taskTitle }), onError: failed }
+        {
+          onSuccess: () => {
+            setOutcome({ kind: 'done', taskId, title: taskTitle });
+            closeKind('done');
+          },
+          onError: failed,
+        }
       );
     } else if (action === 'add') {
       setMatter('add');
@@ -256,12 +286,12 @@ export function OfficeDealFile({
           stage: outcome.from.stage,
           probability: outcome.from.probability,
         },
-        { onSuccess: undone, onError: undoFailed }
+        { onSuccess: () => undone('moved'), onError: undoFailed }
       );
     } else if (action === 'undo' && outcome?.kind === 'done') {
       markTask.mutate(
         { organizationId, id: outcome.taskId, done: false },
-        { onSuccess: undone, onError: undoFailed }
+        { onSuccess: () => undone('done'), onError: undoFailed }
       );
     }
     // The answer is in the report: the focus goes there, off a button that is closed now
@@ -272,12 +302,20 @@ export function OfficeDealFile({
     setMatter(null);
     reportRef.current?.focus();
   };
-  const qualify = () => {
+  // The answer of a question about leaving 見極め: 適格 is recorded with the move when it was asked
+  const leaveQualification = () => {
     if (!next || busy) return;
+    const asked = matter;
     setMatter(null);
-    moveTo(next, 'qualified');
+    setFailedNow(false);
+    moveTo(next, asked === 'sql' ? 'qualified' : undefined);
     reportRef.current?.focus();
   };
+  // What is shown may no longer be changed (the deal left the board): a question open over it
+  // goes with its answers
+  useEffect(() => {
+    if (!canEdit) setMatter(null);
+  }, [canEdit]);
   const dueValid = ISO_DAY.test(dueOn);
   const addClosed = title.trim() === '' || !dueValid || addTask.isPending;
   const saveTask = (event: FormEvent) => {
@@ -326,7 +364,7 @@ export function OfficeDealFile({
   // A question takes the focus on its words, not on an answer; the field of a next action is
   // focused by itself (autoFocus)
   useEffect(() => {
-    if (matter === 'sql') matterRef.current?.focus();
+    if (matter === 'sql' || matter === 'handoff') matterRef.current?.focus();
   }, [matter]);
   // A next action that was set is told in the report: the focus goes there, off the field that
   // is gone now
@@ -339,24 +377,26 @@ export function OfficeDealFile({
     stage: tDeals(`stages.${deal.stage}`),
     probability: deal.probability,
   });
-  const report =
-    outcome?.kind === 'moved'
-      ? outcome.undoFailed
-        ? t('undoFailed')
-        : t(outcome.handedOff ? 'movedHandedOff' : 'moved', {
-            stage: stageName(outcome.to),
-            probability: outcome.probability,
-          })
-      : outcome?.kind === 'done'
+  const report = busy
+    ? // Said while it lasts: the ways out of the file are closed meanwhile
+      t('saving')
+    : failedNow
+      ? t(acted ? 'failedKept' : 'failed')
+      : outcome?.kind === 'moved'
         ? outcome.undoFailed
           ? t('undoFailed')
-          : t('done', { title: outcome.title })
-        : outcome?.kind === 'added'
-          ? t('added', { title: outcome.title, date: formatDealDate(outcome.dueOn) })
-          : outcome?.kind === 'undone'
-            ? t('undone')
-            : outcome?.kind === 'failed'
-              ? t('failed')
+          : t(outcome.handedOff ? 'movedHandedOff' : 'moved', {
+              stage: stageName(outcome.to),
+              probability: outcome.probability,
+            })
+        : outcome?.kind === 'done'
+          ? outcome.undoFailed
+            ? t('undoFailed')
+            : t('done', { title: outcome.title })
+          : outcome?.kind === 'added'
+            ? t('added', { title: outcome.title, date: formatDealDate(outcome.dueOn) })
+            : outcome?.kind === 'undone'
+              ? t('undone')
               : deal.nextTask && taskTitle
                 ? `${standing}${t('next', {
                     date: formatDealDate(deal.nextTask.dueOn),
@@ -368,9 +408,11 @@ export function OfficeDealFile({
       ? next
         ? // The exit of 見極め asks first: said on the choice, so the question is no surprise
           t(
-            skipsSqlDecision(deal.stage, next, deal.leadSqlDecision)
-              ? 'choices.advanceSql'
-              : 'choices.advance',
+            deal.stage !== 'qualification'
+              ? 'choices.advance'
+              : skipsSqlDecision(deal.stage, next, deal.leadSqlDecision)
+                ? 'choices.advanceSql'
+                : 'choices.advanceAsk',
             { stage: stageName(next) }
           )
         : t('choices.advanceEnd')
@@ -378,7 +420,15 @@ export function OfficeDealFile({
         ? previous
           ? t('choices.back', { stage: stageName(previous) })
           : t('choices.backStart')
-        : t(`choices.${choice}`);
+        : choice === 'done' && taskTitle
+          ? // Named, so that it is plain which next action the key marks
+            t('choices.doneNamed', { title: taskTitle })
+          : t(`choices.${choice}`);
+  // A link out of the office does nothing while an answer is being saved, like Esc
+  const leaveUnlessBusy = (event: MouseEvent) => {
+    if (busy) event.preventDefault();
+    else onLeaveOffice();
+  };
   const dealHref = `/${locale}/deals/${deal.id}`;
   const none = t('notSet');
 
@@ -395,7 +445,7 @@ export function OfficeDealFile({
           {!canEdit && <p className="text-sm text-[#d8d2c4]">{t(gone ? 'gone' : 'readOnly')}</p>}
         </div>
 
-        {canEdit && matter === 'sql' && next && (
+        {canEdit && (matter === 'sql' || matter === 'handoff') && next && (
           // The question takes the focus as a whole, not an answer: it is read out from its title,
           // and Enter pressed once more decides nothing
           <section
@@ -405,27 +455,41 @@ export function OfficeDealFile({
             className="flex flex-col gap-2 outline-none"
           >
             <h3 id={sqlTitleId} className={CAP}>
-              {t('sql.title')}
+              {t(matter === 'sql' ? 'sql.title' : 'handoff.title')}
             </h3>
-            <p className="text-sm leading-relaxed">
-              {leadLabel
-                ? tDeals('sqlDialog.description', { lead: leadLabel, stage: stageName(next) })
-                : tDeals('sqlDialog.descriptionUnnamed', { stage: stageName(next) })}
-            </p>
-            <p className="text-sm leading-relaxed text-[#d8d2c4]">
-              {tDeals('sqlDialog.qualifiedHint')}
-            </p>
-            <button type="button" onClick={qualify} className={cn(ACTION, ACTION_MAIN, FOCUS)}>
-              {tDeals('sqlDialog.qualified', { stage: stageName(next) })}
-            </button>
-            <Link
-              href={dealHref}
-              onClick={onLeaveOffice}
-              className={cn(ACTION, ACTION_PLAIN, FOCUS)}
+            {matter === 'sql' && (
+              <>
+                <p className="text-sm leading-relaxed">
+                  {leadLabel
+                    ? tDeals('sqlDialog.description', { lead: leadLabel, stage: stageName(next) })
+                    : tDeals('sqlDialog.descriptionUnnamed', { stage: stageName(next) })}
+                </p>
+                <p className="text-sm leading-relaxed text-[#d8d2c4]">
+                  {tDeals('sqlDialog.qualifiedHint')}
+                </p>
+              </>
+            )}
+            {/* Said before the move, whichever question it is: what goes out is not taken back */}
+            <p className="text-sm leading-relaxed">{t('handoff.warning')}</p>
+            <button
+              type="button"
+              onClick={leaveQualification}
+              className={cn(ACTION, ACTION_MAIN, FOCUS)}
             >
-              {t('sql.notQualified')}
-              <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </Link>
+              {matter === 'sql'
+                ? tDeals('sqlDialog.qualified', { stage: stageName(next) })
+                : t('handoff.go', { stage: stageName(next) })}
+            </button>
+            {matter === 'sql' && (
+              <Link
+                href={dealHref}
+                onClick={onLeaveOffice}
+                className={cn(ACTION, ACTION_PLAIN, FOCUS)}
+              >
+                {t('sql.notQualified')}
+                <ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+              </Link>
+            )}
             <MatterBack onBack={closeMatter}>{t('sql.back')}</MatterBack>
           </section>
         )}
@@ -639,9 +703,11 @@ export function OfficeDealFile({
           <p className="text-xs">{t('detailHint')}</p>
           <Link
             href={dealHref}
-            onClick={onLeaveOffice}
+            // Not removed while saving: it would drop the focus. It does nothing meanwhile
+            aria-disabled={busy || undefined}
+            onClick={leaveUnlessBusy}
             className={cn(
-              'inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white',
+              'inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white aria-disabled:cursor-wait aria-disabled:opacity-60',
               FOCUS
             )}
           >

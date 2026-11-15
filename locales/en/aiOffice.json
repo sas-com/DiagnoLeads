@@ -499,24 +499,24 @@
         },
         "deals": {
           "board": "Deal board",
-          "report": "There are {open} open deals, {amount} in total. {thisWeek} have to move this week, and {noNextAction} have no next action.",
+          "report": "There are {open} open deals, {amount} in total. {overdue} are past their day, {soon} have to move within a week, and {noNextAction} have no next action.",
           "reportNone": "There are no open deals.",
           "reportLoading": "Reading the figures of the board.",
           "reportUnavailable": "The figures of the board could not be read.",
           "ask": {
-            "thisWeek": "Show me what has to move this week",
+            "soon": "Show me what has to move within a week",
             "noNextAction": "Show me those without a next action",
             "mine": "Show me my own",
             "all": "Show me everything"
           },
           "views": {
-            "thisWeek": "To move this week (next action due or expected close by Sunday)",
+            "soon": "To move within a week (by {date}, with what is late)",
             "noNextAction": "No next action",
             "mine": "My deals",
             "all": "All"
           },
           "empty": {
-            "thisWeek": "No deal has to move this week.",
+            "soon": "No deal has to move within a week.",
             "noNextAction": "Every open deal has a next action.",
             "mine": "You have no open deals.",
             "all": "There are no open deals."
@@ -557,9 +557,9 @@
             "forecast": "Open the sales forecast",
             "prospects": "Open the customer search"
           },
-          "reportTruncated": "There are {open} open deals, {amount} in total. There are too many to list them all on the board, so please check in the deals of the normal view how many have to move this week and how many have no next action.",
+          "reportTruncated": "There are {open} open deals, {amount} in total. There are too many to list them all on the board, so please check in the deals of the normal view how many are late, how many have to move within a week and how many have no next action.",
           "closesOn": "Expected close {date}",
-          "closeLate": "Late"
+          "closeLate": "Close date passed"
         },
         "dealFile": {
           "label": "Deal file of \"{name}\"",
@@ -584,7 +584,9 @@
             "add": "Set a next action",
             "undo": "Undo that",
             "close": "Back to the board",
-            "advanceSql": "Move on to \"{stage}\" (SQL decision first)"
+            "advanceSql": "Move on to \"{stage}\" (SQL decision first)",
+            "advanceAsk": "Move on to \"{stage}\" (a word first)",
+            "doneNamed": "Mark \"{title}\" as done"
           },
           "sql": {
             "title": "SQL decision",
@@ -617,9 +619,16 @@
           "unassigned": "Unassigned",
           "openDetail": "Open the deal in the normal view",
           "detailHint": "Winning and losing, changes to the amount or the expected close date, and contact records are made on the deal's page in the normal view.",
-          "closeLate": "Past the expected close",
+          "closeLate": "Close date passed",
           "noAmount": "No amount yet",
-          "gone": "This deal is no longer on the board (it was deleted, or closed as won or lost). It is shown as it was when opened."
+          "gone": "This deal is no longer on the board (it was deleted, or closed as won or lost). It is shown as it was when opened.",
+          "saving": "Saving. This file stays open until it is done.",
+          "failedKept": "Sorry, that answer did not go through. The one before it still stands.",
+          "handoff": {
+            "title": "Before moving on",
+            "warning": "The first time this prospect moves on from qualification, the handoff sheet is sent to the technical team. A move that sent it cannot be undone.",
+            "go": "Move on to \"{stage}\""
+          }
         },
         "reception": {
           "board": "General affairs counter",
