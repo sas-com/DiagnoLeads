@@ -22,7 +22,7 @@ import {
 import { trpc } from '@/lib/trpc/client';
 import { AlertTriangle, Loader2, Pencil, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const EMPTY: PrepCardFields = {
@@ -65,6 +65,16 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
   // and a token taken at the save would then be the new one, letting the save write over it
   const [base, setBase] = useState<Date | null>(null);
   const [conflict, setConflict] = useState(false);
+  // Reading the card before an editing starts, and reading it again after a refusal
+  const [reading, setReading] = useState<'start' | 'reload' | null>(null);
+  const conflictRef = useRef<HTMLDivElement>(null);
+  // The notice sits at the top of a long form and the save button at its foot: when a save is
+  // refused, the notice is brought into view and takes the focus, so that it is seen and read out
+  useEffect(() => {
+    if (!conflict) return;
+    conflictRef.current?.scrollIntoView?.({ block: 'center' });
+    conflictRef.current?.focus();
+  }, [conflict]);
   const save = trpc.leadPrep.save.useMutation({
     onSuccess: () => {
       setForm(null);
@@ -107,14 +117,29 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
     setBase(from?.updatedAt ?? null);
     setConflict(false);
   };
-  const startEditing = () => fill(stored);
+  // The card on the screen can be minutes old (the app keeps a query for five minutes and does
+  // not read it again on focus): an editing that started from it would be refused at the save,
+  // after everything was typed. So the card is read first, and the form starts from that
+  const startEditing = async () => {
+    setReading('start');
+    const latest = await query.refetch();
+    setReading(null);
+    // A read that failed still hands back the card from before (the query keeps it): only a
+    // read that went through may fill the form
+    if (latest.isSuccess) fill(latest.data.card);
+    else toast.error(t('startError'));
+  };
   // Read the card as it is now and start over from it: what was typed is dropped
   const reload = async () => {
+    setReading('reload');
     const latest = await query.refetch();
-    // A read that failed still hands back the card from before (the query keeps it): only a
-    // read that went through may refill the form, or the old card and its old date come back
-    if (latest.isSuccess) fill(latest.data.card);
-    else toast.error(t('reloadError'));
+    setReading(null);
+    if (latest.isSuccess) {
+      fill(latest.data.card);
+      toast.success(t('reloaded'));
+      // The notice, which had the focus, is gone: the form's first field takes it
+      document.getElementById(`${id}-system`)?.focus();
+    } else toast.error(t('reloadError'));
   };
 
   const draft = () => {
@@ -141,12 +166,15 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
             size="sm"
             variant="ghost"
             className="ml-auto h-8"
-            // While the card is read again (right after a save), its date is the one from
-            // before: an editing started now would be refused by the user's own save
-            disabled={query.isFetching === true}
-            onClick={startEditing}
+            disabled={reading === 'start'}
+            aria-busy={reading === 'start'}
+            onClick={() => void startEditing()}
           >
-            <Pencil className="mr-1 h-4 w-4" aria-hidden="true" />
+            {reading === 'start' ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Pencil className="mr-1 h-4 w-4" aria-hidden="true" />
+            )}
             {card ? t('edit') : t('start')}
           </Button>
         )}
@@ -161,23 +189,44 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
           className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
+            // A save that is known to be refused is not sent again
+            if (conflict) return;
             save.mutate({ organizationId, leadId, card: form, expectedUpdatedAt: base });
           }}
         >
           {conflict && (
-            <Callout title={t('conflictTitle')} icon={AlertTriangle} color="red">
-              <p>{t('conflictBody')}</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => void reload()}
-              >
-                <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                {t('reload')}
-              </Button>
-            </Callout>
+            <div ref={conflictRef} role="alert" tabIndex={-1} className="outline-none">
+              <Callout title={t('conflictTitle')} icon={AlertTriangle} color="red">
+                <p>{t('conflictBody')}</p>
+                {/* Who saved the card that is there now, and when (it was read after the refusal) */}
+                {stored && stored.updatedAt.getTime() !== base?.getTime() && (
+                  <p className="mt-1">
+                    {t('conflictSavedBy', {
+                      date: format.dateTime(stored.updatedAt, {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      }),
+                      name: stored.updatedByName ?? '—',
+                    })}
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  disabled={reading === 'reload'}
+                  onClick={() => void reload()}
+                >
+                  {reading === 'reload' ? (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {t('reload')}
+                </Button>
+              </Callout>
+            </div>
           )}
           {data.draftSource && hasDraftMaterial(data.draftSource) && (
             <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/50 p-3">
@@ -268,14 +317,17 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
             ))}
           </fieldset>
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" size="sm" disabled={save.isPending}>
+            {/* Closed after a refusal: the same save would be refused again */}
+            <Button type="submit" size="sm" disabled={save.isPending || conflict}>
               {save.isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               {t('save')}
             </Button>
+            {/* Closed while a save is out: a form closed now would never show that it was refused */}
             <Button
               type="button"
               size="sm"
               variant="outline"
+              disabled={save.isPending}
               onClick={() => {
                 setForm(null);
                 setConflict(false);
@@ -283,6 +335,10 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
             >
               {t('cancel')}
             </Button>
+            {/* Next to the button that was pressed: why nothing was saved */}
+            <output className="self-center text-xs text-red-700 dark:text-red-400">
+              {conflict ? t('conflictStatus') : ''}
+            </output>
           </div>
         </form>
       ) : !card ? (

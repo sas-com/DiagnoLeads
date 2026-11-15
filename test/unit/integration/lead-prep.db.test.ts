@@ -263,5 +263,24 @@ describe.skipIf(!url)('lead prep cards (PostgreSQL)', () => {
         expectedUpdatedAt: null,
       })
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // Nor with a date: the lead is checked in the caller's organization before any card is
+    // looked at, so a foreign lead answers like one that does not exist
+    await expect(
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId: foreign,
+        card,
+        expectedUpdatedAt: new Date(),
+      })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // A date no card can have is refused as input
+    await expect(
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId: await createLead(),
+        card,
+        expectedUpdatedAt: new Date(8.64e15),
+      })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 });

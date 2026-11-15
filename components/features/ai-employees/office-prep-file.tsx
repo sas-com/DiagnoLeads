@@ -33,8 +33,9 @@ type Outcome =
   // through, so the draft is still saved and can be undone again
   | { kind: 'drafted'; before: PrepCardFields; after: PrepCardFields; undoFailed?: boolean }
   | { kind: 'undone' }
-  // The server refused the draft: somebody saved the card in the moment after it was read
-  | { kind: 'refused' }
+  // The server refused the draft: the card was saved in the moment after it was read.
+  // fillable: whether the card as it is now still has a field a draft could fill
+  | { kind: 'refused'; fillable: boolean }
   | { kind: 'failed' };
 
 /** A calendar day ('YYYY-MM-DD') as it is written on the board */
@@ -127,10 +128,6 @@ export function OfficePrepFile({
   // runs when the file was closed (a link at the foot) before the save came back
   const save = trpc.leadPrep.save.useMutation({
     onSuccess: () => void utils.leadPrep.get.invalidate(scope),
-    // Refused because the card was changed (#1225): the file shows the card as it is now
-    onError: (error) => {
-      if (error.data?.code === 'CONFLICT') void utils.leadPrep.get.invalidate(scope);
-    },
   });
   // An answer first reads the card again, then saves: both count as working on it
   const [checking, setChecking] = useState(false);
@@ -160,6 +157,39 @@ export function OfficePrepFile({
     };
   }, []);
 
+  /** The card a draft would save from what the server holds now; null when nothing is to fill */
+  const draftOf = (fresh: Awaited<ReturnType<typeof readNow>>) => {
+    const now = prepCardFields(fresh.card);
+    const filled =
+      fresh.canEdit && fresh.draftSource && hasDraftMaterial(fresh.draftSource)
+        ? savedPrepCard(buildPrepDraft(now, fresh.draftSource, (key, values) => tAll(key, values)))
+        : null;
+    return filled && !samePrepCard(now, filled) ? filled : null;
+  };
+  /**
+   * The server refused a save (#1225): the card was saved from another screen in the moment
+   * after it was read. Before anything is said, the card is read once more, so that what the
+   * file says is true of the card as it is: it never says "ask again" over a card that has
+   * nothing left to fill, or "undo again" over a card whose content changed.
+   */
+  const afterRefusal = async (action: PrepFileAction) => {
+    setChecking(true);
+    try {
+      const fresh = await readNow();
+      if (!shown.current) return;
+      if (action === 'draft') setOutcome({ kind: 'refused', fillable: draftOf(fresh) !== null });
+      // The undo: when the content changed, the file says so by itself (stale); when only the
+      // date moved, the draft is still there and the undo can be asked for again
+      else setOutcome((kept) => (kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : kept));
+    } catch {
+      setOutcome((kept) =>
+        kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : { kind: 'failed' }
+      );
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const inFlight = useRef(false);
   const answer = async (action: PrepFileAction) => {
     // The ref closes the door at once: a key that arrives twice before the file is drawn again
@@ -173,14 +203,13 @@ export function OfficePrepFile({
       const now = prepCardFields(fresh.card);
       if (action === 'draft') {
         // Only the fields that are empty right now are filled
-        const filled =
-          fresh.canEdit && fresh.draftSource && hasDraftMaterial(fresh.draftSource)
-            ? savedPrepCard(
-                buildPrepDraft(now, fresh.draftSource, (key, values) => tAll(key, values))
-              )
-            : null;
-        // Nothing left to fill (somebody filled it meanwhile): the file now shows why
-        if (!filled || samePrepCard(now, filled)) return;
+        const filled = draftOf(fresh);
+        // Nothing left to fill (somebody filled it meanwhile): the file now shows why, and what
+        // it said about an earlier answer no longer holds
+        if (!filled) {
+          setOutcome(null);
+          return;
+        }
         save.mutate(
           // The row's own date, also for a card saved empty (which the file shows as none)
           { ...scope, card: filled, expectedUpdatedAt: fresh.card?.updatedAt ?? null },
@@ -189,8 +218,10 @@ export function OfficePrepFile({
               setOutcome({ kind: 'drafted', before: now, after: filled });
               setPart('prep');
             },
-            onError: (error) =>
-              setOutcome({ kind: error.data?.code === 'CONFLICT' ? 'refused' : 'failed' }),
+            onError: (error) => {
+              if (error.data?.code === 'CONFLICT') void afterRefusal('draft');
+              else setOutcome({ kind: 'failed' });
+            },
           }
         );
       } else if (outcome?.kind === 'drafted') {
@@ -200,11 +231,12 @@ export function OfficePrepFile({
           { ...scope, card: outcome.before, expectedUpdatedAt: fresh.card?.updatedAt ?? null },
           {
             onSuccess: () => setOutcome({ kind: 'undone' }),
-            onError: () => {
-              // The draft is still there: keep it in hand, so the undo can be asked for again.
-              // Also when the server refused (the card was saved just now): the card is read
-              // again, and when what it says changed, the file says that instead (stale comes
-              // first); when only its date changed, the undo goes through the next time
+            onError: (error) => {
+              if (error.data?.code === 'CONFLICT') {
+                void afterRefusal('undo');
+                return;
+              }
+              // The draft is still there: keep it in hand, so the undo can be asked for again
               setOutcome((kept) =>
                 kept?.kind === 'drafted' ? { ...kept, undoFailed: true } : { kind: 'failed' }
               );
@@ -284,7 +316,9 @@ export function OfficePrepFile({
           {prep.data && (
             <p className="text-sm leading-relaxed">{card ? t('prepReady') : t('prepNone')}</p>
           )}
-          {outcome && (
+          {/* While the card is read and saved, what an earlier answer said is not repeated */}
+          {working && <p className="text-base leading-relaxed font-medium">{t('checking')}</p>}
+          {outcome && !working && (
             <p className="text-base leading-relaxed font-medium">
               {outcome.kind === 'drafted'
                 ? stale
@@ -295,12 +329,14 @@ export function OfficePrepFile({
                 : outcome.kind === 'undone'
                   ? t('undone')
                   : outcome.kind === 'refused'
-                    ? t('refused')
+                    ? outcome.fillable
+                      ? t('refused')
+                      : t('refusedNothing')
                     : t('failed')}
             </p>
           )}
           {/* Why the draft is closed, to those who could ask for it */}
-          {canEdit && !drafted && !fillable && !state.busy && (
+          {canEdit && !drafted && !fillable && !state.busy && outcome?.kind !== 'refused' && (
             <p className="text-sm leading-relaxed text-[#d8d2c4]">
               {material ? t('nothingToFill') : t('noMaterial')}
             </p>

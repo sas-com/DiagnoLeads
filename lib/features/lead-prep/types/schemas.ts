@@ -63,5 +63,6 @@ export const leadScopeSchema = z.object({
  */
 export const savePrepCardSchema = leadScopeSchema.extend({
   card: prepCardFieldsSchema,
-  expectedUpdatedAt: z.date().nullable(),
+  // Bounded: a date near the end of what JavaScript can hold has no next millisecond
+  expectedUpdatedAt: z.date().max(new Date('9999-12-31T00:00:00Z')).nullable(),
 });

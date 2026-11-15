@@ -228,8 +228,8 @@ vi.mock('@/lib/trpc/client', () => ({
             }
             // The server refuses: somebody saved the card in the moment after it was read
             if (mocks.conflictWith !== undefined) {
+              // Only the server holds it: the screen's copy follows when the card is read again
               mocks.server = mocks.conflictWith;
-              mocks.card = mocks.conflictWith;
               mocks.conflictWith = undefined;
               const error = { data: { code: 'CONFLICT' } };
               hook.onError?.(error);
@@ -635,7 +635,7 @@ describe('the engineering room', () => {
       });
       expect(mocks.saves).toHaveLength(1);
       expect(
-        await within(office).findByText(/下書きのあとに、事前調査カードが書き換えられました/)
+        await within(office).findByText(/下書きのあとに、事前調査カードがほかの画面で保存されました/)
       ).toBeInTheDocument();
       expect(
         within(office).getByRole('button', { name: /いまの下書きを取り消す/ })
@@ -734,14 +734,45 @@ describe('the engineering room', () => {
         updatedAt: new Date(),
       };
       await user.keyboard('3');
-      expect(await within(office).findByText(/保存の直前に、ほかの人が事前調査カードを書き換えました/)).toBeInTheDocument();
-      expect(mocks.refreshed).toHaveBeenCalled();
+      expect(
+        await within(office).findByText(
+          '保存の直前に、事前調査カードがほかの画面で保存されました。下書きは保存していません。最新のカードから、もう一度下書きを用意できます。'
+        )
+      ).toBeInTheDocument();
+      // Before it said so, the file read the card once more: one read before the save, one after
+      expect(mocks.fetches).toHaveLength(2);
       // Nothing was drafted: no undo, and the draft can be asked for again from the new card
       expect(within(office).queryByRole('button', { name: /いまの下書きを取り消す/ })).toBeNull();
       await user.keyboard('3');
       expect(mocks.saves).toHaveLength(2);
       expect(mocks.saves[1].card.recentNews).toBe('いま同僚が書いた動き');
       expect(within(file).getByText('いま同僚が書いた動き')).toBeInTheDocument();
+    });
+
+    it('does not say "ask again" when the card saved meanwhile leaves nothing to fill (#1225)', async () => {
+      const { user, office } = await openFile();
+      mocks.conflictWith = {
+        estimatedSystem: '同僚が書いたシステム',
+        estimatedSystemBasis: '根拠',
+        recentNews: null,
+        hypotheses: { cost: '人が書いた仮説', people: '同僚が書いた仮説' },
+        firstQuestions: ['同僚が書いた質問'],
+        updatedAt: new Date(),
+        updatedByName: null,
+      };
+      await user.keyboard('3');
+      expect(
+        await within(office).findByText(
+          '保存の直前に、事前調査カードがほかの画面で保存されました。下書きは保存していません。最新のカードには、下書きで埋められる空欄がありません。'
+        )
+      ).toBeInTheDocument();
+      // One reason is given, not two
+      expect(
+        within(office).queryByText('下書きで埋められる空欄は、事前調査カードにありません。')
+      ).not.toBeInTheDocument();
+      expect(
+        within(office).getByRole('button', { name: /事前調査カードの下書きを用意して/ })
+      ).toHaveAttribute('aria-disabled', 'true');
     });
 
     it('lets the undo be asked for again when the server refused it over a date only (#1225)', async () => {
@@ -771,7 +802,7 @@ describe('the engineering room', () => {
       };
       await user.keyboard('z');
       expect(
-        await within(office).findByText(/下書きのあとに、事前調査カードが書き換えられました/)
+        await within(office).findByText(/下書きのあとに、事前調査カードがほかの画面で保存されました/)
       ).toBeInTheDocument();
       expect(
         within(office).getByRole('button', { name: /いまの下書きを取り消す/ })
