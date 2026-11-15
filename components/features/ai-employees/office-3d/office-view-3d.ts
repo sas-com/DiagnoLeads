@@ -111,10 +111,62 @@ export const STAGE_FRAMES: Readonly<
 /** The height over the floor of what a scene frames: the middle of a robot */
 export const SUBJECT_HEIGHT = 1.2;
 
+/** A part of the screen, in screen pixels from its upper left corner */
+export interface ScreenRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * What an opening has to hold: a robot with what it wears on its head (and the badge of an
+ * employee that sleeps or is stuck, a little higher), and its arms at its sides. In floor units.
+ * Close enough that the neighbour at the next seat stays at the edge.
+ */
+export const OPENING_SUBJECT = { height: 2.9, width: 1.9 };
+
+/** The share of an opening that its subject fills: the rest is air around it */
+export const OPENING_FILL = 0.88;
+
+/** The closest an opening shows its subject, in screen pixels for one floor unit */
+export const OPENING_CLOSEST = 190;
+
+/**
+ * The view that shows a subject through an opening between the panels (the customization keeps
+ * one where its preview is, #1148): the whole robot inside it, as large as it fits, its middle
+ * at the middle of the opening. Null for an opening with no room in it (not laid out yet).
+ */
+export function openingView(
+  subject: FloorPoint,
+  opening: ScreenRect,
+  size: ScreenSize
+): View3D | null {
+  if (opening.w <= 0 || opening.h <= 0) return null;
+  // A height over the floor shows 2/sqrt(6) as tall on the screen; a width shows as it is
+  const tall = (2 * OPENING_SUBJECT.height) / SQRT6;
+  const scale = Math.min(
+    (opening.h * OPENING_FILL) / tall,
+    (opening.w * OPENING_FILL) / OPENING_SUBJECT.width,
+    OPENING_CLOSEST
+  );
+  return {
+    target: subject,
+    pxPerUnit: scale,
+    pan: {
+      x: opening.x + opening.w / 2 - size.w / 2,
+      // The middle of the robot (half its height over the floor) at the middle of the opening
+      y: opening.y + opening.h / 2 - size.h / 2 + (OPENING_SUBJECT.height / SQRT6) * scale,
+    },
+    size,
+  };
+}
+
 /**
  * What the camera shows in a scene. On the floor it is the zoom and the drag of the president;
  * in a conversation, a room or the customization it is the scene's subject (an employee, or the
- * desk of the room's employee) at the scene's place on the screen. Without a subject, the floor.
+ * desk of the room's employee) at the scene's place on the screen, or inside the opening the
+ * scene keeps clear for it. Without a subject, the floor.
  */
 export function stageView(
   stage: Stage3D,
@@ -124,6 +176,7 @@ export function stageView(
     pan,
     followed,
     subject,
+    opening = null,
   }: {
     size: ScreenSize;
     zoom: number;
@@ -132,11 +185,15 @@ export function stageView(
     followed: FloorPoint | null;
     /** What the scene is about, for the other scenes */
     subject: FloorPoint | null;
+    /** The part of the screen the scene keeps clear for its subject, if it has one */
+    opening?: ScreenRect | null;
   }
 ): View3D {
   if (stage === 'world' || !subject) {
     return { target: viewTarget(zoom, followed), pxPerUnit: pxPerUnit(size, zoom), pan, size };
   }
+  const through = opening ? openingView(subject, opening, size) : null;
+  if (through) return through;
   const frame = STAGE_FRAMES[stage];
   const scale = pxPerUnit(size, frame.close, HOME_CLOSE_UP);
   return {

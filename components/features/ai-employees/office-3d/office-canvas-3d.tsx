@@ -19,6 +19,7 @@ import {
   CAMERA_OFFSET,
   FLOOR_MIDDLE,
   type ScreenPoint,
+  type ScreenRect,
   type Stage3D,
   type View3D,
   cameraPosition,
@@ -166,6 +167,7 @@ function Walker({
 function CameraRig({
   stage,
   subject,
+  opening,
   zoom,
   pan,
   still,
@@ -177,6 +179,8 @@ function CameraRig({
   stage: Stage3D;
   /** What a scene other than the floor is about */
   subject: FloorPoint | null;
+  /** The part of the screen the scene keeps clear for its subject */
+  opening: ScreenRect | null;
   zoom: number;
   pan: ScreenPoint;
   /** Less motion: the camera jumps instead of gliding */
@@ -215,6 +219,10 @@ function CameraRig({
     stage,
     subject?.x,
     subject?.y,
+    opening?.x,
+    opening?.y,
+    opening?.w,
+    opening?.h,
     zoom,
     pan.x,
     pan.y,
@@ -224,12 +232,16 @@ function CameraRig({
   ]);
 
   useFrame((_, delta) => {
+    const followed = follow();
     const goal = stageView(stage, {
       size: { w: size.width, h: size.height },
       zoom,
       pan,
-      followed: follow(),
-      subject,
+      followed,
+      // Through an opening the employee itself is shown, also while it is still on its way to
+      // where its status puts it: never an empty opening
+      subject: opening && followed ? followed : subject,
+      opening,
     });
     const from = shown.current;
     let view: View3D;
@@ -289,6 +301,7 @@ export default function OfficeCanvas3D({
   night,
   stage = 'world',
   subject = null,
+  opening = null,
   attentive = null,
   zoom = 1,
   pan = NO_PAN,
@@ -309,6 +322,8 @@ export default function OfficeCanvas3D({
   stage?: Stage3D;
   /** What a conversation, a room or the customization is about: where the camera goes */
   subject?: FloorPoint | null;
+  /** The part of the screen the scene keeps clear between its panels: the subject shows in it */
+  opening?: ScreenRect | null;
   /** The employee the president talks to: it turns to the viewer */
   attentive?: AiEmployeeRole | null;
   zoom?: number;
@@ -349,6 +364,7 @@ export default function OfficeCanvas3D({
       <CameraRig
         stage={stage}
         subject={subject}
+        opening={opening}
         zoom={zoom}
         pan={pan}
         still={reducedMotion}

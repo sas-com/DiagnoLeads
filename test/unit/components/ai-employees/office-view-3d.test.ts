@@ -7,12 +7,15 @@ import {
   FLOOR_MIDDLE,
   FLOOR_SPAN,
   FOLLOW_FROM,
+  OPENING_CLOSEST,
+  OPENING_SUBJECT,
   STAGE_FRAMES,
   SUBJECT_HEIGHT,
   type View3D,
   cameraPosition,
   easeTarget,
   easeView,
+  openingView,
   stageView,
   projectFloor,
   pxPerUnit,
@@ -222,6 +225,65 @@ describe('stageView (#1148)', () => {
     expect(stageView('talk', { size, zoom: 1, pan, followed: null, subject: null })).toEqual(
       stageView('world', { size, zoom: 1, pan, followed: null, subject: null })
     );
+  });
+});
+
+describe('openingView (#1148)', () => {
+  const subject = { x: 2.1, y: 12.05 };
+  // The opening of the customization, as it is laid out on three screens: left, over the panel
+  const screens = [
+    { size: { w: 1280, h: 720 }, opening: { x: 24, y: 80, w: 416, h: 300 } },
+    { size: { w: 1440, h: 900 }, opening: { x: 24, y: 80, w: 416, h: 470 } },
+    { size: { w: 1920, h: 1080 }, opening: { x: 24, y: 80, w: 416, h: 650 } },
+    // A narrow screen: the opening is as wide as the screen and low
+    { size: { w: 800, h: 900 }, opening: { x: 16, y: 80, w: 768, h: 224 } },
+  ];
+
+  it('shows the whole robot inside the opening, its middle at the middle of it', () => {
+    for (const { size, opening } of screens) {
+      const view = openingView(subject, opening, size);
+      if (!view) throw new Error('no view');
+      const middle = projectFloor(subject, OPENING_SUBJECT.height / 2, view);
+      expect(middle.x).toBeCloseTo(opening.x + opening.w / 2, 6);
+      expect(middle.y).toBeCloseTo(opening.y + opening.h / 2, 6);
+      // From the floor under it to what floats over its head
+      const feet = projectFloor(subject, 0, view);
+      const top = projectFloor(subject, OPENING_SUBJECT.height, view);
+      expect(top.y).toBeGreaterThan(opening.y);
+      expect(feet.y).toBeLessThan(opening.y + opening.h);
+      // And its arms: half the width to each side of the middle
+      const reach = (OPENING_SUBJECT.width / 2) * view.pxPerUnit;
+      expect(middle.x - reach).toBeGreaterThan(opening.x);
+      expect(middle.x + reach).toBeLessThan(opening.x + opening.w);
+      expect(view.pxPerUnit).toBeLessThanOrEqual(OPENING_CLOSEST);
+      expect(view.target).toEqual(subject);
+    }
+  });
+
+  it('shows it as large as the opening allows: a taller opening, a larger robot', () => {
+    const size = { w: 1440, h: 900 };
+    const low = openingView(subject, { x: 24, y: 80, w: 416, h: 240 }, size);
+    const tall = openingView(subject, { x: 24, y: 80, w: 416, h: 420 }, size);
+    expect(tall?.pxPerUnit).toBeGreaterThan(low?.pxPerUnit ?? Number.POSITIVE_INFINITY);
+  });
+
+  it('has no view for an opening that is not laid out yet', () => {
+    const size = { w: 1440, h: 900 };
+    expect(openingView(subject, { x: 0, y: 0, w: 0, h: 0 }, size)).toBeNull();
+    expect(openingView(subject, { x: 24, y: 80, w: 416, h: 0 }, size)).toBeNull();
+  });
+
+  it('is what the customization shows once it has an opening, and only that scene’s frame before', () => {
+    const size = { w: 1440, h: 900 };
+    const opening = { x: 24, y: 80, w: 416, h: 470 };
+    const base = { size, zoom: 1, pan: { x: 0, y: 0 }, followed: null, subject };
+    expect(stageView('studio', { ...base, opening })).toEqual(openingView(subject, opening, size));
+    // Not laid out yet, or no opening at all (the 2D preview): the scene's own place
+    const framed = stageView('studio', base);
+    expect(stageView('studio', { ...base, opening: null })).toEqual(framed);
+    expect(stageView('studio', { ...base, opening: { x: 0, y: 0, w: 0, h: 0 } })).toEqual(framed);
+    // The floor never looks through an opening
+    expect(stageView('world', { ...base, opening })).toEqual(stageView('world', base));
   });
 });
 
