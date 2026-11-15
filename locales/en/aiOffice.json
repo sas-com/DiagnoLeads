@@ -559,7 +559,7 @@
           },
           "reportTruncated": "There are {open} open deals, {amount} in total. There are too many to list them all on the board, so please check in the deals of the normal view how many have to move this week and how many have no next action.",
           "closesOn": "Expected close {date}",
-          "closeLate": "Past the expected close"
+          "closeLate": "Late"
         },
         "dealFile": {
           "label": "Deal file of \"{name}\"",
