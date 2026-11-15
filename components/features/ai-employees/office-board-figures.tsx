@@ -54,7 +54,6 @@ function FigureBoard({
   hint,
   links,
   boardRef,
-  busy = false,
   onLeave,
   children,
 }: {
@@ -72,8 +71,6 @@ function FigureBoard({
   hint: string;
   links: BoardLink[];
   boardRef?: MutableRefObject<HTMLElement | null>;
-  /** A part of the board is still reading, although the board itself shows */
-  busy?: boolean;
   /** A page of the normal view is opened: the office closes */
   onLeave: () => void;
   children: ReactNode;
@@ -84,7 +81,7 @@ function FigureBoard({
     <section
       ref={boardRef}
       aria-label={title}
-      aria-busy={state === 'loading' || busy}
+      aria-busy={state === 'loading'}
       className={ROOM_BOARD}
     >
       <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
@@ -289,10 +286,16 @@ export function OfficeBoardSources({
           <p>{uncosted > 0 ? tSources('uncosted', { count: uncosted }) : tSources('costed')}</p>
           {returns && <p>{tSources('returns')}</p>}
           {opens && (
-            <p id={openHintId}>
+            <p>
               {tSources('openHint', { days: MARKETING_RANGE_DAYS })}
               {/* Only when there is such a row: no source recorded, or a value of long ago */}
               {closedRows && tSources('openHintClosed')}
+              {/* What a row that opens is described by: one short sentence, since a screen
+                  reader says it at every row the arrows move to. The note above is for the eye
+                  (it speaks of the underline), so it is not the description. */}
+              <span id={openHintId} className="sr-only">
+                {tSources('openDescription', { days: MARKETING_RANGE_DAYS })}
+              </span>
             </p>
           )}
         </>
@@ -340,6 +343,7 @@ export function OfficeBoardSources({
                   name={label(row.source)}
                   source={openableSource(row.source)}
                   hintId={openHintId}
+                  closedLabel={tSources('closedRow')}
                   onOpen={onOpenSource}
                 />
               </th>
@@ -474,22 +478,33 @@ export function OfficeBoardProgress({
 /**
  * The name of a source in its row: a button when the lead list can show its prospects. Its name
  * is the source alone, as it is written (a table is read cell by cell, and a long name would be
- * repeated with every figure); what opening does is said once, by the note under the table.
+ * repeated with every figure); what opening does is its description, one short sentence. A row
+ * that cannot be opened says so to a screen reader, which does not see the missing underline.
  */
 function SourceName({
   name,
   source,
   hintId,
+  closedLabel,
   onOpen,
 }: {
   name: string;
   /** Null when the lead list has no filter for the row (no source recorded) */
   source: InflowSource | null;
-  /** The note that says what opening a row does */
+  /** The short sentence that says what opening a row does */
   hintId: string;
+  /** Said after the name of a row that cannot be opened, for a screen reader */
+  closedLabel: string;
   onOpen: (source: InflowSource) => void;
 }) {
-  if (!source) return <>{name}</>;
+  if (!source) {
+    return (
+      <>
+        {name}
+        <span className="sr-only">{closedLabel}</span>
+      </>
+    );
+  }
   return (
     <button
       type="button"
@@ -512,6 +527,7 @@ function CampaignSection({
   title,
   period,
   state,
+  reading = false,
   emptyText,
   children,
 }: {
@@ -519,13 +535,16 @@ function CampaignSection({
   /** The period of the table, in brackets: read out after the title as one name */
   period: string;
   state: FigureState;
+  /** A part of the table is still on its way, although its rows show */
+  reading?: boolean;
   emptyText?: string;
   children: ReactNode;
 }) {
   const t = useTranslations('aiOffice.immersive.room.marketing');
   return (
-    // As wide as its table, so the heading can stay in place while the table scrolls sideways
-    <div className="w-fit min-w-full py-3">
+    // As wide as its table, so the heading can stay in place while the table scrolls sideways.
+    // Busy is said for this part only: the other figures of the board can be read meanwhile.
+    <div className="w-fit min-w-full py-3" aria-busy={state === 'loading' || reading}>
       <h3 className="sticky left-0 w-fit text-base font-bold">
         {title}
         <span className="text-xs font-normal text-[#d8d2c4]">{period}</span>
@@ -596,7 +615,6 @@ export function OfficeBoardCampaigns({
       title={tBoard('board')}
       summary={tBoard('summary', { days })}
       state={forbidden ? 'forbidden' : 'ready'}
-      busy={qrState === 'loading' || agencyState === 'loading' || breakdownReading}
       hint={tBoard('hint')}
       links={[
         { href: '/settings/qr-campaigns', label: tBoard('openQr') },
@@ -621,10 +639,15 @@ export function OfficeBoardCampaigns({
         title={tBoard('qr.title')}
         period={tBoard('qr.period')}
         state={qrState}
+        reading={breakdownReading}
         emptyText={qrState === 'ready' && qrRows.length === 0 ? tBoard('qr.empty') : undefined}
       >
         <table className={TABLE}>
           <caption className="sr-only">{tBoard('qr.caption')}</caption>
+          {/* The groups the head of two rows speaks of: scope="colgroup" needs them */}
+          <colgroup span={4} />
+          <colgroup span={2} />
+          <colgroup span={1} />
           <thead>
             <tr>
               <th scope="col" rowSpan={2} className={cn(HEAD, FIRST, 'text-left align-bottom')}>

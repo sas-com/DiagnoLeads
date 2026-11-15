@@ -913,10 +913,13 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
   it('names a row that opens by its source alone, and says what opening does once', async () => {
     const { office } = await enterMarketing();
     const row = within(office).getByRole('button', { name: '勉強会・セミナー' });
-    // What opening does is the note under the table, said as the description of each row
-    expect(row).toHaveAccessibleDescription(
-      '流入元の行を開くと、その流入元の過去30日の見込み客が見込み客ボードに出ます。下線の無い行（流入元の記録なしなど）は開けません。'
-    );
+    // One short sentence, said at every row the arrows move to: not the whole note, which
+    // speaks of the underline and of the rows that do not open
+    expect(row).toHaveAccessibleDescription('過去30日の見込み客を見込み客ボードに出します');
+    // A row that cannot be opened says so to a screen reader
+    expect(
+      within(office).getByRole('rowheader', { name: '流入元の記録なし（開けません）' })
+    ).toBeInTheDocument();
   });
 
   it('shows the prospects of that source in the same period, asked from leads.list', async () => {
@@ -1101,8 +1104,14 @@ describe('the campaign board (#1201)', () => {
       '…読み込んでいます',
     ]);
     expect(within(board).getByText('内訳を読んでいます。')).toBeInTheDocument();
-    // A part of the board is still reading: the board says so
-    expect(board).toHaveAttribute('aria-busy', 'true');
+    // That part of the board is still reading, and says so; the rest can be read meanwhile
+    const qr = within(board).getByRole('heading', { name: 'QR キャンペーン（作成からの累計）' });
+    expect(qr.parentElement).toHaveAttribute('aria-busy', 'true');
+    expect(board).toHaveAttribute('aria-busy', 'false');
+    expect(
+      within(board).getByRole('heading', { name: '代行会社（過去30日に登録された見込み客）' })
+        .parentElement
+    ).toHaveAttribute('aria-busy', 'false');
   });
 
   it('says that there is no campaign and no agency, each in its place', async () => {

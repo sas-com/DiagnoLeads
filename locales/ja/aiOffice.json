@@ -327,7 +327,9 @@
             "openHint": "流入元の行を開くと、その流入元の過去{days}日の見込み客が見込み客ボードに出ます。",
             "leadsOf": "流入元：{source}・過去{days}日",
             "back": "流入元ボードに戻る",
-            "openHintClosed": "下線の無い行（流入元の記録なしなど）は開けません。"
+            "openHintClosed": "下線の無い行（流入元の記録なしなど）は開けません。",
+            "openDescription": "過去{days}日の見込み客を見込み客ボードに出します",
+            "closedRow": "（開けません）"
           },
           "funnel": {
             "board": "進み具合ボード",

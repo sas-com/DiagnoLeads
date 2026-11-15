@@ -327,7 +327,9 @@
             "openHint": "Opening the row of a source shows its prospects of the last {days} days on the lead board.",
             "leadsOf": "Source: {source}, last {days} days",
             "back": "Back to the source board",
-            "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened."
+            "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened.",
+            "openDescription": "Shows its prospects of the last {days} days on the lead board",
+            "closedRow": " (cannot be opened)"
           },
           "funnel": {
             "board": "Progress board",

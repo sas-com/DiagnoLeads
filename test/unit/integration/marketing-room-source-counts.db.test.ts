@@ -26,7 +26,7 @@ import { appRouter } from '@/server/routers/_app';
 import { inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/db/rls', () => ({ setCurrentUser: vi.fn().mockResolvedValue(undefined) }));
 
@@ -44,9 +44,10 @@ describe.skipIf(!url)('source board counts and the lead board opened from a row 
   // biome-ignore lint/suspicious/noExplicitAny: tRPC caller
   let caller: any;
 
-  // The room fixes its clock when it opens; the analytics API reads its own. Both are "now":
-  // the rows are placed around the start of the period that this clock gives.
-  const now = new Date();
+  // The room fixes its clock when it opens; the analytics API takes no "now" and reads its own.
+  // Date is fixed to the same instant for both (see beforeEach), so the two periods are the same
+  // whenever the test runs, also across midnight in Japan. A Saturday afternoon in Japan:
+  const now = new Date('2026-11-14T06:00:00Z');
   // biome-ignore lint/style/noNonNullAssertion: '30d' always has a start
   const from = analyticsPeriodStart(MARKETING_RANGE, now)!;
   const HOUR = 60 * 60 * 1000;
@@ -130,6 +131,14 @@ describe.skipIf(!url)('source board counts and the lead board opened from a row 
       lead('advertising', new Date(from.getTime() + HOUR), otherOrgId),
     ]);
   });
+
+  // Only Date is faked, so the database client's timers keep running
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(now);
+  });
+
+  afterEach(() => vi.useRealTimers());
 
   afterAll(async () => {
     if (organizationIds.length > 0) {
