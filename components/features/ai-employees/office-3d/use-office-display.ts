@@ -17,10 +17,10 @@ import {
 } from './office-display';
 
 /**
- * Why the office shows the 2D floor although 3D was wanted: it could not be shown (the chunk, a
- * render error), it was too slow on this device, or this browser gives no WebGL at all
+ * Why the office just went back to the 2D floor: the 3D one could not be shown (the chunk, no
+ * WebGL, a render error), or it was too slow on this device. Said on the visit it happens only
  */
-export type DisplayNote = 'failed' | 'slow' | 'unavailable';
+export type DisplayNote = 'failed' | 'slow';
 
 /** The storage of this browser, or null where it may not be touched (private mode, a sandbox) */
 function browserStorage(): Storage | null {
@@ -35,7 +35,7 @@ function browserStorage(): Storage | null {
  * Which floor the full-screen office shows (#1150), for the office to keep in one place: it
  * starts with what this device remembers (else the default), remembers what the person chooses,
  * and watches once how fast the 3D floor is drawn, so a slow device gets the 2D floor and is
- * told so. The rules are the pure functions of office-display.ts.
+ * told so, once. The rules are the pure functions of office-display.ts.
  */
 export function useOfficeDisplay({ reducedMotion }: { reducedMotion: boolean }) {
   const [threeD, setThreeD] = useState(false);
@@ -56,14 +56,9 @@ export function useOfficeDisplay({ reducedMotion }: { reducedMotion: boolean }) 
     const wanted = stored?.display ?? DEFAULT_DISPLAY;
     // Asked only where 3D is wanted: a browser that starts in 2D is not asked for a context
     const webgl = fits && wanted === '3d' && webglAvailable();
-    if (firstDisplay({ stored, fits, webgl, preferred: DEFAULT_DISPLAY }) === '3d') {
-      setThreeD(true);
-    } else if (fits && wanted === '3d') {
-      setNote('unavailable');
-    } else if (fits && stored?.reason === 'slow') {
-      // 2D because 3D was slow here last time: said again, with the way to try once more
-      setNote('slow');
-    }
+    // Where it starts in 2D instead (too slow here last time, or no WebGL) nothing is said: the
+    // reason was given on the visit it happened, and a screen opened every day does not repeat it
+    if (firstDisplay({ stored, fits, webgl, preferred: DEFAULT_DISPLAY }) === '3d') setThreeD(true);
   }, []);
 
   // A page that was hidden drew nothing meanwhile: the count starts over when it comes back

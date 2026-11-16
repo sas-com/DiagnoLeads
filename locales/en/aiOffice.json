@@ -989,8 +989,7 @@
         },
         "loading": "Loading the 3D floor.",
         "failed": "The 3D floor could not be shown. The office is back in 2D.",
-        "slow": "3D draws slowly on this device, so the office is shown in 2D. Press \"3D view\" (the V key) to try it again.",
-        "unavailable": "This browser cannot show 3D, so the office is shown in 2D."
+        "slow": "3D draws slowly on this device, so the office is shown in 2D. Press \"3D view\" (the V key) to try it again."
       },
       "walkingTo": "On the way to {room}",
       "feelings": {

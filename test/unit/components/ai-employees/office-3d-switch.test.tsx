@@ -25,6 +25,10 @@ const mocks = vi.hoisted(() => ({
   statuses: [] as string[],
   vacant: [] as string[],
   walks: null as null | ((role: string, walking: boolean) => void),
+  // How often the canvas rendered, and what it was given to report the frame rate (#1270)
+  canvasRenders: 0,
+  reportFps: null as null | ((fps: number) => void),
+  reporters: new Set<unknown>(),
   scene: null as null | {
     stage?: string;
     subject?: { x: number; y: number } | null;
@@ -61,6 +65,9 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
     mocks.statuses = employees.map((employee) => employee.status);
     mocks.vacant = [...(vacant ?? [])];
     mocks.walks = onWalking ?? null;
+    mocks.canvasRenders += 1;
+    mocks.reportFps = onFps ?? null;
+    mocks.reporters.add(onFps);
     mocks.scene = { stage, subject, attentive, events };
     useEffect(() => {
       if (!mocks.draws) return;
@@ -431,11 +438,12 @@ describe('the floor the office starts with, and what this device remembers (#115
       reason: 'slow',
     });
 
-    // The next visit starts in 2D and says why, with the way to try again
+    // The next visit starts in 2D, and does not say it again: the reason was given once
     cleanup();
     const next = await enterOffice();
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
-    expect(within(next.office).getByText(slowNote)).toBeInTheDocument();
+    expect(within(next.office).queryByText(slowNote)).not.toBeInTheDocument();
+    expect(within(next.office).getByRole('button', { name: /3D 表示/ })).toBeInTheDocument();
   });
 
   it('leaves 3D on once the person chose it, however slowly it is drawn', async () => {
@@ -474,13 +482,12 @@ describe('the floor the office starts with, and what this device remembers (#115
     expect(within(office).queryByText(slowNote)).not.toBeInTheDocument();
   });
 
-  it('starts in 2D and says so where the browser gives no WebGL, without loading the 3D floor', async () => {
+  it('starts in 2D, quietly, where the browser gives no WebGL, without loading the 3D floor', async () => {
     withWebgl(false);
     const { office } = await enterOffice();
-    expect(
-      within(office).getByText('このブラウザでは 3D を表示できないため、2D で表示しています。')
-    ).toBeInTheDocument();
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    // Nothing to read every day: the office says so when someone asks for 3D and it fails
+    expect(within(office).queryByRole('status')).not.toBeInTheDocument();
     // Nothing is remembered: another browser on this device may well show it
     expect(window.localStorage.getItem(KEY)).toBeNull();
   });
@@ -496,3 +503,47 @@ describe('the floor the office starts with, and what this device remembers (#115
     errors.mockRestore();
   });
 });
+
+describe('the frame rate of the 3D floor (#1270)', () => {
+  beforeEach(() => {
+    mocks.trial = false;
+    mocks.breaks = false;
+    mocks.draws = true;
+    mocks.fps = [42];
+    mocks.preferred = '2d';
+    window.localStorage.clear();
+    mocks.canvasRenders = 0;
+    mocks.reportFps = null;
+    mocks.reporters = new Set();
+  });
+
+  it('shows each new figure without rendering the office or the canvas again', async () => {
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    expect(await within(office).findByText('毎秒 42 コマ')).toBeInTheDocument();
+    const renders = mocks.canvasRenders;
+
+    act(() => mocks.reportFps?.(55));
+    expect(within(office).getByText('毎秒 55 コマ')).toBeInTheDocument();
+    act(() => mocks.reportFps?.(31));
+    expect(within(office).getByText('毎秒 31 コマ')).toBeInTheDocument();
+    // The figure lives outside the office's state: nothing above the line rendered again
+    expect(mocks.canvasRenders).toBe(renders);
+    // and the canvas was always given the same function to report with
+    expect(mocks.reporters.size).toBe(1);
+  });
+
+  it('forgets the figure when the 3D floor is left, and waits for a new one when it comes back', async () => {
+    mocks.draws = true;
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await within(office).findByText('毎秒 42 コマ');
+    await user.keyboard('v');
+    expect(within(office).queryByText(/毎秒 \d+ コマ/)).not.toBeInTheDocument();
+    mocks.draws = false;
+    await user.keyboard('v');
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(within(office).queryByText(/毎秒 \d+ コマ/)).not.toBeInTheDocument();
+  });
+});
+
