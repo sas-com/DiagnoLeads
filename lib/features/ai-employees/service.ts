@@ -9,6 +9,7 @@ import { aiEmployeeRuns, aiEmployees } from '@/lib/db/schema';
 import { jstDay } from '@/lib/jst';
 import { type SQL, and, desc, eq, gte, sql } from 'drizzle-orm';
 import { type DeskStatus, deskStatus } from './office';
+import { TRAINING_LEVEL } from './types/levels';
 import {
   type AiEmployeeProfile,
   type AiEmployeeProfilePatch,
@@ -140,7 +141,7 @@ export async function getOffice(
       createdAt: employee.createdAt,
       deskStatus: deskStatus({
         hasWork: roleHasWork(employee.role),
-        employee: { status },
+        employee: { status, onboarded: employee.level > TRAINING_LEVEL },
         lastRun,
         now,
       }),

@@ -37,7 +37,9 @@ const NOW = new Date('2026-11-13T01:30:00Z');
 describe('the rooms', () => {
   it('each belong to a role and are entered with their own key', () => {
     for (const room of OFFICE_ROOMS) {
-      expect(AI_EMPLOYEE_ROLES).toContain(ROOM_ROLES[room]);
+      // The training room is everyone's (#1191)
+      if (room === 'training') expect(ROOM_ROLES[room]).toBeNull();
+      else expect(AI_EMPLOYEE_ROLES).toContain(ROOM_ROLES[room]);
       expect(roomOfKey(ROOM_KEYS[room])).toBe(room);
     }
     expect(new Set(OFFICE_ROOMS.map((room) => ROOM_KEYS[room])).size).toBe(OFFICE_ROOMS.length);
@@ -59,9 +61,17 @@ describe('the rooms', () => {
 });
 
 describe('the places of the floor guide (#1162)', () => {
-  it('are the five places of the work, on the keys 1 to 5 in that order', () => {
-    expect(FLOOR_PLACES).toEqual(['desk', 'marketing', 'sales', 'engineering', 'backoffice']);
-    expect(FLOOR_PLACES.map((place) => PLACE_KEYS[place])).toEqual(['1', '2', '3', '4', '5']);
+  it('are the places of the work, on the keys 1 to 6 in that order (the training room on 6, #1191)', () => {
+    expect(FLOOR_PLACES).toEqual([
+      'desk',
+      'marketing',
+      'sales',
+      'engineering',
+      'backoffice',
+      'training',
+    ]);
+    expect(FLOOR_PLACES.map((place) => PLACE_KEYS[place])).toEqual(['1', '2', '3', '4', '5', '6']);
+    expect(roomOfKey('6')).toBe('training');
     for (const place of FLOOR_PLACES) expect(placeOfKey(PLACE_KEYS[place])).toBe(place);
   });
 
@@ -84,7 +94,7 @@ describe('the places of the floor guide (#1162)', () => {
   });
 
   it('are not opened by the keys of the camera or by other keys', () => {
-    for (const key of ['0', '+', '-', 'e', 'E', 'Enter', '6', '9']) expect(placeOfKey(key)).toBeNull();
+    for (const key of ['0', '+', '-', 'e', 'E', 'Enter', '7', '9']) expect(placeOfKey(key)).toBeNull();
   });
 });
 
