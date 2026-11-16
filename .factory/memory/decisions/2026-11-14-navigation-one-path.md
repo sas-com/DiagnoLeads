@@ -5,8 +5,8 @@ category: UI
 title: "導線を1本にそろえる。入口は出社の画面・フロア案内に5つの場所（未完成は今のページへの扉）・管理画面は残して部屋にそろえる・ダッシュボードは今日に統合（Epic #1161）"
 status: active
 superseded_by: []
-issues: [1161, 1162, 1163, 1164]
-paths: ["components/features/ai-employees/office-rooms.ts", "components/layout/AppSidebar.tsx", "lib/routes/home.ts"]
+issues: [1161, 1162, 1163, 1164, 1176]
+paths: ["components/features/ai-employees/office-rooms.ts", "components/layout/AppSidebar.tsx", "lib/routes/home.ts", "components/features/today/today-screen.tsx", "components/dashboard/team-review.tsx", "app/[locale]/(dashboard)/dashboard/page.tsx"]
 ---
 
 ### [UI] 導線を1本にそろえる。入口は出社の画面・フロア案内に5つの場所（未完成は今のページへの扉）・管理画面は残して部屋にそろえる・ダッシュボードは今日に統合（Epic #1161）
@@ -33,4 +33,9 @@ paths: ["components/features/ai-employees/office-rooms.ts", "components/layout/A
 - **却下案**:
   - 開発室を商談の「現状把握・提案」の段に絞る：商談の画面に段で絞る仕組みが無く、足すと範囲が広がる。エンジニアの役目（現行システムの調査）に合う「現行調査」の種類の絞り込み（既にある `kind`）にした
   - 管理画面を段階的に無くす：作る量が大きく、スマホと読み上げの代わりが要る（オーナーが残すほうを選んだ）
+- **ダッシュボードの統合**（#1164。オーナーの判断 2026-11-14、こちらの推奨）: 今日は「自分の分」、ダッシュボードは「チーム全体」の画面だった。ダッシュボードにしか無い項目は、こう移した
+  - 動く項目（連絡待ちの相談申込・新着リード・使い始めのチェックリスト）は、今日のいちばん上（自分の分の上）に置く。相談申込と新着リードは組織全体の分
+  - 振り返りの数字（状況・期間の分析・次回日程の決定率・パイプライン）は、分析の画面のいちばん上に「チームの振り返り」（`TeamReview`）として置き、画面の期間に合わせる（全期間のときは90日）
+  - `/dashboard` は今日へ転送する（古いリンクとブックマークのため。言語は `supportedLocaleOr` で確かめてから使う）。表示のカスタマイズ（並べ替え・非表示）は無くした
+  - 重なる項目（次の行動の期限・今週の商談）は、今日の自分の分を使う。ダッシュボードにあった「全員」の見方の置き場所は #1176 で決める
 - **ほかの決定への影響**: `2026-11-13-office-is-the-base` の「まだ決まっていないこと」のうち「従来の一覧の画面を残すか」は、この決定で「残して部屋にそろえる」に決まった

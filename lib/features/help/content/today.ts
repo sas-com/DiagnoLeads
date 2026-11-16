@@ -5,9 +5,9 @@ export const todayArticle: HelpArticle = {
   locale: 'ja',
   title: '今日',
   summary:
-    '自分の今日の予定と、やることをまとめて見ます。朝に開いて、上から順に片付けていく使い方を想定しています。',
+    '今日の予定と、やることをまとめて見ます。いちばん上にチームで対応する連絡待ちの相談申込と新着リード、その下に自分の次の行動・商談予定・商談・今日の活動が並びます。朝に開いて、上から順に片付けていく使い方を想定しています。出社の画面の「社長のデスク」（1 キー）からも開きます。',
   routes: ['/today'],
-  reviewedAt: '2026-11-10',
+  reviewedAt: '2026-11-14',
   related: ['workflow-lifecycle'],
   blocks: [
     { type: 'h2', id: 'sections', text: '並んでいるもの' },
@@ -78,9 +78,46 @@ export const todayArticle: HelpArticle = {
       type: 'note',
       tone: 'tip',
       content: [
-        { type: 'text', text: '組織全体の状況（連絡待ちの相談申込や数字）は' },
-        { type: 'link', text: 'ダッシュボード', href: '/dashboard' },
-        { type: 'text', text: 'で見ます。' },
+        { type: 'text', text: 'チームの数字（期間の推移・次回日程の決定率・パイプライン）は' },
+        { type: 'link', text: '分析', href: '/analytics' },
+        {
+          type: 'text',
+          text: 'の画面のいちばん上で見ます。前のダッシュボードの数字も、そこに移りました。',
+        },
+      ],
+    },
+    { type: 'h2', id: 'pending', text: '連絡待ちの相談申込' },
+    {
+      type: 'p',
+      content:
+        '相談申込のあったリードを、連絡の期限の近い順に並べます。期限は申込から数えた営業日で、過ぎたものは「営業日超過」と出ます。',
+    },
+    {
+      type: 'ul',
+      items: [
+        [
+          { type: 'ui', text: '電話した' },
+          { type: 'text', text: '・' },
+          { type: 'ui', text: 'メールした' },
+          { type: 'text', text: 'を記録すると一覧から外れます。' },
+        ],
+        [
+          { type: 'ui', text: 'つながらなかった' },
+          { type: 'text', text: 'を記録しても一覧に残ります。不通の回数が増えていきます。' },
+        ],
+      ],
+    },
+    { type: 'h2', id: 'checklist', text: 'はじめにやること' },
+    {
+      type: 'p',
+      content:
+        '使い始めの間は、画面の上に役割に合ったチェックリストが出ます。オーナー・管理者には組織の設定（窓口・メンバーの招待・営業の手引きなど）、メンバーには使い方の最初の一歩が並びます。',
+    },
+    {
+      type: 'ul',
+      items: [
+        '窓口・招待・営業の手引き・営業代行リンクは、設定が済むと自動で「済み」になります。ほかの項目は「済みにする」を押します。',
+        '×で閉じると、そのブラウザでは次から出ません。',
       ],
     },
     {

@@ -49,7 +49,6 @@ describe('the side menu (#1163)', () => {
       within(within(nav).getByRole('heading', { name }).parentElement as HTMLElement);
     expect(section('社長のデスク').getAllByRole('link').map((link) => link.textContent)).toEqual([
       '今日',
-      'ダッシュボード',
     ]);
     expect(
       section('マーケティング室').getAllByRole('link').map((link) => link.textContent)
