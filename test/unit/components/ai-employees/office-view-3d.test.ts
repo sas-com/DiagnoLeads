@@ -19,7 +19,7 @@ import {
   viewTarget,
 } from '@/components/features/ai-employees/office-3d/office-view-3d';
 import { FLOOR_DEPTH, FLOOR_WIDTH } from '@/components/features/ai-employees/office-map-layout';
-import { HOME_CLOSE_UP } from '@/components/features/ai-employees/office-president';
+import { HOME_CLOSE_UP, homeCloseUp } from '@/components/features/ai-employees/office-president';
 import { describe, expect, it } from 'vitest';
 
 const size = { w: 1440, h: 900 };
@@ -33,16 +33,19 @@ const view = (over: Partial<View3D> = {}): View3D => ({
 
 describe('pxPerUnit', () => {
   it('starts as close as the 2D office, and fits the whole floor when stepped back', () => {
-    const whole = pxPerUnit(size, 1 / HOME_CLOSE_UP);
+    const closeUp = homeCloseUp(size);
+    const whole = pxPerUnit(size, 1 / closeUp);
     // The span of floor units the screen holds fits into the screen, both ways
     expect(whole * FLOOR_SPAN.w).toBeLessThanOrEqual(size.w + 0.001);
     expect(whole * FLOOR_SPAN.h).toBeLessThanOrEqual(size.h + 0.001);
-    expect(pxPerUnit(size, 1)).toBeCloseTo(whole * HOME_CLOSE_UP);
+    expect(pxPerUnit(size, 1)).toBeCloseTo(whole * closeUp);
+    // A scene other than the floor names its close-up: the same on any screen
+    expect(pxPerUnit(size, 2, HOME_CLOSE_UP)).toBeCloseTo(whole * HOME_CLOSE_UP * 2);
   });
 
   it('grows with the zoom and with the screen', () => {
     expect(pxPerUnit(size, 2)).toBeCloseTo(pxPerUnit(size, 1) * 2);
-    expect(pxPerUnit({ w: 2880, h: 1800 }, 1)).toBeCloseTo(pxPerUnit(size, 1) * 2);
+    expect(pxPerUnit({ w: 2880, h: 1800 }, 1, 1)).toBeCloseTo(pxPerUnit(size, 1, 1) * 2);
   });
 });
 
@@ -98,15 +101,16 @@ describe('projectFloor', () => {
   });
 
   it('starts with the far corners of the floor at the edges of the screen, like the 2D office', () => {
-    // At the starting zoom the left and right corners sit within a few pixels of the edges
-    const left = projectFloor({ x: 0, y: FLOOR_DEPTH }, 0, view());
-    const right = projectFloor({ x: FLOOR_WIDTH, y: 0 }, 0, view());
+    // At the closest starting zoom the left and right corners sit within a few pixels of the edges
+    const closest = view({ pxPerUnit: pxPerUnit(size, 1, HOME_CLOSE_UP) });
+    const left = projectFloor({ x: 0, y: FLOOR_DEPTH }, 0, closest);
+    const right = projectFloor({ x: FLOOR_WIDTH, y: 0 }, 0, closest);
     expect(Math.abs(left.x)).toBeLessThan(24);
     expect(Math.abs(right.x - size.w)).toBeLessThan(24);
   });
 
   it('keeps every corner of the floor on the screen when the whole floor is in view', () => {
-    const whole = view({ pxPerUnit: pxPerUnit(size, 1 / HOME_CLOSE_UP) });
+    const whole = view({ pxPerUnit: pxPerUnit(size, 1, 1) });
     for (const corner of [
       { x: 0, y: 0 },
       { x: FLOOR_WIDTH, y: 0 },

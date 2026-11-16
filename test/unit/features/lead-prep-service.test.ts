@@ -195,31 +195,38 @@ describe('getPrepDraftSource', () => {
 });
 
 describe('savePrepCard', () => {
+  const READ_AT = new Date('2026-10-15T00:00:00.123Z');
+
   it('writes nothing for a lead not in the organization', async () => {
     const { fake, db } = dbAnswering(new Map());
 
     expect(
       await savePrepCard(
         db,
-        { organizationId: ORG_ID, leadId: LEAD_ID, userId: USER_ID, card },
+        { organizationId: ORG_ID, leadId: LEAD_ID, userId: USER_ID, card, expectedUpdatedAt: null },
         NOW
       )
-    ).toBe(false);
+    ).toEqual({ status: 'not_found' });
 
     expect(fake.calls.map((call) => call.op)).toEqual(['select']);
     expect(sqlOf(fake.calls[0].where).params).toEqual([LEAD_ID, ORG_ID]);
   });
 
-  it("creates the card on the first save and replaces it after, in the lead's organization", async () => {
-    const { fake, db } = dbAnswering(new Map([[leads, [{ id: LEAD_ID }]]]));
+  it('creates the card when none was read, and never writes over one that is there (#1225)', async () => {
+    const { fake, db } = dbAnswering(
+      new Map<unknown, unknown[]>([
+        [leads, [{ id: LEAD_ID }]],
+        [leadPrepCards, [{ updatedAt: NOW }]],
+      ])
+    );
 
     expect(
       await savePrepCard(
         db,
-        { organizationId: ORG_ID, leadId: LEAD_ID, userId: USER_ID, card },
+        { organizationId: ORG_ID, leadId: LEAD_ID, userId: USER_ID, card, expectedUpdatedAt: null },
         NOW
       )
-    ).toBe(true);
+    ).toEqual({ status: 'saved', updatedAt: NOW });
 
     const write = callOn(fake, leadPrepCards);
     expect(write).toMatchObject({
@@ -234,13 +241,93 @@ describe('savePrepCard', () => {
         updatedAt: NOW,
       },
     });
-    // A later save keeps who created the card and when
-    expect(write.onConflict).toEqual({
-      type: 'update',
-      config: {
-        target: leadPrepCards.leadId,
-        set: { ...card, updatedBy: USER_ID, updatedAt: NOW },
-      },
+    // A card somebody created meanwhile stays as it is: the insert does nothing
+    expect(write.onConflict).toMatchObject({ type: 'nothing' });
+  });
+
+  it('says so when a card was created after the caller read that there was none', async () => {
+    // The insert did nothing: no row comes back
+    const { db } = dbAnswering(new Map([[leads, [{ id: LEAD_ID }]]]));
+
+    expect(
+      await savePrepCard(
+        db,
+        { organizationId: ORG_ID, leadId: LEAD_ID, userId: USER_ID, card, expectedUpdatedAt: null },
+        NOW
+      )
+    ).toEqual({ status: 'conflict' });
+  });
+
+  it('replaces the card only while it is as the caller read it, in the lead’s organization', async () => {
+    const { fake, db } = dbAnswering(
+      new Map<unknown, unknown[]>([
+        [leads, [{ id: LEAD_ID }]],
+        [leadPrepCards, [{ updatedAt: NOW }]],
+      ])
+    );
+
+    expect(
+      await savePrepCard(
+        db,
+        {
+          organizationId: ORG_ID,
+          leadId: LEAD_ID,
+          userId: USER_ID,
+          card,
+          expectedUpdatedAt: READ_AT,
+        },
+        NOW
+      )
+    ).toEqual({ status: 'saved', updatedAt: NOW });
+
+    const write = callOn(fake, leadPrepCards);
+    expect(write.op).toBe('update');
+    // Who created the card and when are kept
+    expect(write.set).toEqual({ ...card, updatedBy: USER_ID, updatedAt: NOW });
+    const where = sqlOf(write.where);
+    expect(where.sql).toBe(
+      '("lead_prep_cards"."lead_id" = $1 and "lead_prep_cards"."organization_id" = $2 and "lead_prep_cards"."updated_at" = $3)'
+    );
+    expect(where.params.slice(0, 2)).toEqual([LEAD_ID, ORG_ID]);
+    // The date compared is the one that was read, not the new one
+    expect(new Date(where.params[2] as string | Date).getTime()).toBe(READ_AT.getTime());
+  });
+
+  it('writes nothing over a card somebody saved since it was read', async () => {
+    // The update matched no row
+    const { db } = dbAnswering(new Map([[leads, [{ id: LEAD_ID }]]]));
+
+    expect(
+      await savePrepCard(
+        db,
+        {
+          organizationId: ORG_ID,
+          leadId: LEAD_ID,
+          userId: USER_ID,
+          card,
+          expectedUpdatedAt: READ_AT,
+        },
+        NOW
+      )
+    ).toEqual({ status: 'conflict' });
+  });
+
+  it('always moves updatedAt forward, also when the clock has not moved since the read', async () => {
+    const { fake, db } = dbAnswering(
+      new Map<unknown, unknown[]>([
+        [leads, [{ id: LEAD_ID }]],
+        [leadPrepCards, [{ updatedAt: new Date(NOW.getTime() + 1) }]],
+      ])
+    );
+
+    await savePrepCard(
+      db,
+      { organizationId: ORG_ID, leadId: LEAD_ID, userId: USER_ID, card, expectedUpdatedAt: NOW },
+      NOW
+    );
+
+    expect(callOn(fake, leadPrepCards).set).toMatchObject({
+      updatedAt: new Date(NOW.getTime() + 1),
     });
   });
 });

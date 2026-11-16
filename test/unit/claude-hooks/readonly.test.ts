@@ -77,8 +77,10 @@ describe('readOnlyViolation', () => {
     allowed('gh api --method GET search/issues -f q=repo:x && gh auth status');
     allowed('bun run test:run test/unit/claude-hooks && bun run typecheck && bun run lint');
     allowed('bun run test:run -- -t guard && npm run test:run -- test/unit/a.test.ts');
+    allowed('bun run verify && bun run verify --plan && bun run verify --full --maxWorkers=2');
     allowed('bunx vitest run test/unit/a.test.ts && bunx tsc --noEmit');
     allowed("bunx vitest run test/unit/a.test.ts -t 'name' --reporter=verbose --silent");
+    allowed('bunx vitest run --project unit --maxWorkers 2 --bail 1 --run -t=-negative');
     allowed('bunx @biomejs/biome check . && bun x vitest --run');
     allowed('curl -sS https://code.claude.com/docs/en/hooks.md | grep -n onFailure');
     allowed("curl -o /dev/null -w '%{http_code}' https://example.com && curl -sSL https://x/a.md");
@@ -322,6 +324,22 @@ describe('readOnlyViolation', () => {
     for (const command of [
       'bunx vitest run --outputFile=CLAUDE.md --reporter=json',
       'bun run test:run --outputFile CLAUDE.md',
+      'bun run verify --outputFile CLAUDE.md',
+      'bun run verify --plan --config /tmp/x.ts',
+      'bun run verify --update',
+      'bun run verify -- --config /tmp/x.ts',
+      'npm run verify --coverage',
+      // An option that takes a value does not swallow the next option (#1185)
+      'bunx vitest run --project --config /tmp/x.ts',
+      'bun run verify --maxWorkers --outputFile x',
+      'bunx vitest run -t --root /tmp',
+      'bun run test:run --exclude --setupFiles /tmp/x.ts',
+      'bunx vitest run --reporter --config x',
+      'bunx vitest run --project= init browser',
+      'bunx vitest run -ut',
+      // Only the leading -- is dropped; a later one would make vitest read init as the command
+      'npm run test -- -t a -t -- init browser',
+      'bun run test:run -t a -t -- init browser',
       'bunx vitest run --config /tmp/x.ts',
       'bunx vitest run --root /tmp',
       'bunx vitest run --coverage',

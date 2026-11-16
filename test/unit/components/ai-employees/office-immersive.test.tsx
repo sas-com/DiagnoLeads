@@ -22,6 +22,8 @@ const EMPLOYEE_ID = '770e8400-e29b-41d4-a716-446655440001';
 const mocks = vi.hoisted(() => ({
   hires: [] as unknown[],
   updates: [] as unknown[],
+  dismissals: [] as unknown[],
+  saving: false,
   invalidate: vi.fn(),
 }));
 
@@ -43,10 +45,24 @@ vi.mock('@/lib/trpc/client', () => ({
           isPending: false,
           mutate: (input: unknown) => {
             mocks.updates.push(input);
-            options.onSuccess?.({ id: EMPLOYEE_ID, name: 'AIセールス' }, input);
+            options.onSuccess?.(
+              { id: EMPLOYEE_ID, name: (input as { name?: string }).name ?? 'AIセールス' },
+              input
+            );
           },
         }),
       },
+      dismiss: {
+        useMutation: (options: { onSuccess?: () => void } = {}) => ({
+          isPending: mocks.saving,
+          isError: false,
+          mutate: (input: unknown) => {
+            mocks.dismissals.push(input);
+            options.onSuccess?.();
+          },
+        }),
+      },
+      runs: { useQuery: () => ({ isLoading: false, error: null, data: [] }) },
     },
   },
 }));
@@ -110,6 +126,8 @@ describe('OfficeImmersive', () => {
   beforeEach(() => {
     mocks.hires.length = 0;
     mocks.updates.length = 0;
+    mocks.dismissals.length = 0;
+    mocks.saving = false;
     mocks.invalidate.mockClear();
   });
 
@@ -164,21 +182,21 @@ describe('OfficeImmersive', () => {
       Array.from(guide.querySelectorAll('a, button')).map((entry) => entry.textContent)
     ).toEqual([
       '1社長のデスク今日の予定ページを開く',
-      '2マーケティング室リード管理',
-      '3営業フロア商談ページを開く',
-      '4開発室現行調査ページを開く',
-      '5総務・受付今日の期限',
+      '2マーケティング室集客と見込み客',
+      '3営業フロア商談',
+      '4開発室現行調査',
+      '5総務・受付総務の窓口',
     ]);
     expect(within(guide).getByRole('link', { name: /社長のデスク/ })).toHaveAttribute(
       'href',
       '/ja/today'
     );
-    expect(within(guide).getByRole('link', { name: /開発室/ })).toHaveAttribute(
-      'href',
-      '/ja/deals?kind=survey'
-    );
+    // The engineering room is built (#1194): it is entered, not opened as a page
+    expect(within(guide).queryByRole('link', { name: /開発室/ })).not.toBeInTheDocument();
+    expect(within(guide).getByRole('button', { name: /開発室/ })).toBeInTheDocument();
+    expect(within(guide).getByRole('button', { name: /営業フロア/ })).toBeInTheDocument();
     // A door leaves the full-screen office for its page
-    await user.click(within(guide).getByRole('link', { name: /営業フロア/ }));
+    await user.click(within(guide).getByRole('link', { name: /社長のデスク/ }));
     expect(onExit).toHaveBeenCalledTimes(1);
   });
 
@@ -187,13 +205,8 @@ describe('OfficeImmersive', () => {
     const router = useRouter();
     const { office, onExit } = renderOffice();
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
-    await user.keyboard('3');
-    expect(onExit).toHaveBeenCalledTimes(1);
-    expect(router.push).toHaveBeenCalledWith('/ja/deals');
     await user.keyboard('1');
     expect(router.push).toHaveBeenLastCalledWith('/ja/today');
-    await user.keyboard('4');
-    expect(router.push).toHaveBeenLastCalledWith('/ja/deals?kind=survey');
   });
 
   it('shows the staff and the president’s tasks once in the office', async () => {
@@ -215,6 +228,60 @@ describe('OfficeImmersive', () => {
     ]);
     // The drawing is decoration only
     expect(office.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('names the rooms and tags the staff over the 2D floor, outside the drawing (#1177)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+
+    // One layer of DOM over the floor: it can step out from under the panels, the drawing cannot
+    const layer = office.querySelector('[data-office-labels]') as HTMLElement;
+    expect(within(layer).getAllByRole('button')).toHaveLength(4);
+    const tag = within(layer).getByRole('button', { name: /AIセールス 研修中/ });
+    expect(tag.style.visibility).toBe('visible');
+    const room = within(layer).getByText('研修室');
+    expect(room).toHaveAttribute('aria-hidden', 'true');
+    expect(room.closest('svg')).toBeNull();
+    // The drawing itself carries no names any more
+    expect(office.querySelector('svg text')).toBeNull();
+    // Who is chosen shows on the floor too: a mark over the head, for the eye only (#1183)
+    const marker = layer.querySelector('[data-chosen-marker]') as HTMLElement;
+    expect(marker).toHaveAttribute('aria-hidden', 'true');
+    expect(marker.style.visibility).toBe('visible');
+  });
+
+  it('lets the pointer through the rows that only centre the bar and the floor guide (#1234)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    // Both rows span the screen: without this they lie over the last rows of the staff list
+    const bar = within(office).getByRole('button', { name: /^近づく/ }).parentElement
+      ?.parentElement as HTMLElement;
+    expect(bar.className).toContain('pointer-events-auto');
+    expect(bar.parentElement?.className).toContain('pointer-events-none');
+    const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
+    expect(guide.className).toContain('pointer-events-none');
+    expect(guide.className).toContain('*:pointer-events-auto');
+  });
+
+  it('groups the actions of the bar: the employee, the view, the way out (#1183)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    const bar = within(office).getByRole('button', { name: /^近づく/ }).parentElement
+      ?.parentElement as HTMLElement;
+    const groups = Array.from(bar.children).map((group) =>
+      within(group as HTMLElement)
+        .getAllByRole('button')
+        .map((button) => button.textContent)
+    );
+    // The chosen seat is vacant here: nobody to customize
+    expect(groups).toEqual([
+      ['話しかけるE'],
+      ['近づく+', '全体を見る-', '視点を戻す0', '3D（試験中）V'],
+      ['通常の表示に戻る', '退社するEsc'],
+    ]);
   });
 
   it('hires from a conversation with a vacant desk', async () => {
@@ -306,6 +373,166 @@ describe('OfficeImmersive', () => {
     // The first choice does not turn into the opposite order
     expect(within(office).queryByRole('button', { name: /戻ってきて/ })).not.toBeInTheDocument();
     expect(within(office).getByRole('button', { name: /オフィスに戻る/ })).toHaveFocus();
+  });
+
+  it('opens a staff matter with its number, and keeps the numbers out of it (#1170)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.click(within(office).getByRole('button', { name: /AIセールス.*研修中.*商談にする/ }));
+    await user.keyboard('e');
+    const choices = () =>
+      within(office)
+        .queryAllByRole('button')
+        .map((button) => button.textContent)
+        .filter((text) => /^[1-9]/.test(text ?? ''));
+    expect(choices()).toEqual([
+      '1しばらく休んでいい',
+      '2名前を変える',
+      '3作業記録を見せて',
+      '4解雇する',
+      '5またあとで',
+    ]);
+
+    // 3: the work log. Nothing was recorded, and it says so; the title has the focus, so that
+    // Enter does nothing
+    await user.keyboard('3');
+    expect(within(office).getByRole('heading', { name: '作業記録' })).toHaveFocus();
+    expect(within(office).getByText('作業の記録はまだありません。')).toBeInTheDocument();
+    // The numbers of the choices are off while the matter is open: no pause, no other matter
+    await user.keyboard('1');
+    await user.keyboard('4');
+    await user.keyboard('{Enter}');
+    expect(mocks.updates).toEqual([]);
+    expect(within(office).getByRole('heading', { name: '作業記録' })).toBeInTheDocument();
+    // Esc closes the matter, not the conversation
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('heading', { name: '社長（あなた）' })).toBeInTheDocument();
+    expect(within(office).getByText('AIセールスと会話中')).toBeInTheDocument();
+
+    // 2: a new name, typed where the focus is; the employee answers with it
+    await user.keyboard('2');
+    const name = within(office).getByLabelText('新しい表示名');
+    expect(name).toHaveFocus();
+    await user.clear(name);
+    await user.keyboard('営業1号{Enter}');
+    expect(mocks.updates).toEqual([
+      { organizationId: ORG_ID, employeeId: EMPLOYEE_ID, name: '営業1号' },
+    ]);
+    const said = within(office).getByText(
+      'AIセールスから営業1号という名前になりました。これからもよろしくお願いします。'
+    );
+    expect(mocks.invalidate).toHaveBeenCalledWith({ organizationId: ORG_ID });
+    // Carried out with Enter: the answer keeps the focus, so that one more Enter does not walk
+    // out of the conversation before it was read
+    expect(said).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(within(office).getByText('AIセールスと会話中')).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /オフィスに戻る/ })).toBeInTheDocument();
+  });
+
+  it('does not step back with Esc while a staff matter is being saved (#1170)', async () => {
+    mocks.saving = true;
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.click(within(office).getByRole('button', { name: /AIセールス.*研修中.*商談にする/ }));
+    await user.keyboard('e');
+    await user.keyboard('4');
+    expect(within(office).getByRole('heading', { name: '解雇する' })).toBeInTheDocument();
+    // On its way: Esc must not make it look given up
+    await user.keyboard('{Escape}');
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('heading', { name: '解雇する' })).toBeInTheDocument();
+    expect(within(office).getByText('AIセールスと会話中')).toBeInTheDocument();
+  });
+
+  it('closes a staff matter whose AI employee is gone, and does not open it for the next one', async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <OfficeImmersive
+          organizationId={ORG_ID}
+          companyName="テスト商事"
+          presidentName="山田 太郎"
+          employees={[sales]}
+          canManage
+          onExit={vi.fn()}
+        />
+      </NextIntlClientProvider>
+    );
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.click(within(office).getByRole('button', { name: /AIセールス.*研修中.*商談にする/ }));
+    await user.keyboard('e');
+    await user.keyboard('4');
+    expect(within(office).getByRole('heading', { name: '解雇する' })).toBeInTheDocument();
+
+    // Another administrator dismissed it meanwhile: the office reads the staff again
+    view.rerender(
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <OfficeImmersive
+          organizationId={ORG_ID}
+          companyName="テスト商事"
+          presidentName="山田 太郎"
+          employees={[]}
+          canManage
+          onExit={vi.fn()}
+        />
+      </NextIntlClientProvider>
+    );
+    expect(within(office).queryByRole('heading', { name: '解雇する' })).not.toBeInTheDocument();
+    // The choices of a vacant desk, and their numbers work
+    await user.keyboard('1');
+    expect(mocks.hires).toHaveLength(1);
+    expect(within(office).queryByRole('heading', { name: '解雇する' })).not.toBeInTheDocument();
+  });
+
+  it('never dismisses with the keys of the choices alone: the name has to be typed (#1175)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.click(within(office).getByRole('button', { name: /AIセールス.*研修中.*商談にする/ }));
+    // The keys someone presses on and on: talk, then every number, Enter and the space bar
+    await user.keyboard('e');
+    await user.keyboard('4');
+    expect(within(office).getByRole('heading', { name: '解雇する' })).toBeInTheDocument();
+    const typed = within(office).getByLabelText('確認のため、この AI社員の名前「AIセールス」を入力してください');
+    expect(typed).toHaveFocus();
+    await user.keyboard('4123456789{Enter} {Enter}');
+    expect(mocks.dismissals).toEqual([]);
+    expect(mocks.updates).toEqual([]);
+    expect(within(office).getByRole('heading', { name: '解雇する' })).toBeInTheDocument();
+
+    // Esc gives the dismissal up; opened again, nothing typed is left
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('heading', { name: '社長（あなた）' })).toBeInTheDocument();
+    await user.keyboard('4');
+    const again = within(office).getByLabelText('確認のため、この AI社員の名前「AIセールス」を入力してください');
+    expect(again).toHaveValue('');
+
+    // With the name typed, it is carried out and the office says so
+    await user.keyboard('AIセールス{Enter}');
+    expect(mocks.dismissals).toEqual([{ organizationId: ORG_ID, employeeId: EMPLOYEE_ID }]);
+    expect(
+      within(office).getByText('AIセールスを解雇しました。この席は空席に戻りました。')
+    ).toHaveFocus();
+    expect(mocks.invalidate).toHaveBeenCalledWith({ organizationId: ORG_ID });
+  });
+
+  it('shows the work log, and no order, to someone who cannot manage (#1170)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice({ canManage: false });
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.click(within(office).getByRole('button', { name: /AIセールス.*研修中.*商談にする/ }));
+    await user.keyboard('e');
+    for (const order of [/しばらく休んでいい/, /名前を変える/, /解雇する/]) {
+      expect(within(office).queryByRole('button', { name: order })).not.toBeInTheDocument();
+    }
+    await user.keyboard('1');
+    expect(within(office).getByRole('heading', { name: '作業記録' })).toBeInTheDocument();
+    expect(mocks.updates).toEqual([]);
+    expect(mocks.dismissals).toEqual([]);
   });
 
   it('puts a paused AI employee back to work from the president’s first task', async () => {

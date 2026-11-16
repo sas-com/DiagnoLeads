@@ -108,8 +108,9 @@ describe('Office3DTags', () => {
     const sales = screen.getByRole('button', { name: /AIセールス 研修中/ });
     const spot = spotOf('sales', 'training');
     const rest = projectFloor({ x: spot.x, y: spot.y }, 0, view);
+    // Its upper edge hangs under the feet (jsdom measures no width: the middle is the left edge)
     expect(sales.style.transform).toBe(
-      `translate(${rest.x.toFixed(1)}px, ${(rest.y + TAG_DROP).toFixed(1)}px) translate(-50%, 0)`
+      `translate(${rest.x.toFixed(1)}px, ${(rest.y + TAG_DROP).toFixed(1)}px)`
     );
 
     const walking = { x: 12, y: 9 };
@@ -141,6 +142,15 @@ describe('Office3DTags', () => {
     const room = screen.getByText('マーケティング室');
     expect(room).toHaveAttribute('aria-hidden', 'true');
     expect(room.style.visibility).toBe('visible');
+  });
+
+  it('leaves out the name of a room that the view puts off the screen (#1177)', () => {
+    const { ref } = renderTags();
+    // Dragged far to the right: the rooms on the right leave the screen
+    act(() => ref.current?.place({ ...view, pan: { x: 1400, y: 0 } }, {}));
+    expect(screen.getByText('開発室').style.visibility).toBe('hidden');
+    act(() => ref.current?.place(view, {}));
+    expect(screen.getByText('開発室').style.visibility).toBe('visible');
   });
 
   it('places itself with what the canvas last showed, without waiting for a frame', () => {

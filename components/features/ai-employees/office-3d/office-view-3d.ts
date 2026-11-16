@@ -7,7 +7,7 @@
  * Pure functions.
  */
 import { FLOOR_DEPTH, FLOOR_WIDTH, type FloorPoint } from '../office-map-layout';
-import { HOME_CLOSE_UP } from '../office-president';
+import { HOME_CLOSE_UP, homeCloseUp } from '../office-president';
 
 /**
  * The floor units the screen holds when the whole floor is in view, walls and a margin for the
@@ -47,11 +47,12 @@ export interface View3D {
 }
 
 /**
- * Screen pixels for one floor unit. A zoom of 1 is the same close-up the 2D office starts with;
- * a zoom of 1 / HOME_CLOSE_UP ("see the whole floor") fits the whole floor into the screen.
+ * Screen pixels for one floor unit. A zoom of 1 is the same close-up the 2D office starts with
+ * on this screen (`homeCloseUp`); stepped back as far as the camera goes, the whole floor fits
+ * into the screen. A scene other than the floor gives its own close-up, the same on any screen.
  */
-export function pxPerUnit(size: ScreenSize, zoom: number): number {
-  return Math.min(size.w / FLOOR_SPAN.w, size.h / FLOOR_SPAN.h) * HOME_CLOSE_UP * zoom;
+export function pxPerUnit(size: ScreenSize, zoom: number, closeUp = homeCloseUp(size)): number {
+  return Math.min(size.w / FLOOR_SPAN.w, size.h / FLOOR_SPAN.h) * closeUp * zoom;
 }
 
 /** Where the camera looks: at the followed employee once zoomed in, else at the middle */
@@ -137,7 +138,7 @@ export function stageView(
     return { target: viewTarget(zoom, followed), pxPerUnit: pxPerUnit(size, zoom), pan, size };
   }
   const frame = STAGE_FRAMES[stage];
-  const scale = pxPerUnit(size, frame.close);
+  const scale = pxPerUnit(size, frame.close, HOME_CLOSE_UP);
   return {
     target: subject,
     pxPerUnit: scale,

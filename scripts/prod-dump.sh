@@ -5,7 +5,10 @@
 #   bash prod-dump.sh          # cron, hourly: skips when today's (JST) dump already exists
 #   bash prod-dump.sh --now    # always dump, e.g. right before running SQL on production
 # The connection URL is never printed. The cms schema is left out on purpose: dl_readonly has no
-# access to it (CMS password hashes), and the CMS is off in production.
+# access to it (CMS password hashes), and the CMS is off in production. So is the table
+# public.site_visit_salts (the day's salt for visitor hashes, #412): dl_readonly cannot read it, and
+# pg_dump locks every table it dumps, so leaving out only its data still fails (#1126).
+# prod-restore-to.sh recreates it empty.
 set -euo pipefail
 ENV_FILE="$HOME/.config/diagnoleads/prod-ro.env"
 OUT_DIR="$HOME/diagnoleads-backups"
@@ -38,7 +41,7 @@ trap 'rm -f "$tmp"' EXIT
 
 # pg_dump must not be older than the server (Postgres 17); the URL goes in by environment
 docker run --rm --network host -e PGURL "$PG_IMAGE" \
-  sh -c 'pg_dump "$PGURL" --format=custom --no-owner --no-privileges --schema=public --schema=drizzle --schema=app' \
+  sh -c 'pg_dump "$PGURL" --format=custom --no-owner --no-privileges --schema=public --schema=drizzle --schema=app --exclude-table=public.site_visit_salts' \
   > "$tmp"
 
 # A readable archive with tables in it, or the run fails

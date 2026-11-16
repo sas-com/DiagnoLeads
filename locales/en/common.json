@@ -5341,6 +5341,10 @@
     "drafted": "Drafted into the empty fields. Check and save.",
     "saved": "Prep card saved",
     "saveError": "Could not save it. Please try again.",
+    "conflictTitle": "Not saved. This card was saved after you started editing",
+    "conflictBody": "What you typed is not saved (it is still on this screen). \"Load the latest card\" discards it and lets you edit from what is saved. If you want to keep what you typed, copy it first.",
+    "reload": "Load the latest card",
+    "reloadError": "The latest card could not be loaded. What you typed is still here. Please try again.",
     "updatedBy": "Updated by {name} on {date}",
     "drafts": {
       "basisDiagnosis": "The Web diagnosis answer (migration source)",
@@ -5348,7 +5352,11 @@
       "primary": "The main challenge. Find out where it hurts most (work, people, cost)",
       "primaryWithReasons": "The main challenge. Reasons from the diagnosis: {reasons}",
       "selected": "Chosen in the diagnosis. Check how it relates to the main challenge"
-    }
+    },
+    "conflictSavedBy": "Saved now: updated by {name} on {date}",
+    "conflictStatus": "Not saved. See the notice above.",
+    "reloaded": "The latest card was loaded",
+    "startError": "The latest card could not be loaded, so editing did not start. Please try again."
   },
   "actTiming": {
     "title": "When to act",
