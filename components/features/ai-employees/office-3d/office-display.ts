@@ -9,7 +9,7 @@
 export type OfficeDisplay = '2d' | '3d';
 
 /** The floor the office starts with where nothing else decides (owner, 2026-11-14: 3D) */
-export const DEFAULT_DISPLAY: OfficeDisplay = '2d';
+export const DEFAULT_DISPLAY: OfficeDisplay = '3d';
 
 /**
  * Below this many frames a second, on average, a device is too slow for the 3D floor and gets
