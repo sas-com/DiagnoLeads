@@ -98,7 +98,7 @@ describe('AI employee works', () => {
 });
 
 describe('deskStatus', () => {
-  const active = { status: 'active' as const };
+  const active = { status: 'active' as const, onboarded: true };
   const at = (msAgo: number) => new Date(NOW.getTime() - msAgo);
 
   it('is vacant without an employee', () => {
@@ -110,7 +110,7 @@ describe('deskStatus', () => {
       expect(
         deskStatus({
           hasWork,
-          employee: { status: 'paused' },
+          employee: { status: 'paused', onboarded: true },
           lastRun: { status: 'failed', startedAt: NOW },
           now: NOW,
         })
@@ -123,6 +123,17 @@ describe('deskStatus', () => {
       deskStatus({
         hasWork: false,
         employee: active,
+        lastRun: { status: 'running', startedAt: NOW },
+        now: NOW,
+      })
+    ).toBe('training');
+  });
+
+  it('is in training until the president approved its onboarding, even when the role has work (#1189)', () => {
+    expect(
+      deskStatus({
+        hasWork: true,
+        employee: { status: 'active', onboarded: false },
         lastRun: { status: 'running', startedAt: NOW },
         now: NOW,
       })

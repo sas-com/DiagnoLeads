@@ -175,4 +175,22 @@ describe('the migration of the AI employee tables', () => {
     expect(sql).toContain('ALTER TABLE "ai_employees" ENABLE ROW LEVEL SECURITY;');
     expect(sql).toContain('ALTER TABLE "ai_employee_runs" ENABLE ROW LEVEL SECURITY;');
   });
+
+  it('turns it on for the tables of the training room too (#1188)', () => {
+    const training = readFileSync(
+      resolve(__dirname, '../../../../drizzle/0040_training_room.sql'),
+      'utf8'
+    );
+    for (const table of [
+      'ai_employee_sessions',
+      'ai_employee_memories',
+      'ai_employee_memory_versions',
+      'ai_employee_reviews',
+    ]) {
+      expect(training).toContain(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY;`);
+    }
+    // The new columns of ai_employees have defaults: the running code keeps inserting
+    expect(training).toContain('ADD COLUMN "level" integer DEFAULT 0 NOT NULL');
+    expect(training).toContain(`ADD COLUMN "policy" text DEFAULT '' NOT NULL`);
+  });
 });
