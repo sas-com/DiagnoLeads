@@ -27,6 +27,7 @@ import {
 import { listNotes, loadNotes, saveNoteChanges } from './agent/memory-store';
 import { correctionMessage, onboardingMessage, reviewMessage } from './agent/prompts';
 import { agentEnabled } from './agent/runtime';
+import { ensureEmployeeTraining } from './curriculum';
 import {
   type ReviewFacts,
   type ReviewRecommendation,
@@ -341,6 +342,14 @@ export async function startOnboarding(
   if (employee.level !== TRAINING_LEVEL) return fail('already_onboarded');
   if (await hasOpenSession(db, input.organizationId, employee.id)) return fail('open_session');
   const now = input.now ?? new Date();
+  // The employee's own training, copied from the templates the first time (#1280)
+  const training = await ensureEmployeeTraining(db, {
+    organizationId: input.organizationId,
+    employeeId: employee.id,
+    role: employee.role,
+    locale: input.locale,
+    now,
+  });
   const first: Anthropic.MessageParam = {
     role: 'user',
     content: onboardingMessage({
@@ -348,6 +357,7 @@ export async function startOnboarding(
       role: employee.role,
       organizationName: input.organizationName,
       policy: employee.policy,
+      training,
       locale: input.locale,
     }),
   };

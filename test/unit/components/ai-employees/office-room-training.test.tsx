@@ -16,6 +16,7 @@ const ORG_ID = '660e8400-e29b-41d4-a716-446655440000';
 
 const mocks = vi.hoisted(() => ({
   data: null as unknown,
+  curriculum: null as unknown,
   calls: [] as { name: string; input: unknown }[],
   advance: vi.fn(),
   invalidate: vi.fn(),
@@ -35,7 +36,12 @@ vi.mock('@/lib/trpc/client', () => {
     });
   return {
     trpc: {
-      useUtils: () => ({ aiEmployees: { training: { invalidate: mocks.invalidate } } }),
+      useUtils: () => ({
+        aiEmployees: {
+          training: { invalidate: mocks.invalidate },
+          curriculum: { invalidate: mocks.invalidate },
+        },
+      }),
       aiEmployees: {
         training: {
           useQuery: () => ({
@@ -53,6 +59,15 @@ vi.mock('@/lib/trpc/client', () => {
         setPolicy: { useMutation: mutation('setPolicy') },
         editNote: { useMutation: mutation('editNote') },
         advance: { useMutation: () => ({ mutateAsync: mocks.advance }) },
+        curriculum: {
+          useQuery: (_input: unknown, options: { enabled?: boolean } = {}) =>
+            options.enabled === false
+              ? { isPending: true, isError: false, data: undefined }
+              : { isPending: false, isError: false, data: mocks.curriculum },
+        },
+        saveTemplate: { useMutation: mutation('saveTemplate') },
+        saveTraining: { useMutation: mutation('saveTraining') },
+        copyTemplate: { useMutation: mutation('copyTemplate') },
       },
     },
   };
@@ -157,7 +172,7 @@ describe('OfficeRoomTraining', () => {
     await user.click(screen.getByRole('button', { name: '訂正を伝える' }));
     expect(onFileOpenChange).toHaveBeenLastCalledWith(true);
     // A number typed into the field is not a key of the room: the board stays
-    press('2');
+    press('3');
     expect(screen.getByRole('heading', { name: '報告（オンボーディング）' })).toBeInTheDocument();
     await user.type(screen.getByLabelText('訂正してほしいこと'), '目標は1つで');
     await user.click(screen.getByRole('button', { name: '訂正を送る' }));
@@ -178,12 +193,12 @@ describe('OfficeRoomTraining', () => {
       employee({ notes: [{ path: '/memories/role.md', content: '見込み客を見極める', updatedAt: new Date() }] }),
       employee({ id: 'b', role: 'sales', name: 'AI 追客' }),
     ]);
-    press('2');
+    press('3');
     expect(screen.getByRole('heading', { name: '記憶ノート' })).toBeInTheDocument();
     expect(screen.getByText('/memories/role.md')).toBeInTheDocument();
     press('ArrowDown');
     expect(screen.getByText('AI 追客のノートはまだありません。')).toBeInTheDocument();
-    press('4');
+    press('5');
     expect(screen.getByRole('heading', { name: '社長の方針' })).toBeInTheDocument();
   });
 
@@ -222,7 +237,7 @@ describe('OfficeRoomTraining', () => {
     const { press } = renderRoom([
       employee({ level: 1, onboardedAt: '2026-08-01', review, session, nextReviewAt: '2026-12-01' }),
     ]);
-    press('3');
+    press('4');
     expect(screen.getByText('昇格の基準に届いています')).toBeInTheDocument();
     expect(screen.getByText('基準に届きました。')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '昇格を承認する' }));
@@ -261,7 +276,7 @@ describe('OfficeRoomTraining', () => {
       createdAt: '2026-11-01',
     };
     const { press } = renderRoom([employee({ level: 1, onboardedAt: '2026-08-01', review })]);
-    press('3');
+    press('4');
     screen.getByRole('button', { name: '昇格を承認する' }).focus();
     await user.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: 'やめる' })).toHaveFocus();
@@ -318,7 +333,85 @@ describe('OfficeRoomTraining', () => {
     expect(screen.queryByRole('button', { name: 'オンボーディングを始める' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '止める' })).not.toBeInTheDocument();
     expect(mocks.advance).not.toHaveBeenCalled();
-    press('2');
+    press('3');
     expect(screen.getByText('ノートは、AI社員を管理できる人だけが読めます。')).toBeInTheDocument();
+  });
+
+  it('shows the employee’s training in its format, and edits it, copies it again or edits the template with buttons (#1280)', async () => {
+    const user = userEvent.setup();
+    const id = '770e8400-e29b-41d4-a716-446655440001';
+    const common = {
+      company: '架空の部品を作る会社です。',
+      services: '部品の設計',
+      customers: '',
+      values: '',
+      donts: '',
+    };
+    const role = { purpose: '見込み客を見極める', scope: '', tasks: '', handoffs: '', measures: '' };
+    mocks.curriculum = {
+      templates: {
+        common: { scope: 'common', sections: common, version: 3, updatedAt: null },
+        marketer: { scope: 'marketer', sections: role, version: 0, updatedAt: null },
+      },
+      employees: {
+        [id]: {
+          common: { kind: 'common', sections: common, templateVersion: 2, updatedAt: new Date() },
+        },
+      },
+    };
+    const { press } = renderRoom([employee()]);
+    press('1');
+    expect(screen.getByRole('heading', { name: '研修' })).toBeInTheDocument();
+    expect(screen.getByText('架空の部品を作る会社です。')).toBeInTheDocument();
+    // Its own copy is from version 2, the template is at 3; the role training is not copied yet
+    expect(screen.getByText(/テンプレートの版 2 から写しています。 テンプレートが新しくなっています（版 3）。/)).toBeInTheDocument();
+    expect(screen.getByText(/まだ写していません/)).toBeInTheDocument();
+    expect(screen.getByText('見込み客を見極める')).toBeInTheDocument();
+
+    // Edit the employee's own common training: the keys stay in the fields
+    await user.click(screen.getAllByRole('button', { name: 'この社員の研修を直す' })[0]);
+    const values = screen.getByLabelText('大切にしていること');
+    await user.type(values, '数字で話す');
+    press('3');
+    expect(screen.getByRole('heading', { name: '研修' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '保存する' }));
+    expect(mocks.calls.at(-1)).toEqual({
+      name: 'saveTraining',
+      input: {
+        organizationId: ORG_ID,
+        employeeId: id,
+        kind: 'common',
+        sections: { ...common, values: '数字で話す' },
+      },
+    });
+
+    // Copying again asks once more, with the way back focused
+    await user.click(screen.getByRole('button', { name: 'テンプレートから写し直す' }));
+    expect(screen.getByRole('button', { name: 'やめる' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: '写し直す（確定）' }));
+    expect(mocks.calls.at(-1)).toEqual({
+      name: 'copyTemplate',
+      input: { organizationId: ORG_ID, employeeId: id, kind: 'common', locale: 'ja' },
+    });
+
+    // The role template of the marketers
+    await user.click(screen.getAllByRole('button', { name: 'テンプレートを直す' })[1]);
+    await user.clear(screen.getByLabelText('成果の測り方'));
+    await user.type(screen.getByLabelText('成果の測り方'), '商談になった割合');
+    await user.click(screen.getByRole('button', { name: 'テンプレートを保存する' }));
+    expect(mocks.calls.at(-1)).toEqual({
+      name: 'saveTemplate',
+      input: {
+        organizationId: ORG_ID,
+        scope: 'marketer',
+        sections: { ...role, measures: '商談になった割合' },
+      },
+    });
+  });
+
+  it('keeps the training for the managers', () => {
+    const { press } = renderRoom([employee()], { canManage: false });
+    press('1');
+    expect(screen.getByText('研修の中身は、AI社員を管理できる人だけが読めます。')).toBeInTheDocument();
   });
 });

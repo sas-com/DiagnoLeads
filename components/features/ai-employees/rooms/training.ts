@@ -10,15 +10,16 @@ import type {
   AiEmployeeSessionStatus,
 } from '@/lib/features/ai-employees/types/training';
 
-/** The boards of the room, on the keys 1 to 4 */
-export const TRAINING_BOARDS = ['report', 'notes', 'review', 'policy'] as const;
+/** The boards of the room, on the keys 1 to 5 (the training first, #1280) */
+export const TRAINING_BOARDS = ['curriculum', 'report', 'notes', 'review', 'policy'] as const;
 export type TrainingBoard = (typeof TRAINING_BOARDS)[number];
 
 export const BOARD_KEYS: Readonly<Record<TrainingBoard, string>> = {
-  report: '1',
-  notes: '2',
-  review: '3',
-  policy: '4',
+  curriculum: '1',
+  report: '2',
+  notes: '3',
+  review: '4',
+  policy: '5',
 };
 
 export function boardOfKey(key: string): TrainingBoard | null {

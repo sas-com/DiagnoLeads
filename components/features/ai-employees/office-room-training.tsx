@@ -2,6 +2,15 @@
 
 import { isImeKey } from '@/components/ui/ime';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  type CommonSections,
+  type RoleSections,
+  TRAINING_KINDS,
+  TRAINING_SECTIONS,
+  TRAINING_SECTION_MAX_LENGTH,
+  type TrainingKind,
+  type TrainingSections,
+} from '@/lib/features/ai-employees/types/curriculum';
 import { type AiEmployeeLevel, LEVEL_KEYS } from '@/lib/features/ai-employees/types/levels';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import {
@@ -43,7 +52,9 @@ import { useRoomKeys } from './use-room-keys';
 type Field =
   | { kind: 'correct'; sessionId: string }
   | { kind: 'policy'; employeeId: string }
-  | { kind: 'note'; employeeId: string; path: string };
+  | { kind: 'note'; employeeId: string; path: string }
+  // A training of the format (#1280): an employee's own, or a template
+  | { kind: 'training'; trainingKind: TrainingKind; employeeId: string | null };
 
 /** Only one field is open at a time in the room */
 const FIELD_ID = 'training-room-field';
@@ -95,6 +106,10 @@ export function OfficeRoomTraining({
   const [board, setBoard] = useState<TrainingBoard>('report');
   const [field, setField] = useState<Field | null>(null);
   const [draft, setDraft] = useState('');
+  // The sections of a training being written, by section key
+  const [sectionDrafts, setSectionDrafts] = useState<TrainingSections>({});
+  // The kind of training about to be copied again from its template (asks once more)
+  const [confirmCopy, setConfirmCopy] = useState<TrainingKind | null>(null);
   const [confirmPromote, setConfirmPromote] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -108,6 +123,24 @@ export function OfficeRoomTraining({
   const savePolicy = trpc.aiEmployees.setPolicy.useMutation({ onSettled: refresh, onError });
   const editNote = trpc.aiEmployees.editNote.useMutation({ onSettled: refresh, onError });
   const advance = trpc.aiEmployees.advance.useMutation();
+  // The training (#1280): read only for the managers, and only while its board is shown
+  const curriculum = trpc.aiEmployees.curriculum.useQuery(
+    { organizationId, locale },
+    { enabled: canManage && board === 'curriculum' }
+  );
+  const refreshCurriculum = () => utils.aiEmployees.curriculum.invalidate({ organizationId });
+  const saveTemplate = trpc.aiEmployees.saveTemplate.useMutation({
+    onSettled: refreshCurriculum,
+    onError,
+  });
+  const saveTraining = trpc.aiEmployees.saveTraining.useMutation({
+    onSettled: refreshCurriculum,
+    onError,
+  });
+  const copyTemplate = trpc.aiEmployees.copyTemplate.useMutation({
+    onSettled: refreshCurriculum,
+    onError,
+  });
 
   const busy =
     start.isPending ||
@@ -116,13 +149,16 @@ export function OfficeRoomTraining({
     openReview.isPending ||
     decide.isPending ||
     savePolicy.isPending ||
-    editNote.isPending;
+    editNote.isPending ||
+    saveTemplate.isPending ||
+    saveTraining.isPending ||
+    copyTemplate.isPending;
   useEffect(() => {
     onBusyChange(busy);
     return () => onBusyChange(false);
   }, [busy, onBusyChange]);
 
-  const holding = field !== null || confirmPromote;
+  const holding = field !== null || confirmPromote || confirmCopy !== null;
   useEffect(() => {
     onFileOpenChange(holding);
     return () => onFileOpenChange(false);
@@ -170,6 +206,7 @@ export function OfficeRoomTraining({
   const closeField = () => {
     setField(null);
     setDraft('');
+    setSectionDrafts({});
   };
   const choose = (index: number) => {
     const next = employees[index];
@@ -188,10 +225,11 @@ export function OfficeRoomTraining({
       if (!busy) closeField();
       return true;
     }
-    if (confirmPromote) {
+    if (confirmPromote || confirmCopy) {
       if (event.key !== 'Escape') return false;
       event.preventDefault();
       setConfirmPromote(false);
+      setConfirmCopy(null);
       return true;
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -333,6 +371,8 @@ export function OfficeRoomTraining({
             <RoomBoardMessage>{t('readError')}</RoomBoardMessage>
           ) : !selected ? (
             <RoomBoardMessage>{t('guide.empty')}</RoomBoardMessage>
+          ) : board === 'curriculum' ? (
+            curriculumBoard()
           ) : board === 'report' ? (
             reportBoard()
           ) : board === 'notes' ? (
@@ -631,6 +671,222 @@ export function OfficeRoomTraining({
             </div>
           ))}
       </>
+    );
+  }
+
+  /**
+   * The employee's training (#1280): the common training and its role training, in the fixed
+   * format. Its own copy is shown; before the first copy, the template it will be copied from
+   */
+  function curriculumBoard() {
+    if (!selected) return null;
+    if (!canManage) return <RoomBoardMessage>{t('curriculum.forManagers')}</RoomBoardMessage>;
+    if (curriculum.isPending) return <RoomBoardLoading>{t('reading')}</RoomBoardLoading>;
+    if (curriculum.isError || !curriculum.data) {
+      return <RoomBoardMessage>{t('readError')}</RoomBoardMessage>;
+    }
+    const data = curriculum.data;
+    const role = selected.role as AiEmployeeRole;
+    return (
+      <>
+        <p className="text-sm text-[#d8d2c4]">{t('curriculum.about')}</p>
+        {TRAINING_KINDS.map((kind) => {
+          const templateScope = kind === 'common' ? 'common' : role;
+          const template = data.templates[templateScope];
+          const own = data.employees[selected.id]?.[kind];
+          const shown = own?.sections ?? template.sections;
+          const editingOwn =
+            field?.kind === 'training' &&
+            field.trainingKind === kind &&
+            field.employeeId === selected.id;
+          const editingTemplate =
+            field?.kind === 'training' && field.trainingKind === kind && field.employeeId === null;
+          const title =
+            kind === 'common'
+              ? tOffice('curriculum.kinds.common')
+              : `${tOffice('curriculum.kinds.role')}（${tOffice(`roles.${role}.title`)}）`;
+          return (
+            <section key={kind} className="space-y-3 border border-[#f5f1e8]/15 px-4 py-3">
+              <h3 className="text-lg font-bold">{title}</h3>
+              <p className="text-sm text-[#d8d2c4]">
+                {own
+                  ? own.templateVersion > 0
+                    ? t('curriculum.copied', { version: own.templateVersion })
+                    : t('curriculum.copiedDefault')
+                  : t('curriculum.notCopied')}
+                {own && template.version > own.templateVersion
+                  ? ` ${t('curriculum.newer', { version: template.version })}`
+                  : ''}
+              </p>
+              {editingOwn || editingTemplate ? (
+                sectionsForm({
+                  kind,
+                  label: editingTemplate
+                    ? t('curriculum.templateOf', { title })
+                    : t('curriculum.ownOf', { title, name: selected.name }),
+                  submit: editingTemplate ? t('actions.saveTemplate') : t('actions.saveTraining'),
+                  onSubmit: () =>
+                    editingTemplate
+                      ? saveTemplate.mutate(
+                          { organizationId, scope: templateScope, sections: sectionDrafts },
+                          { onSuccess: closeField }
+                        )
+                      : saveTraining.mutate(
+                          kind === 'common'
+                            ? {
+                                organizationId,
+                                employeeId: selected.id,
+                                kind,
+                                sections: sectionDrafts as CommonSections,
+                              }
+                            : {
+                                organizationId,
+                                employeeId: selected.id,
+                                kind,
+                                sections: sectionDrafts as RoleSections,
+                              },
+                          { onSuccess: closeField }
+                        ),
+                })
+              ) : (
+                <>
+                  <dl className="space-y-2">
+                    {TRAINING_SECTIONS[kind].map((section) => (
+                      <div key={section}>
+                        <dt className={CAP}>{tOffice(`curriculum.sections.${section}`)}</dt>
+                        <dd className="text-base leading-relaxed whitespace-pre-wrap">
+                          {shown[section]?.trim() ? (
+                            shown[section]
+                          ) : (
+                            <span className="text-sm text-[#d8d2c4]">{t('curriculum.empty')}</span>
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  {confirmCopy === kind ? (
+                    <div
+                      key={`confirm-copy-${kind}`}
+                      className="space-y-3 border border-[#e9cf9a] px-4 py-3"
+                    >
+                      <p className="text-base">
+                        {t('curriculum.confirmCopy', { name: selected.name, title })}
+                      </p>
+                      <div className="flex flex-wrap gap-3">
+                        {action({
+                          autoFocus: true,
+                          onClick: () => setConfirmCopy(null),
+                          children: t('actions.cancelCopy'),
+                        })}
+                        {action({
+                          main: true,
+                          onClick: () =>
+                            copyTemplate.mutate(
+                              { organizationId, employeeId: selected.id, kind, locale },
+                              { onSettled: () => setConfirmCopy(null) }
+                            ),
+                          children: t('actions.confirmCopy'),
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div key={`actions-${kind}`} className="flex flex-wrap gap-3">
+                      {action({
+                        onClick: () => {
+                          setSectionDrafts({ ...shown });
+                          setField({
+                            kind: 'training',
+                            trainingKind: kind,
+                            employeeId: selected.id,
+                          });
+                        },
+                        children: t('actions.editTraining'),
+                      })}
+                      {own &&
+                        action({
+                          onClick: () => setConfirmCopy(kind),
+                          children: t('actions.copyTemplate'),
+                        })}
+                      {action({
+                        onClick: () => {
+                          setSectionDrafts({ ...template.sections });
+                          setField({ kind: 'training', trainingKind: kind, employeeId: null });
+                        },
+                        children: t('actions.editTemplate'),
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          );
+        })}
+        <p className="text-sm text-[#d8d2c4]">{t('curriculum.templateNote')}</p>
+      </>
+    );
+  }
+
+  /** The sections of a training, one field each; Esc or the second button closes it */
+  function sectionsForm({
+    kind,
+    label,
+    submit,
+    onSubmit,
+  }: {
+    kind: TrainingKind;
+    label: string;
+    submit: string;
+    onSubmit: () => void;
+  }) {
+    return (
+      <form
+        className="space-y-3"
+        aria-label={label}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!busy) onSubmit();
+        }}
+      >
+        {TRAINING_SECTIONS[kind].map((section, index) => {
+          const id = `${FIELD_ID}-${section}`;
+          return (
+            <div key={section} className="space-y-1">
+              <label htmlFor={id} className="block text-sm font-bold">
+                {tOffice(`curriculum.sections.${section}`)}
+              </label>
+              <p id={`${id}-hint`} className="text-xs text-[#d8d2c4]">
+                {tOffice(`curriculum.hints.${section}`)}
+              </p>
+              <Textarea
+                id={id}
+                autoFocus={index === 0}
+                aria-describedby={`${id}-hint`}
+                value={sectionDrafts[section] ?? ''}
+                maxLength={TRAINING_SECTION_MAX_LENGTH}
+                rows={3}
+                onChange={(event) =>
+                  setSectionDrafts((current) => ({ ...current, [section]: event.target.value }))
+                }
+                className="bg-[#0a0e18] text-[#f5f1e8]"
+              />
+            </div>
+          );
+        })}
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="submit"
+            aria-disabled={busy || undefined}
+            className={cn(
+              'min-h-11 border px-4 text-sm font-bold aria-disabled:cursor-not-allowed aria-disabled:opacity-60',
+              choiceClass(true),
+              FOCUS
+            )}
+          >
+            {submit}
+          </button>
+          {action({ onClick: closeField, children: t('actions.close') })}
+        </div>
+      </form>
     );
   }
 
