@@ -304,6 +304,35 @@ const questions: DiagnosticQuestion[] = [
       ),
     }
   ),
+  // Whether AI can run the current core system freely while building the new one (#1257)
+  single(
+    'staging_env',
+    text(
+      '現行システムの検証環境（ステージング環境）はありますか？',
+      'Is there a staging environment of the current system?'
+    ),
+    [
+      option(
+        'free',
+        'あり、自由に操作でき、データの投入と初期データへの戻しもできる',
+        'Yes, and it can be used freely, including loading data and resetting it to the initial data'
+      ),
+      option(
+        'limited',
+        'あるが、操作やデータの投入、初期データへの戻しに制約がある',
+        'Yes, but using it, loading data or resetting it is restricted'
+      ),
+      option('none', 'ない（本番の環境だけ）', 'No, only the production environment'),
+      unknown,
+    ],
+    {
+      ...detail,
+      description: text(
+        '本番とは別に、同じシステムを動かして試せる環境です。AIを使った移行では、現行システムをこの環境で動かしながら同じ動きのものを作り、新旧の結果を突き合わせます。',
+        'An environment, separate from production, where the same system can be run and tried. In an AI-assisted migration, the current system runs there while the new one is built to behave the same, and the results of both are compared.'
+      ),
+    }
+  ),
 
   // ── AS/400 (IBM i) (reviewed by an AS/400 migration specialist, 2026-10-11) ────
   multiple(
@@ -1182,6 +1211,7 @@ export const axMigrationDefinition: DiagnosticDefinition = {
         'as400_screens_forms',
         'as400_version',
         'gaiji',
+        'staging_env',
       ],
       showWhen: onPath('as400'),
     },
@@ -1205,6 +1235,7 @@ export const axMigrationDefinition: DiagnosticDefinition = {
         'acos_jobs',
         'acos_database',
         'gaiji',
+        'staging_env',
       ],
       showWhen: onPath('acos'),
     },
@@ -1249,6 +1280,7 @@ export const axMigrationDefinition: DiagnosticDefinition = {
         'source_docs',
         'business_areas',
         'legacy_edi',
+        'staging_env',
       ],
       showWhen: onPath('other'),
     },

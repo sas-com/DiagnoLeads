@@ -1182,7 +1182,8 @@ describe('AxDiagnosisResult', () => {
     renderResult();
 
     const followUp = screen.getByTestId('ax-follow-up');
-    expect(within(followUp).getByText(/結果の精度を上げる追加質問（任意・7問）/)).toBeInTheDocument();
+    // 8 with the staging environment question (#1257)
+    expect(within(followUp).getByText(/結果の精度を上げる追加質問（任意・8問）/)).toBeInTheDocument();
     await user.click(within(followUp).getByRole('button', { name: /追加質問/ }));
     const submit = within(followUp).getByRole('button', { name: '回答して結果を更新する' });
     // Not sendable before anything is answered (and it keeps the focus while sending)
@@ -1199,6 +1200,26 @@ describe('AxDiagnosisResult', () => {
     const done = await screen.findByText(/結果を更新しました/);
     // The confirmation takes the focus, so it is read out
     expect(done.closest('output')).toHaveFocus();
+  });
+
+  it('asks about a staging environment in the follow-ups of a core system, not of an Access tool (#1257)', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderResult();
+    const core = screen.getByTestId('ax-follow-up');
+    await user.click(within(core).getByRole('button', { name: /追加質問/ }));
+    expect(
+      within(core).getByRole('group', { name: /検証環境（ステージング環境）/ })
+    ).toBeInTheDocument();
+    unmount();
+
+    renderResult({
+      platform: 'access',
+      answers: accessAnswers,
+      result: toPublicResult(evaluateAxMigration(accessAnswers)),
+    });
+    const access = screen.getByTestId('ax-follow-up');
+    await user.click(within(access).getByRole('button', { name: /追加質問/ }));
+    expect(within(access).queryByRole('group', { name: /検証環境/ })).not.toBeInTheDocument();
   });
 
   it('prints the result (or saves it as a PDF) with the browser, from the top or the end', async () => {

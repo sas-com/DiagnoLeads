@@ -95,6 +95,18 @@ describe('axMigrationDefinition (v2)', () => {
     expect(question?.exclusiveOptions).toEqual(['none']);
   });
 
+  it.each(AX_PLATFORMS)('asks about a staging environment only as a follow-up on the core-system paths (%s)', (platform) => {
+    const question = applicableQuestions(axMigrationDefinition, { platform }).find(
+      (q) => q.id === 'staging_env'
+    );
+    if (platform === 'access') {
+      expect(question).toBeUndefined();
+      return;
+    }
+    expect(question).toMatchObject({ type: 'single', required: false, detail: true });
+    expect(question?.options.map((o) => o.value)).toEqual(['free', 'limited', 'none', 'unknown']);
+  });
+
   it('gives every option of a scored question a weight, and names the unscored questions', () => {
     // Asked for the lead, the size estimate or sales, not weighed option by option
     const unscored = [
@@ -107,6 +119,8 @@ describe('axMigrationDefinition (v2)', () => {
       'access_users',
       // Kinds of data in the tool (#826): for planning how the data is handled
       'access_data_kinds',
+      // Staging environment of the core system (#1257): a precondition sales confirms, not scored
+      'staging_env',
       // Company size (#150): checked against the organization's target ranges, not scored
       'annual_revenue',
       'employees',
