@@ -20,6 +20,13 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import SidebarWidget from './SidebarWidget';
 
+type NavSection = {
+  key: string;
+  /** The place of the office the pages belong to; the office itself has no heading */
+  title?: string;
+  items: NavItem[];
+};
+
 type NavItem = {
   name: string;
   nameKey: string;
@@ -34,107 +41,136 @@ const AppSidebar: React.FC = () => {
   const locale = useLocale();
   const t = useTranslations('navigation');
 
+  const tRooms = useTranslations('aiOffice.rooms');
+
   const [openSubmenu, setOpenSubmenu] = useState<{
-    type: 'main' | 'settings';
+    type: string;
     index: number;
   } | null>(null);
   const [subMenuHeight, setSubMenuHeight] = useState<Record<string, number>>({});
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Locale-aware nav items
-  const navItems: NavItem[] = useMemo(
+  /**
+   * The menu follows the places of the office (#1163, decision 2026-11-14-navigation-one-path):
+   * the office first, then each place with the pages of its work, under the same names as the
+   * floor guide of the full-screen office
+   */
+  const sections: NavSection[] = useMemo(
     () => [
       {
-        icon: <RiDashboardLine className="w-5 h-5" />,
-        name: t('dashboard'),
-        nameKey: 'dashboard',
-        path: `/${locale}/dashboard`,
-      },
-      {
-        icon: <RiCalendarTodoLine className="w-5 h-5" />,
-        name: t('today'),
-        nameKey: 'today',
-        path: `/${locale}/today`,
-      },
-      {
-        icon: <RiUserLine className="w-5 h-5" />,
-        name: t('leads'),
-        nameKey: 'leads',
-        path: `/${locale}/leads`,
-      },
-      {
-        icon: <RiBriefcase4Line className="w-5 h-5" />,
-        name: t('deals'),
-        nameKey: 'deals',
-        path: `/${locale}/deals`,
-      },
-      {
-        icon: <RiLineChartLine className="w-5 h-5" />,
-        name: t('forecast'),
-        nameKey: 'forecast',
-        path: `/${locale}/forecast`,
-      },
-      {
-        icon: <RiUserSearchLine className="w-5 h-5" />,
-        name: t('prospects'),
-        nameKey: 'prospects',
-        path: `/${locale}/prospects`,
-      },
-      {
-        icon: <RiBarChartLine className="w-5 h-5" />,
-        name: t('analytics'),
-        nameKey: 'analytics',
-        path: `/${locale}/analytics`,
-      },
-      {
-        icon: <RiBuilding2Line className="w-5 h-5" />,
-        name: t('office'),
-        nameKey: 'office',
-        path: `/${locale}/office`,
-      },
-    ],
-    [locale, t]
-  );
-
-  const settingsItems: NavItem[] = useMemo(
-    () => [
-      {
-        icon: <RiSettings4Line className="w-5 h-5" />,
-        name: t('settings'),
-        nameKey: 'settings',
-        subItems: [
+        key: 'office',
+        items: [
           {
-            name: t('organization'),
-            nameKey: 'organization',
-            path: `/${locale}/settings/organization`,
+            icon: <RiBuilding2Line className="w-5 h-5" />,
+            name: t('office'),
+            nameKey: 'office',
+            path: `/${locale}/office`,
           },
-          { name: t('members'), nameKey: 'members', path: `/${locale}/settings/members` },
-          { name: t('webhooks'), nameKey: 'webhooks', path: `/${locale}/settings/webhooks` },
-          { name: t('embed'), nameKey: 'embed', path: `/${locale}/settings/embed` },
+        ],
+      },
+      {
+        key: 'desk',
+        title: tRooms('desk'),
+        items: [
           {
-            name: t('qrCampaigns'),
-            nameKey: 'qrCampaigns',
-            path: `/${locale}/settings/qr-campaigns`,
+            icon: <RiCalendarTodoLine className="w-5 h-5" />,
+            name: t('today'),
+            nameKey: 'today',
+            path: `/${locale}/today`,
           },
           {
-            name: t('axPlaybook'),
-            nameKey: 'axPlaybook',
-            path: `/${locale}/settings/ax-playbook`,
+            icon: <RiDashboardLine className="w-5 h-5" />,
+            name: t('dashboard'),
+            nameKey: 'dashboard',
+            path: `/${locale}/dashboard`,
+          },
+        ],
+      },
+      {
+        key: 'marketing',
+        title: tRooms('marketing'),
+        items: [
+          {
+            icon: <RiUserLine className="w-5 h-5" />,
+            name: t('leads'),
+            nameKey: 'leads',
+            path: `/${locale}/leads`,
           },
           {
-            name: t('agencyLinks'),
-            nameKey: 'agencyLinks',
-            path: `/${locale}/settings/agency-links`,
+            icon: <RiBarChartLine className="w-5 h-5" />,
+            name: t('analytics'),
+            nameKey: 'analytics',
+            path: `/${locale}/analytics`,
+          },
+        ],
+      },
+      {
+        key: 'sales',
+        title: tRooms('sales'),
+        items: [
+          {
+            icon: <RiBriefcase4Line className="w-5 h-5" />,
+            name: t('deals'),
+            nameKey: 'deals',
+            path: `/${locale}/deals`,
           },
           {
-            name: t('fieldGlossary'),
-            nameKey: 'fieldGlossary',
-            path: `/${locale}/settings/field-glossary`,
+            icon: <RiLineChartLine className="w-5 h-5" />,
+            name: t('forecast'),
+            nameKey: 'forecast',
+            path: `/${locale}/forecast`,
+          },
+          {
+            icon: <RiUserSearchLine className="w-5 h-5" />,
+            name: t('prospects'),
+            nameKey: 'prospects',
+            path: `/${locale}/prospects`,
+          },
+        ],
+      },
+      {
+        key: 'backoffice',
+        title: tRooms('backoffice'),
+        items: [
+          {
+            icon: <RiSettings4Line className="w-5 h-5" />,
+            name: t('settings'),
+            nameKey: 'settings',
+            subItems: [
+              {
+                name: t('organization'),
+                nameKey: 'organization',
+                path: `/${locale}/settings/organization`,
+              },
+              { name: t('members'), nameKey: 'members', path: `/${locale}/settings/members` },
+              { name: t('webhooks'), nameKey: 'webhooks', path: `/${locale}/settings/webhooks` },
+              { name: t('embed'), nameKey: 'embed', path: `/${locale}/settings/embed` },
+              {
+                name: t('qrCampaigns'),
+                nameKey: 'qrCampaigns',
+                path: `/${locale}/settings/qr-campaigns`,
+              },
+              {
+                name: t('axPlaybook'),
+                nameKey: 'axPlaybook',
+                path: `/${locale}/settings/ax-playbook`,
+              },
+              {
+                name: t('agencyLinks'),
+                nameKey: 'agencyLinks',
+                path: `/${locale}/settings/agency-links`,
+              },
+              {
+                name: t('fieldGlossary'),
+                nameKey: 'fieldGlossary',
+                path: `/${locale}/settings/field-glossary`,
+              },
+            ],
           },
         ],
       },
     ],
-    [locale, t]
+    [locale, t, tRooms]
   );
 
   const isActive = useCallback(
@@ -162,7 +198,7 @@ const AppSidebar: React.FC = () => {
     </svg>
   );
 
-  const renderMenuItems = (items: NavItem[], menuType: 'main' | 'settings') => (
+  const renderMenuItems = (items: NavItem[], menuType: string) => (
     <ul className="flex flex-col gap-2">
       {items.map((nav, index) => (
         <li key={nav.name}>
@@ -258,12 +294,11 @@ const AppSidebar: React.FC = () => {
 
   useEffect(() => {
     let submenuMatched = false;
-    for (const menuType of ['main', 'settings'] as const) {
-      const items = menuType === 'main' ? navItems : settingsItems;
-      for (const [index, nav] of items.entries()) {
+    for (const section of sections) {
+      for (const [index, nav] of section.items.entries()) {
         for (const subItem of nav.subItems ?? []) {
           if (isActive(subItem.path)) {
-            setOpenSubmenu({ type: menuType, index });
+            setOpenSubmenu({ type: section.key, index });
             submenuMatched = true;
           }
         }
@@ -273,7 +308,7 @@ const AppSidebar: React.FC = () => {
     if (!submenuMatched) {
       setOpenSubmenu(null);
     }
-  }, [isActive, navItems, settingsItems]);
+  }, [isActive, sections]);
 
   useEffect(() => {
     if (openSubmenu !== null) {
@@ -287,7 +322,7 @@ const AppSidebar: React.FC = () => {
     }
   }, [openSubmenu]);
 
-  const handleSubmenuToggle = (index: number, menuType: 'main' | 'settings') => {
+  const handleSubmenuToggle = (index: number, menuType: string) => {
     setOpenSubmenu((prevOpenSubmenu) => {
       if (prevOpenSubmenu && prevOpenSubmenu.type === menuType && prevOpenSubmenu.index === index) {
         return null;
@@ -318,27 +353,20 @@ const AppSidebar: React.FC = () => {
       <div className="flex flex-col overflow-y-auto pt-6 lg:pt-0 duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
-            <div>
-              <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start'
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? t('menu') : <HorizontalDots />}
-              </h2>
-              {renderMenuItems(navItems, 'main')}
-            </div>
-
-            <div>
-              <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start'
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? t('management') : <HorizontalDots />}
-              </h2>
-              {renderMenuItems(settingsItems, 'settings')}
-            </div>
+            {sections.map((section) => (
+              <div key={section.key}>
+                {section.title && (
+                  <h2
+                    className={`mb-2 text-xs flex leading-[20px] text-gray-500 dark:text-gray-400 ${
+                      !isExpanded && !isHovered ? 'lg:justify-center' : 'justify-start'
+                    }`}
+                  >
+                    {isExpanded || isHovered || isMobileOpen ? section.title : <HorizontalDots />}
+                  </h2>
+                )}
+                {renderMenuItems(section.items, section.key)}
+              </div>
+            ))}
           </div>
         </nav>
         {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null}
