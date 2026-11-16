@@ -5,8 +5,8 @@ category: UI
 title: "AI社員オフィスの 3D を本実装に進める。全場面を 3D・ロボットはデザイナーの 3D モデル・本番の既定を 3D にする（Epic #1146）"
 status: active
 superseded_by: []
-issues: [1135, 1146, 1147, 1148, 1149, 1150, 1151, 1157, 1177, 1183, 1159, 1234, 1150]
-paths: ["components/features/ai-employees/office-3d/**", "components/features/ai-employees/office-immersive.tsx", "components/features/ai-employees/office-furniture.ts", "components/features/ai-employees/office-floor-labels.tsx", "components/features/ai-employees/office-label-layout.ts"]
+issues: [1135, 1146, 1147, 1148, 1149, 1150, 1151, 1157, 1177, 1183, 1159, 1234]
+paths: ["components/features/ai-employees/office-3d/**", "components/features/ai-employees/office-immersive.tsx", "components/features/ai-employees/office-furniture.ts", "components/features/ai-employees/office-floor-labels.tsx", "components/features/ai-employees/office-label-layout.ts", "components/features/ai-employees/office-studio.tsx", "components/features/ai-employees/office-recent-events.ts"]
 ---
 
 ### [UI] AI社員オフィスの 3D を本実装に進める。全場面を 3D・ロボットはデザイナーの 3D モデル・本番の既定を 3D にする（Epic #1146）
@@ -45,6 +45,17 @@ paths: ["components/features/ai-employees/office-3d/**", "components/features/ai
   - 3D は、フロアだけでなく、会話・部屋・カスタマイズの場面の後ろにも出したままにする（タイトルの画面だけ 2D）。場面ごとのカメラ（どこを・どの近さで・画面のどこに）は純粋な関数 `stageView`（`office-view-3d.ts`）で決め、入れ物（`office-immersive.tsx`）は場面と対象の場所を渡すだけにする。画面のどこに置くかは 2D と同じ割合（会話とカスタマイズは左から 32%・上から 42%、部屋は左から 15%・上から 30%）
   - 場面が変わったときだけ、視点全体（見る場所・近さ・ずらし）を 0.9 秒かけて滑らせる。フロアでのドラッグと拡大は、今までどおりすぐ効かせる。「動きを減らす」設定では滑らせない
   - 名札（押せるボタン）はフロアの場面だけに出す。会話の相手は、こちらを向かせる（飾り。相手が誰かはパネルが伝える）
+- **ルール**（#1148 の後半で足した。2026-11-15）:
+  - カスタマイズのプレビューは、3D のときはフロアのロボットそのものにする。絵（2D）の場所を「窓」（何も描かない枠）にして、カメラがその窓の中にロボット全体を収める（`openingView`。`office-view-3d.ts`）。窓の場所は、置いた部品（`office-studio.tsx`）が画面で測って知らせる。割合で決め打ちしない（画面の幅と高さで、左のパネルの高さが変わる）
+  - 下書きの見た目は、保存の前にフロアのロボットへ渡す（`onLook`）。カスタマイズを出たら外す（保存したものだけがフロアに残る）。下書きは自分の画面だけで、サーバーには送らない
+  - 3D が出ていない間（2D・読み込み中・表示できなかったあと）は、今までの 2D の絵のまま。窓を出すのは、3D のフロアが最初の1コマを描いたあとだけ
+  - 窓の中には、フロアにあるもの（机・ほかの AI社員）もそのまま映る。プレビュー用に別の 3D を作らない（3D の描画を2つ持たない。フロアとの続きが切れる）。隣の席が端に残る近さまで寄り（`OPENING_SUBJECT`・`OPENING_FILL`）、窓の縁を暗くして、まわりを引かせる。窓に収める大きさ（`OPENING_SUBJECT`）は 3D のロボットの大きさ（`ROBOT_SCALE`。`robot-3d.tsx`）に合わせた数字なので、ロボットの大きさを変えたら一緒に直す（#1159 でロボットが 1.25 倍になったとき、窓からはみ出す寸前だった）
+  - カスタマイズの間、その AI社員は「社長が近づいた」ときの表情にする（目が開く・頭の上の印なし）。喜んでいる間の目は、どの目を選んでも同じ弧になり、選んだ目を確かめられない（`ui-ux-specialist` のレビューの指摘）。休止中（目を閉じ、色が暗い）と要確認は、状態どおりのまま（2D の絵と同じ）。休止中をカスタマイズの間だけ起きた姿で見せる案は、オーナーの判断（2026-11-15、選択肢から「今のまま」）で採らない。見た目を確かめたいときは、呼び戻してからカスタマイズする
+  - 歩いている途中でも、窓にはその AI社員を映す（行き先ではなく、今いる場所を見る）
+  - カードの文（話し方の見本・メッセージ）は2行分の高さを取っておく。行が増えて窓が低くなると、中のロボットが跳ねる
+  - 縦に並ぶ幅（1024px 未満）では、窓は 2D の絵と同じ高さ・左の列と同じ幅までにし、暗幕は一様の薄い色にする（横のグラデーションは、窓が左にある広い画面だけ）
+  - 出来事（`office-recent-events.ts`）は、サーバーが成功を返した採用と呼び戻しだけを記録する。休止は出来事にしない（状態どおり眠る）。名前の変更と解雇は出来事にしない。見せる時間は 8 秒で、歩いている間は数えない（席に着いてから数える。廊下で誰にも見られずに終わらない）
+  - 検証用のパネル（開発だけ）の出来事は、実際の出来事より優先する
 - **ルール**（#1177 で足した。オーナーの指摘「文字が被ってみえない部分も修正してください」）:
   - フロアの名札と部屋名は、2D でも 3D でも同じ DOM の層（`office-floor-labels.tsx`）に置く。2D の絵（SVG）の中に部屋名を描かない（HUD を避けられず、拡大で文字の大きさが変わる）
   - 置き場所は純粋な関数（`office-label-layout.ts`）で決める。名札は、ほかの名札と重なるときに上下にだけ動かす（選んでいる名札は動かさない）。部屋名は、HUD のパネル・ロボット・名札・ほかの部屋名・画面の端を避け、候補の場所（部屋の奥の上 → 床の中央 → 手前）の近くに空きが無ければ出さない

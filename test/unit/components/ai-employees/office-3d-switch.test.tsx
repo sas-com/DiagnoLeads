@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   fps: [42] as number[],
   preferred: '2d' as '2d' | '3d',
   statuses: [] as string[],
+  looks: [] as unknown[],
+  opening: undefined as undefined | null | { x: number; y: number; w: number; h: number },
   vacant: [] as string[],
   walks: null as null | ((role: string, walking: boolean) => void),
   // How often the canvas rendered, and what it was given to report the frame rate (#1270)
@@ -43,6 +45,7 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
     vacant,
     stage,
     subject,
+    opening,
     attentive,
     events,
     onFps,
@@ -50,7 +53,8 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
     onView,
     onWalking,
   }: {
-    employees: readonly { status: string }[];
+    employees: readonly { status: string; look: unknown }[];
+    opening?: null | { x: number; y: number; w: number; h: number };
     vacant?: readonly string[];
     stage?: string;
     subject?: { x: number; y: number } | null;
@@ -63,6 +67,8 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
   }) {
     if (mocks.breaks) throw new Error('no WebGL context');
     mocks.statuses = employees.map((employee) => employee.status);
+    mocks.looks = employees.map((employee) => employee.look);
+    mocks.opening = opening;
     mocks.vacant = [...(vacant ?? [])];
     mocks.walks = onWalking ?? null;
     mocks.canvasRenders += 1;
@@ -134,8 +140,23 @@ vi.mock('@/lib/trpc/client', () => ({
   trpc: {
     useUtils: () => ({ aiEmployees: { office: { invalidate: vi.fn() } } }),
     aiEmployees: {
-      hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
-      update: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+      // Orders are carried out at once: what the office does after the answer of the server
+      hire: {
+        useMutation: (options: { onSuccess?: (data: unknown, input: unknown) => void } = {}) => ({
+          isPending: false,
+          mutate: (input: unknown) => options.onSuccess?.({ id: 'new' }, input),
+        }),
+      },
+      update: {
+        useMutation: (options: { onSuccess?: (data: unknown, input: unknown) => void } = {}) => ({
+          isPending: false,
+          mutate: (input: unknown) =>
+            options.onSuccess?.(
+              { id: '770e8400-e29b-41d4-a716-446655440001', name: 'AIセールス' },
+              input
+            ),
+        }),
+      },
     },
   },
 }));
@@ -154,7 +175,7 @@ const sales = {
   profile: DEFAULT_AI_EMPLOYEE_PROFILE,
 };
 
-async function enterOffice() {
+async function enterOffice(employees: (typeof sales)[] = [sales]) {
   const user = userEvent.setup();
   render(
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
@@ -162,7 +183,7 @@ async function enterOffice() {
         organizationId="660e8400-e29b-41d4-a716-446655440000"
         companyName="テスト商事"
         presidentName="山田 太郎"
-        employees={[sales]}
+        employees={employees}
         canManage
         onExit={vi.fn()}
       />
@@ -184,6 +205,11 @@ describe('the switch to the 3D floor', () => {
     mocks.preferred = '2d';
     mocks.statuses = [];
     window.localStorage.clear();
+    mocks.looks = [];
+    mocks.opening = undefined;
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('is on V, not on a number: the numbers belong to the rooms', async () => {
@@ -224,6 +250,11 @@ describe('the switch to the 3D floor', () => {
     expect(
       within(office).getByRole('region', { name: 'AIセールスのカスタマイズ' })
     ).toBeInTheDocument();
+    // The customization shows its 2D picture again: there is no 3D robot to look at (#1148)
+    expect(within(office).queryByTestId('studio-opening')).not.toBeInTheDocument();
+    expect(
+      within(office).getByRole('img', { name: 'AIセールスのプレビュー' }).querySelector('svg')
+    ).not.toBeNull();
     errors.mockRestore();
   });
 
@@ -306,6 +337,162 @@ describe('the switch to the 3D floor', () => {
     await user.keyboard('c');
     expect(within(office).getByTestId('floor-3d')).toBeInTheDocument();
     expect(mocks.scene).toMatchObject({ stage: 'studio', subject: { x: seat.x, y: seat.y } });
+  });
+
+  it('shows the draft of the customization on the 3D robot before it is saved (#1148)', async () => {
+    // "Leave it to me" draws the last choice of every part: not the look the employee has
+    vi.spyOn(Math, 'random').mockReturnValue(0.999);
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await screen.findByTestId('floor-3d');
+    expect(mocks.looks).toEqual([DEFAULT_AI_EMPLOYEE_PROFILE.look]);
+
+    await user.keyboard('c');
+    const studio = within(office).getByRole('region', { name: 'AIセールスのカスタマイズ' });
+    // The preview is the robot on the floor: an opening with nothing drawn in it, no 2D picture
+    const preview = within(office).getByRole('img', { name: 'AIセールスのプレビュー' });
+    expect(preview).toBe(within(office).getByTestId('studio-opening'));
+    expect(preview).toBeEmptyDOMElement();
+    // Customized: the employee turns to the viewer and looks at the president, eyes open and
+    // nothing over its head, so that the eyes of the draft can be told apart
+    expect(mocks.scene).toMatchObject({
+      stage: 'studio',
+      attentive: 'sales',
+      events: { sales: 'president_near' },
+    });
+    expect(mocks.looks).toEqual([DEFAULT_AI_EMPLOYEE_PROFILE.look]);
+
+    await user.click(within(studio).getByRole('button', { name: 'おまかせ' }));
+    expect(mocks.looks).not.toEqual([DEFAULT_AI_EMPLOYEE_PROFILE.look]);
+    const drawn = mocks.looks[0];
+    // Putting the draft back puts the robot back
+    await user.click(within(office).getByRole('button', { name: 'もとに戻す' }));
+    expect(mocks.looks).toEqual([DEFAULT_AI_EMPLOYEE_PROFILE.look]);
+
+    // Leaving without saving takes the draft off the robot: the floor shows what is stored
+    await user.click(within(studio).getByRole('button', { name: 'おまかせ' }));
+    expect(mocks.looks).toEqual([drawn]);
+    await user.keyboard('{Escape}');
+    await user.keyboard('{Escape}');
+    expect(mocks.scene).toMatchObject({ stage: 'world', attentive: null });
+    expect(mocks.looks).toEqual([DEFAULT_AI_EMPLOYEE_PROFILE.look]);
+  });
+
+  it('tells the 3D floor where the opening of the customization is, and only there (#1148)', async () => {
+    const box = { left: 24, top: 80, width: 416, height: 470 };
+    const real = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.dataset.testid === 'studio-opening' ? (box as DOMRect) : real.call(this);
+    });
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await screen.findByTestId('floor-3d');
+    expect(mocks.opening).toBeNull();
+
+    await user.keyboard('c');
+    expect(within(office).getByTestId('studio-opening')).toBeInTheDocument();
+    expect(mocks.opening).toEqual({ x: 24, y: 80, w: 416, h: 470 });
+
+    // Back on the floor there is no opening: the camera is the president's again
+    await user.keyboard('{Escape}');
+    expect(mocks.scene).toMatchObject({ stage: 'world' });
+    expect(mocks.opening).toBeNull();
+  });
+
+  it('keeps the 2D picture in the customization while the 3D floor is not drawn (#1148)', async () => {
+    mocks.draws = false;
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await screen.findByTestId('floor-3d');
+    await user.keyboard('c');
+    expect(within(office).queryByTestId('studio-opening')).not.toBeInTheDocument();
+    const preview = within(office).getByRole('img', { name: 'AIセールスのプレビュー' });
+    expect(preview.querySelector('svg')).not.toBeNull();
+    expect(mocks.opening).toBeNull();
+  });
+
+  it('shows a hire as something that happened, and a rest as nothing (#1148)', async () => {
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await screen.findByTestId('floor-3d');
+    // Sent to rest: no event. The status makes it sleep
+    await user.keyboard('e');
+    await user.keyboard('1');
+    expect(within(office).getByText(/しばらく休みます/)).toBeInTheDocument();
+    expect(mocks.scene?.events).toEqual({ sales: 'president_near' });
+    await user.keyboard('1');
+
+    // Hired: the new employee cheers, and the president standing there does not cover it
+    // (the staff list is a new one each time the floor comes back)
+    const staff = within(office).getByRole('heading', { name: '社員名簿' })
+      .parentElement as HTMLElement;
+    await user.click(within(staff).getByRole('button', { name: /マーケター/ }));
+    await user.keyboard('e');
+    await user.keyboard('1');
+    expect(mocks.scene?.events).toEqual({ marketer: 'hired' });
+    await user.keyboard('1');
+    expect(mocks.scene?.events).toEqual({ marketer: 'hired' });
+  });
+
+  it('says in the staff list that a new employee is glad, for a while (#1148)', async () => {
+    const user = userEvent.setup();
+    const office3d = (employees: (typeof sales)[]) => (
+      <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
+        <OfficeImmersive
+          organizationId="660e8400-e29b-41d4-a716-446655440000"
+          companyName="テスト商事"
+          presidentName="山田 太郎"
+          employees={employees}
+          canManage
+          onExit={vi.fn()}
+        />
+      </NextIntlClientProvider>
+    );
+    const view = render(office3d([sales]));
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.keyboard('v');
+    await screen.findByTestId('floor-3d');
+    const row = (name: RegExp) =>
+      within(
+        within(office).getByRole('heading', { name: '社員名簿' }).parentElement as HTMLElement
+      ).getByRole('button', { name });
+    // Nobody is glad about nothing
+    expect(row(/AIセールス/)).not.toHaveTextContent('喜んでいます');
+
+    await user.click(row(/マーケター/));
+    await user.keyboard('e');
+    await user.keyboard('1');
+    await user.keyboard('1');
+    // The office reads the staff again: the new employee is there, in training
+    const marketer = {
+      ...sales,
+      id: '770e8400-e29b-41d4-a716-446655440002',
+      role: 'marketer' as const,
+      name: 'AIマーケター',
+    };
+    view.rerender(office3d([sales, marketer as unknown as typeof sales]));
+    expect(row(/AIマーケター/)).toHaveTextContent('喜んでいます');
+    expect(row(/AIセールス/)).not.toHaveTextContent('喜んでいます');
+  });
+
+  it('shows a call back from a rest as something that happened (#1148)', async () => {
+    const paused = { ...sales, status: 'paused' as const, deskStatus: 'paused' as const };
+    const { user } = await enterOffice([paused as unknown as typeof sales]);
+    await user.keyboard('v');
+    await screen.findByTestId('floor-3d');
+    await user.keyboard('e');
+    await user.keyboard('1');
+    expect(mocks.scene?.events).toEqual({ sales: 'resumed' });
+
+    // Customized right after: the cheer gives way, and comes back on the floor
+    await user.keyboard('1');
+    await user.keyboard('c');
+    expect(mocks.scene).toMatchObject({ stage: 'studio', events: { sales: 'president_near' } });
+    await user.keyboard('{Escape}');
+    expect(mocks.scene).toMatchObject({ stage: 'world', events: { sales: 'resumed' } });
   });
 
   it('forgets what the trial panel pretended when the trial ends', async () => {
