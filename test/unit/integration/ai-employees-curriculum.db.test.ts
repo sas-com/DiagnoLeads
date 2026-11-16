@@ -237,15 +237,24 @@ describe.skipIf(!url)('AI employees: the training (PostgreSQL)', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 
     const logged = await pg
-      .select({ metadata: auditLogs.metadata })
+      .select({ metadata: auditLogs.metadata, changes: auditLogs.changes })
       .from(auditLogs)
       .where(and(eq(auditLogs.organizationId, orgA), eq(auditLogs.resource, 'ai_training')));
+    // The first copies made by the onboarding (common and role) are on record too
     expect(logged.map((row) => row.metadata?.event).sort()).toEqual([
+      'employee_training_copied',
+      'employee_training_copied',
       'employee_training_copied',
       'employee_training_saved',
       'template_saved',
       'template_saved',
       'template_saved',
     ]);
+    // What the training said before and after is traced, like the policy
+    const saved = logged.find((row) => row.metadata?.event === 'employee_training_saved');
+    expect(saved?.changes).toMatchObject({
+      before: { kind: 'common', sections: COMMON },
+      after: { kind: 'common', sections: own },
+    });
   });
 });

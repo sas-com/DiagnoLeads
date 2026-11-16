@@ -409,6 +409,34 @@ describe('OfficeRoomTraining', () => {
     });
   });
 
+  it('closes a template being written when another employee is chosen: it is never saved to another role (#1280)', async () => {
+    const user = userEvent.setup();
+    const empty = { scope: '', purpose: '', tasks: '', handoffs: '', measures: '' };
+    mocks.curriculum = {
+      templates: {
+        common: {
+          scope: 'common',
+          sections: { company: '', services: '', customers: '', values: '', donts: '' },
+          version: 0,
+          updatedAt: null,
+        },
+        marketer: { scope: 'marketer', sections: empty, version: 0, updatedAt: null },
+        sales: { scope: 'sales', sections: empty, version: 0, updatedAt: null },
+      },
+      employees: {},
+    };
+    const { press } = renderRoom([
+      employee(),
+      employee({ id: 'b', role: 'sales', name: 'AI 追客' }),
+    ]);
+    press('1');
+    await user.click(screen.getAllByRole('button', { name: 'テンプレートを直す' })[1]);
+    expect(screen.getByLabelText('目的')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /AI 追客/ }));
+    expect(screen.queryByLabelText('目的')).not.toBeInTheDocument();
+    expect(mocks.calls).toEqual([]);
+  });
+
   it('keeps the training for the managers', () => {
     const { press } = renderRoom([employee()], { canManage: false });
     press('1');

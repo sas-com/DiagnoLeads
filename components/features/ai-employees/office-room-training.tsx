@@ -8,6 +8,7 @@ import {
   TRAINING_KINDS,
   TRAINING_SECTIONS,
   TRAINING_SECTION_MAX_LENGTH,
+  type TemplateScope,
   type TrainingKind,
   type TrainingSections,
 } from '@/lib/features/ai-employees/types/curriculum';
@@ -53,8 +54,10 @@ type Field =
   | { kind: 'correct'; sessionId: string }
   | { kind: 'policy'; employeeId: string }
   | { kind: 'note'; employeeId: string; path: string }
-  // A training of the format (#1280): an employee's own, or a template
-  | { kind: 'training'; trainingKind: TrainingKind; employeeId: string | null };
+  // A training of the format (#1280): an employee's own, or the template of a scope. The target
+  // is kept with the field, so choosing another employee never saves it somewhere else
+  | { kind: 'training'; trainingKind: TrainingKind; employeeId: string }
+  | { kind: 'template'; trainingKind: TrainingKind; scope: TemplateScope };
 
 /** Only one field is open at a time in the room */
 const FIELD_ID = 'training-room-field';
@@ -109,7 +112,10 @@ export function OfficeRoomTraining({
   // The sections of a training being written, by section key
   const [sectionDrafts, setSectionDrafts] = useState<TrainingSections>({});
   // The kind of training about to be copied again from its template (asks once more)
-  const [confirmCopy, setConfirmCopy] = useState<TrainingKind | null>(null);
+  const [confirmCopy, setConfirmCopy] = useState<{
+    employeeId: string;
+    kind: TrainingKind;
+  } | null>(null);
   const [confirmPromote, setConfirmPromote] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -212,6 +218,9 @@ export function OfficeRoomTraining({
     const next = employees[index];
     if (!next) return;
     setSelectedId(next.id);
+    // What was open belonged to the employee chosen before
+    closeField();
+    setConfirmCopy(null);
     setConfirmPromote(false);
     setNotice(null);
   };
@@ -242,6 +251,7 @@ export function OfficeRoomTraining({
     event.preventDefault();
     setBoard(opened);
     setConfirmPromote(false);
+    setConfirmCopy(null);
     return true;
   };
   useRoomKeys(keysRef, onRoomKey);
@@ -336,6 +346,7 @@ export function OfficeRoomTraining({
                 onClick={() => {
                   setBoard(entry);
                   setConfirmPromote(false);
+                  setConfirmCopy(null);
                 }}
               >
                 {t(`boards.${entry}`)}
@@ -700,7 +711,11 @@ export function OfficeRoomTraining({
             field.trainingKind === kind &&
             field.employeeId === selected.id;
           const editingTemplate =
-            field?.kind === 'training' && field.trainingKind === kind && field.employeeId === null;
+            field?.kind === 'template' &&
+            field.trainingKind === kind &&
+            field.scope === templateScope
+              ? field
+              : null;
           const title =
             kind === 'common'
               ? tOffice('curriculum.kinds.common')
@@ -728,7 +743,7 @@ export function OfficeRoomTraining({
                   onSubmit: () =>
                     editingTemplate
                       ? saveTemplate.mutate(
-                          { organizationId, scope: templateScope, sections: sectionDrafts },
+                          { organizationId, scope: editingTemplate.scope, sections: sectionDrafts },
                           { onSuccess: closeField }
                         )
                       : saveTraining.mutate(
@@ -764,7 +779,7 @@ export function OfficeRoomTraining({
                       </div>
                     ))}
                   </dl>
-                  {confirmCopy === kind ? (
+                  {confirmCopy?.kind === kind && confirmCopy.employeeId === selected.id ? (
                     <div
                       key={`confirm-copy-${kind}`}
                       className="space-y-3 border border-[#e9cf9a] px-4 py-3"
@@ -804,13 +819,13 @@ export function OfficeRoomTraining({
                       })}
                       {own &&
                         action({
-                          onClick: () => setConfirmCopy(kind),
+                          onClick: () => setConfirmCopy({ employeeId: selected.id, kind }),
                           children: t('actions.copyTemplate'),
                         })}
                       {action({
                         onClick: () => {
                           setSectionDrafts({ ...template.sections });
-                          setField({ kind: 'training', trainingKind: kind, employeeId: null });
+                          setField({ kind: 'template', trainingKind: kind, scope: templateScope });
                         },
                         children: t('actions.editTemplate'),
                       })}

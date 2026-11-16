@@ -348,6 +348,7 @@ export async function startOnboarding(
     employeeId: employee.id,
     role: employee.role,
     locale: input.locale,
+    userId: input.userId,
     now,
   });
   const first: Anthropic.MessageParam = {

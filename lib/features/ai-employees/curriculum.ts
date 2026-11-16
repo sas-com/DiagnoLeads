@@ -127,9 +127,11 @@ function audit(
   db: Pick<Database, 'insert'>,
   input: {
     organizationId: string;
-    userId: string;
+    userId: string | null;
     resourceId: string;
     event: string;
+    /** What the training said before, like the policy's audit: the text an AI reads is traced */
+    before?: Record<string, unknown> | null;
     after: Record<string, unknown>;
   }
 ) {
@@ -139,7 +141,7 @@ function audit(
     action: 'update',
     resource: 'ai_training',
     resourceId: input.resourceId,
-    changes: { after: input.after },
+    changes: { before: input.before ?? null, after: input.after },
     metadata: { event: input.event },
   });
 }
@@ -158,6 +160,15 @@ export async function saveTemplate(
   const now = input.now ?? new Date();
   const sections = completeSections(kindOfScope(input.scope), input.sections);
   return db.transaction(async (tx) => {
+    const [before] = await tx
+      .select({ sections: aiTrainingTemplates.sections, version: aiTrainingTemplates.version })
+      .from(aiTrainingTemplates)
+      .where(
+        and(
+          eq(aiTrainingTemplates.organizationId, input.organizationId),
+          eq(aiTrainingTemplates.scope, input.scope)
+        )
+      );
     const [saved] = await tx
       .insert(aiTrainingTemplates)
       .values({
@@ -177,6 +188,7 @@ export async function saveTemplate(
           updatedBy: input.userId,
           updatedAt: now,
         },
+        setWhere: eq(aiTrainingTemplates.organizationId, input.organizationId),
       })
       .returning({ id: aiTrainingTemplates.id, version: aiTrainingTemplates.version });
     if (!saved) throw new Error('The template was not saved');
@@ -185,7 +197,8 @@ export async function saveTemplate(
       userId: input.userId,
       resourceId: saved.id,
       event: 'template_saved',
-      after: { scope: input.scope, version: saved.version },
+      before: before ? { sections: before.sections, version: before.version } : null,
+      after: { scope: input.scope, version: saved.version, sections },
     });
     return { version: saved.version };
   });
@@ -218,6 +231,16 @@ async function writeTraining(
   }
 ) {
   const sections = completeSections(input.kind, input.sections);
+  const [before] = await db
+    .select({ sections: aiEmployeeTrainings.sections })
+    .from(aiEmployeeTrainings)
+    .where(
+      and(
+        eq(aiEmployeeTrainings.organizationId, input.organizationId),
+        eq(aiEmployeeTrainings.employeeId, input.employeeId),
+        eq(aiEmployeeTrainings.kind, input.kind)
+      )
+    );
   await db
     .insert(aiEmployeeTrainings)
     .values({
@@ -239,7 +262,9 @@ async function writeTraining(
         updatedBy: input.userId,
         updatedAt: input.now,
       },
+      setWhere: eq(aiEmployeeTrainings.organizationId, input.organizationId),
     });
+  return { before: before?.sections ?? null, after: sections };
 }
 
 /** A manager edits an employee's own training of one kind; null when there is no such employee */
@@ -258,13 +283,18 @@ export async function saveEmployeeTraining(
   if (!employee) return null;
   const now = input.now ?? new Date();
   await db.transaction(async (tx) => {
-    await writeTraining(tx, { ...pickTraining(input), templateVersion: null, now });
+    const written = await writeTraining(tx, {
+      ...pickTraining(input),
+      templateVersion: null,
+      now,
+    });
     await audit(tx, {
       organizationId: input.organizationId,
       userId: input.userId,
       resourceId: employee.id,
       event: 'employee_training_saved',
-      after: { kind: input.kind },
+      before: written.before && { kind: input.kind, sections: written.before },
+      after: { kind: input.kind, sections: written.after },
     });
   });
   return { kind: input.kind };
@@ -333,7 +363,7 @@ export async function copyTemplate(
     input.locale
   );
   await db.transaction(async (tx) => {
-    await writeTraining(tx, {
+    const written = await writeTraining(tx, {
       organizationId: input.organizationId,
       employeeId: employee.id,
       kind: input.kind,
@@ -347,7 +377,8 @@ export async function copyTemplate(
       userId: input.userId,
       resourceId: employee.id,
       event: 'employee_training_copied',
-      after: { kind: input.kind, templateVersion: template.version },
+      before: written.before && { kind: input.kind, sections: written.before },
+      after: { kind: input.kind, templateVersion: template.version, sections: written.after },
     });
   });
   return { templateVersion: template.version };
@@ -364,6 +395,8 @@ export async function ensureEmployeeTraining(
     employeeId: string;
     role: AiEmployeeRole;
     locale: CurriculumLocale;
+    /** Who started what asks for it (the onboarding): the first copy is on record */
+    userId: string;
     now?: Date;
   }
 ): Promise<Record<TrainingKind, TrainingSections>> {
@@ -386,7 +419,7 @@ export async function ensureEmployeeTraining(
       continue;
     }
     const template = await templateFor(db, input.organizationId, input.role, kind, input.locale);
-    await db
+    const [copied] = await db
       .insert(aiEmployeeTrainings)
       .values({
         organizationId: input.organizationId,
@@ -394,10 +427,21 @@ export async function ensureEmployeeTraining(
         kind,
         sections: template.sections,
         templateVersion: template.version,
+        updatedBy: input.userId,
         createdAt: now,
         updatedAt: now,
       })
-      .onConflictDoNothing({ target: [aiEmployeeTrainings.employeeId, aiEmployeeTrainings.kind] });
+      .onConflictDoNothing({ target: [aiEmployeeTrainings.employeeId, aiEmployeeTrainings.kind] })
+      .returning({ id: aiEmployeeTrainings.id });
+    if (copied) {
+      await audit(db, {
+        organizationId: input.organizationId,
+        userId: input.userId,
+        resourceId: input.employeeId,
+        event: 'employee_training_copied',
+        after: { kind, templateVersion: template.version, sections: template.sections },
+      });
+    }
     result[kind] = template.sections;
   }
   return result;
