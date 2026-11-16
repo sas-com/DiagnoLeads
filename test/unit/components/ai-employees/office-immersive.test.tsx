@@ -97,7 +97,7 @@ function renderOffice(
       />
     </NextIntlClientProvider>
   );
-  return { onExit, office: screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' }) };
+  return { onExit, office: screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' }) };
 }
 
 // WCAG 2 contrast ratio of two #rrggbb colors
@@ -181,7 +181,7 @@ describe('OfficeImmersive', () => {
     expect(
       Array.from(guide.querySelectorAll('a, button')).map((entry) => entry.textContent)
     ).toEqual([
-      '1社長のデスク今日の予定ページを開く',
+      '1社長のデスク今日の全体ページを開く',
       '2マーケティング室集客と見込み客',
       '3営業フロア商談',
       '4開発室現行調査',
@@ -461,7 +461,7 @@ describe('OfficeImmersive', () => {
         />
       </NextIntlClientProvider>
     );
-    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     await user.click(within(office).getByRole('button', { name: /AIセールス.*研修中.*商談にする/ }));
     await user.keyboard('e');

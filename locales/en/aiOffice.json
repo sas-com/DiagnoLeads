@@ -164,7 +164,7 @@
     },
     "loading": "Loading",
     "immersive": {
-      "label": "AI office (full screen)",
+      "label": "AI office (office view)",
       "president": "President",
       "day": "Day",
       "night": "Night",
@@ -258,7 +258,7 @@
       "room": {
         "back": "Back to the floor",
         "work": {
-          "desk": "Today",
+          "desk": "Today at a glance",
           "marketing": "Acquisition and prospects",
           "sales": "Deals",
           "engineering": "Surveys",
@@ -325,11 +325,11 @@
             "keys": {
               "open": "open its prospects"
             },
-            "openHint": "Opening the row of a source shows its prospects of the last {days} days on the lead board.",
+            "openHint": "Opening the row of a source shows its prospects of the last {days} days on the prospect board.",
             "leadsOf": "Source: {source}, last {days} days",
             "back": "Back to the source board",
             "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened.",
-            "openDescription": "Shows its prospects of the last {days} days on the lead board",
+            "openDescription": "Shows its prospects of the last {days} days on the prospect board",
             "closedRow": " (cannot be opened)",
             "sqlNote": "The SQL of this table counts the prospects judged SQL. The SQL of the progress board counts the prospects that were won too, so the two can differ."
           },
@@ -399,7 +399,7 @@
           "notComputable": "Cannot be computed"
         },
         "leads": {
-          "board": "Lead board",
+          "board": "Prospect board",
           "views": {
             "needsAction": "Not started yet (new)",
             "consultation": "Consultation requested",
@@ -422,10 +422,10 @@
           "noCompany": "No company name",
           "noLevel": "—",
           "unassigned": "Unassigned",
-          "empty": "No leads match this view.",
+          "empty": "No prospects match this view.",
           "loading": "Loading",
-          "error": "The leads could not be read. Please open the room again in a while.",
-          "forbidden": "You do not have permission to see leads. Please ask an administrator.",
+          "error": "The prospects could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see prospects. Please ask an administrator.",
           "range": "{from}–{to} of {total}",
           "openHint": "Opening a row opens the customer file in this room.",
           "openList": "Open the list in the normal view",
@@ -438,7 +438,7 @@
           "title": "Customer file",
           "reading": "Reading the contact records.",
           "readError": "The contact records could not be read. Please open the file again in a while.",
-          "noContact": "There is no contact record for this lead yet.",
+          "noContact": "There is no contact record for this prospect yet.",
           "latest": "The last contact was \"{kind}\" on {date}. Contact records in all: {total}.",
           "recorded": "Recorded \"{kind}\". You can undo it if it was a mistake.",
           "undone": "The record was undone.",
@@ -998,7 +998,7 @@
         "attentive": "Looking at you"
       }
     },
-    "enterOffice": "Enter the office (full screen)",
+    "enterOffice": "Enter the office",
     "installApp": "Install as an app"
   }
 }
