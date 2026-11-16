@@ -4,7 +4,8 @@ import { TEST_USERS, setupAuthenticatedTest } from './helpers/auth';
 /**
  * E2E Test: no Content Security Policy violation on the public AX pages, on the login page,
  * which loads sonner (its runtime <style> is patched out, #213), and on admin screens whose
- * libraries add <style> elements while they run (ApexCharts, Radix's scroll lock and Select, #317).
+ * libraries add <style> elements while they run (ApexCharts, Radix's scroll lock and Select, #317),
+ * and on the 3D floor of the AI office (three.js, #1150).
  * Meaningful against the production build (CI, E2E_USE_BUILD), which sends the strict CSP; the
  * dev server's policy is loose. A violation means something was blocked: a script, a style or a
  * request the page needs (#207, #211).
@@ -33,6 +34,15 @@ function expectStrictPolicy(response: Response | null): void {
   expect(policy).toContain("'nonce-");
   expect(policy).toContain("'strict-dynamic'");
 }
+
+// The 3D floor of the office needs WebGL, which a headless Chromium without a GPU gives only when
+// told to draw in software (learning "ヘッドレスの Chromium で WebGL の画面と…"). The other pages
+// of this file do not care
+test.use({
+  launchOptions: {
+    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  },
+});
 
 test.describe('Content Security Policy', () => {
   for (const path of [
@@ -65,9 +75,24 @@ test.describe('Content Security Policy', () => {
 test.describe('Content Security Policy on the admin screens', () => {
   // One test signs in once: sign-in allows 5 attempts a minute from one address (rate-limit.ts),
   // which the smoke run shares with the other signed-in tests
-  test('charts, a select and a dialog run without a violation @smoke', async ({ page }) => {
+  test('the 3D office, charts, a select and a dialog run without a violation @smoke', async ({ page }) => {
     await setupAuthenticatedTest(page, TEST_USERS.owner);
     const violations = await watchViolations(page);
+
+    // Signing in opens the full-screen office, which starts on its 3D floor (#1150): three.js
+    // and React Three Fiber are loaded then, and must run under the strict policy (no WASM, no
+    // worker, no blob) and against the React that Next.js carries. Drawing in software is slow,
+    // so the office may fall back to 2D some seconds later: only the first frames are checked
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    // Opened again, as someone who just came in: the page is loaded under watch this time, with
+    // the strict policy, and no second sign-in is spent
+    expectStrictPolicy(await page.goto('/ja/office?source=login'));
+    const office = page.getByRole('dialog');
+    await office.getByRole('button', { name: /^出社する/ }).click();
+    await expect(office.locator('canvas')).toBeVisible({ timeout: 30 * 1000 });
+    expect(errors).toEqual([]);
+    expect(violations).toEqual([]);
 
     expectStrictPolicy(await page.goto('/ja/analytics'));
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

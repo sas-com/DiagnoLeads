@@ -1,14 +1,15 @@
 /**
  * The switch to the 3D floor of the full-screen office (#1135, spike): its own key, the 2D floor
  * kept until the 3D one drew, and the way back to 2D when it cannot be shown. A production build
- * offers the switch and the frame rate but not the trial panel (#1157). The 3D canvas itself is
- * mocked: three.js is never loaded here.
+ * offers the switch and the frame rate but not the trial panel (#1157). Which floor the office
+ * starts with, what the device remembers and the way back from a slow device are at the end
+ * (#1150). The 3D canvas itself is mocked: three.js is never loaded here.
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DESK_SEATS, spotOf } from '@/components/features/ai-employees/office-map-layout';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { useEffect } from 'react';
@@ -18,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   trial: true,
   breaks: false,
   draws: true,
+  // What the canvas reports, a report a second, and what the office starts with (#1150)
+  fps: [42] as number[],
+  preferred: '2d' as '2d' | '3d',
   statuses: [] as string[],
   looks: [] as unknown[],
   opening: undefined as undefined | null | { x: number; y: number; w: number; h: number },
@@ -74,7 +78,7 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
     useEffect(() => {
       if (!mocks.draws) return;
       onReady?.();
-      onFps?.(42);
+      for (const fps of mocks.fps) onFps?.(fps);
       // A frame: the real canvas tells where the camera looks, and the tags are placed
       const frame = window.setTimeout(() =>
         onView?.(
@@ -105,6 +109,23 @@ vi.mock(
       ...actual,
       get OFFICE_3D_TRIAL() {
         return mocks.trial;
+      },
+    };
+  }
+);
+
+// The floor the office starts with, set by each test: the unit tests never load three.js
+vi.mock(
+  '@/components/features/ai-employees/office-3d/office-display',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('@/components/features/ai-employees/office-3d/office-display')
+      >();
+    return {
+      ...actual,
+      get DEFAULT_DISPLAY() {
+        return mocks.preferred;
       },
     };
   }
@@ -180,7 +201,10 @@ describe('the switch to the 3D floor', () => {
     mocks.trial = true;
     mocks.breaks = false;
     mocks.draws = true;
+    mocks.fps = [42];
+    mocks.preferred = '2d';
     mocks.statuses = [];
+    window.localStorage.clear();
     mocks.looks = [];
     mocks.opening = undefined;
   });
@@ -190,7 +214,7 @@ describe('the switch to the 3D floor', () => {
 
   it('is on V, not on a number: the numbers belong to the rooms', async () => {
     const { user, office } = await enterOffice();
-    expect(within(office).getByRole('button', { name: /3D（試験中）/ })).toHaveTextContent('V');
+    expect(within(office).getByRole('button', { name: /3D 表示/ })).toHaveTextContent('V');
     await user.keyboard('9');
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
     await user.keyboard('v');
@@ -220,7 +244,7 @@ describe('the switch to the 3D floor', () => {
       await within(office).findByText('3D のフロアを表示できませんでした。2D の表示に戻しました。')
     ).toBeInTheDocument();
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /3D（試験中）/ })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /3D 表示/ })).toBeInTheDocument();
     // The office is still there, and its keys still work
     await user.keyboard('c');
     expect(
@@ -496,10 +520,10 @@ describe('the switch to the 3D floor in a production build (#1157)', () => {
   it('starts in 2D, switches to 3D and back, and shows how fast the device draws', async () => {
     const { user, office } = await enterOffice();
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
-    await user.click(within(office).getByRole('button', { name: /3D（試験中）/ }));
+    await user.click(within(office).getByRole('button', { name: /3D 表示/ }));
     expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
     expect(await within(office).findByText('毎秒 42 コマ')).toBeInTheDocument();
-    await user.click(within(office).getByRole('button', { name: /2D に戻す/ }));
+    await user.click(within(office).getByRole('button', { name: /2D 表示/ }));
     expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
     expect(within(office).queryByText('毎秒 42 コマ')).not.toBeInTheDocument();
     // The key works too
@@ -531,11 +555,150 @@ describe('the switch to the 3D floor in a production build (#1157)', () => {
   });
 });
 
+describe('the floor the office starts with, and what this device remembers (#1150)', () => {
+  const KEY = 'diagnoleads.office.display';
+  const slowNote = /この端末では 3D の描画が遅いため、2D で表示しています。/;
+  // A device that draws 5 frames a second: the warm-up and the measured seconds
+  const slow = Array.from({ length: 12 }, () => 5);
+  const context = HTMLCanvasElement.prototype.getContext;
+
+  /** A browser that gives a WebGL context (jsdom knows none) */
+  function withWebgl(works = true) {
+    vi.stubGlobal('WebGLRenderingContext', function WebGLRenderingContext() {});
+    HTMLCanvasElement.prototype.getContext = (() =>
+      works ? {} : null) as unknown as typeof context;
+  }
+
+  beforeEach(() => {
+    mocks.trial = false;
+    mocks.breaks = false;
+    mocks.draws = true;
+    mocks.fps = [42];
+    mocks.preferred = '3d';
+    window.localStorage.clear();
+    withWebgl();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    HTMLCanvasElement.prototype.getContext = context;
+    cleanup();
+  });
+
+  it('starts in 3D by itself where 3D is the default, and remembers a switch to 2D', async () => {
+    const { user, office } = await enterOffice();
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+
+    await user.keyboard('v');
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(KEY) ?? 'null')).toEqual({
+      display: '2d',
+      reason: 'chosen',
+    });
+    expect(within(office).queryByRole('status')).not.toBeInTheDocument();
+
+    // The next visit: 2D, as chosen, whatever the default
+    cleanup();
+    await enterOffice();
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+  });
+
+  it('starts in 2D where 2D is the default, and in 3D after the person chose it here', async () => {
+    mocks.preferred = '2d';
+    const { user } = await enterOffice();
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    await user.keyboard('v');
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+
+    cleanup();
+    await enterOffice();
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+  });
+
+  it('goes back to 2D on a device that draws too slowly, says so, and starts in 2D next time', async () => {
+    mocks.fps = slow;
+    const { office } = await enterOffice();
+    expect(await within(office).findByText(slowNote)).toBeInTheDocument();
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    expect(JSON.parse(window.localStorage.getItem(KEY) ?? 'null')).toEqual({
+      display: '2d',
+      reason: 'slow',
+    });
+
+    // The next visit starts in 2D, and does not say it again: the reason was given once
+    cleanup();
+    const next = await enterOffice();
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    expect(within(next.office).queryByText(slowNote)).not.toBeInTheDocument();
+    expect(within(next.office).getByRole('button', { name: /3D 表示/ })).toBeInTheDocument();
+  });
+
+  it('leaves 3D on once the person chose it, however slowly it is drawn', async () => {
+    mocks.fps = slow;
+    const { user, office } = await enterOffice();
+    expect(await within(office).findByText(slowNote)).toBeInTheDocument();
+    // Try again: a choice is not overruled
+    await user.keyboard('v');
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(within(office).queryByText(slowNote)).not.toBeInTheDocument();
+
+    // Nor on the next visit
+    cleanup();
+    const next = await enterOffice();
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(within(next.office).queryByText(slowNote)).not.toBeInTheDocument();
+  });
+
+  it('keeps 3D on a device that draws fast enough', async () => {
+    mocks.fps = Array.from({ length: 12 }, () => 60);
+    const { office } = await enterOffice();
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(within(office).queryByText(slowNote)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('does not judge the speed while the floor draws only on a change (less motion)', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('reduce'),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    mocks.fps = slow;
+    const { office } = await enterOffice();
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(within(office).queryByText(slowNote)).not.toBeInTheDocument();
+  });
+
+  it('starts in 2D, quietly, where the browser gives no WebGL, without loading the 3D floor', async () => {
+    withWebgl(false);
+    const { office } = await enterOffice();
+    expect(screen.queryByTestId('floor-3d')).not.toBeInTheDocument();
+    // Nothing to read every day: the office says so when someone asks for 3D and it fails
+    expect(within(office).queryByRole('status')).not.toBeInTheDocument();
+    // Nothing is remembered: another browser on this device may well show it
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('remembers nothing when the 3D floor fails: the next visit tries again', async () => {
+    mocks.breaks = true;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { office } = await enterOffice();
+    expect(
+      await within(office).findByText('3D のフロアを表示できませんでした。2D の表示に戻しました。')
+    ).toBeInTheDocument();
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+    errors.mockRestore();
+  });
+});
+
 describe('the frame rate of the 3D floor (#1270)', () => {
   beforeEach(() => {
     mocks.trial = false;
     mocks.breaks = false;
     mocks.draws = true;
+    mocks.fps = [42];
+    mocks.preferred = '2d';
+    window.localStorage.clear();
     mocks.canvasRenders = 0;
     mocks.reportFps = null;
     mocks.reporters = new Set();

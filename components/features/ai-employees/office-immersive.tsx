@@ -49,6 +49,7 @@ import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
 import { type FpsMeter, createFpsMeter, useFps } from './office-3d/office-fps';
 import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
 import type { ScreenRect } from './office-3d/office-view-3d';
+import { type DisplayNote, useOfficeDisplay } from './office-3d/use-office-display';
 import { officeFits } from './office-app';
 import { OfficeTags2D } from './office-floor-labels';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
@@ -93,8 +94,9 @@ import { StatusDot } from './office-world-tag';
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 
 /**
- * The floor in 3D (#1135, spike): three.js is loaded only when the president switches to it, so
- * the rest of the app does not carry it
+ * The floor in 3D (#1135, #1150): three.js is loaded only when the 3D floor is shown (after
+ * clocking in, on a screen and a browser that can show it), so the rest of the app does not
+ * carry it
  */
 const OfficeCanvas3D = dynamic(() => import('./office-3d/office-canvas-3d'), { ssr: false });
 
@@ -187,7 +189,19 @@ export function OfficeImmersive({
   const [roomBusy, setRoomBusy] = useState(false);
   // The 3D spike (#1135): whether the floor is drawn in 3D, and what the trial panel pretends
   // (a status and an event for the chosen employee, on this screen only)
-  const [threeD, setThreeD] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  // Followed while the office is open: someone may switch the setting on to stop the motion
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return;
+    const read = () => setReducedMotion(query.matches);
+    read();
+    query.addEventListener?.('change', read);
+    return () => query.removeEventListener?.('change', read);
+  }, []);
+  // Which floor is drawn: what this device remembers, else the default (#1150)
+  const display = useOfficeDisplay({ reducedMotion });
+  const threeD = display.threeD;
   const [trialStatus, setTrialStatus] = useState<Partial<Record<AiEmployeeRole, DeskStatus>>>({});
   const [trialEvent, setTrialEvent] = useState<Partial<Record<AiEmployeeRole, OfficeEvent>>>({});
   // How fast the 3D floor is drawn: read only by what shows it, never the office's state (#1270)
@@ -219,11 +233,9 @@ export function OfficeImmersive({
   }, []);
   // The 2D floor stays until the 3D one drew its first frame, and comes back if it cannot be shown
   const [threeDReady, setThreeDReady] = useState(false);
-  const [threeDFailed, setThreeDFailed] = useState(false);
-  const leave3d = (failed: boolean) => {
-    setThreeD(false);
+  // What the 3D floor showed ends with it, however it ended
+  const clear3d = () => {
     setThreeDReady(false);
-    setThreeDFailed(failed);
     // What the trial panel pretended ends with the trial
     setTrialStatus({});
     setTrialEvent({});
@@ -231,23 +243,23 @@ export function OfficeImmersive({
     setWalking({});
     shown3dView.current = null;
   };
-  const toggle3d = () => {
-    if (threeD) leave3d(false);
-    else {
-      setThreeDFailed(false);
-      setThreeD(true);
-    }
+  // The office leaves 3D by itself (it could not be shown, or this device is too slow) and says so
+  const leave3d = (why: DisplayNote) => {
+    display.fallBack(why);
+    clear3d();
   };
-  const [reducedMotion, setReducedMotion] = useState(false);
-  // Followed while the office is open: someone may switch the setting on to stop the motion
-  useEffect(() => {
-    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (!query) return;
-    const read = () => setReducedMotion(query.matches);
-    read();
-    query.addEventListener?.('change', read);
-    return () => query.removeEventListener?.('change', read);
-  }, []);
+  // The president switches: the choice is remembered on this device (#1150)
+  const toggle3d = () => {
+    if (threeD) clear3d();
+    display.choose(threeD ? '2d' : '3d');
+  };
+  // The 3D floor reports how fast it is drawn: shown under the bar, and watched once (#1150)
+  const fpsReport = useRef<(value: number) => void>(() => undefined);
+  fpsReport.current = (value) => {
+    fpsMeter.report(value);
+    if (display.tooSlow(value)) leave3d('slow');
+  };
+  const onFps3d = useCallback((value: number) => fpsReport.current(value), []);
 
   const statuses = statusByRole(employees);
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
@@ -662,7 +674,7 @@ export function OfficeImmersive({
             />
           )}
           {show3d && (
-            <Office3DBoundary onError={() => leave3d(true)}>
+            <Office3DBoundary onError={() => leave3d('failed')}>
               <OfficeCanvas3D
                 employees={floor3d}
                 vacant={AI_EMPLOYEE_ROLES.filter((role) => statuses[role] === 'vacant')}
@@ -686,7 +698,7 @@ export function OfficeImmersive({
                 pan={{ x: pan.x + home.x, y: pan.y }}
                 focus={selectedEmployee ? selected : null}
                 reducedMotion={reducedMotion}
-                onFps={fpsMeter.report}
+                onFps={onFps3d}
                 onReady={() => setThreeDReady(true)}
                 onView={(view, places) => {
                   shown3dView.current = { view, places };
@@ -945,14 +957,14 @@ export function OfficeImmersive({
                 />
               )}
               {/* While the 3D floor loads the 2D one stays; if it cannot be shown, the office says so */}
-              {((threeD && !threeDReady) || threeDFailed) && (
+              {((threeD && !threeDReady) || display.note) && (
                 <output
                   className={cn(
                     PANEL,
                     'absolute bottom-32 left-1/2 block -translate-x-1/2 px-4 py-3 text-sm'
                   )}
                 >
-                  {t(threeDFailed ? 'trial3d.failed' : 'trial3d.loading')}
+                  {t(`trial3d.${display.note ?? 'loading'}`)}
                 </output>
               )}
 

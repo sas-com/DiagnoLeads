@@ -977,8 +977,8 @@
         "soon": "Not yet in use"
       },
       "trial3d": {
-        "on": "3D (trial)",
-        "off": "Back to 2D",
+        "on": "3D view",
+        "off": "2D view",
         "title": "3D trial",
         "note": "Switch the status of {name} and what happened to it, on this screen only, to watch it walk and feel. The real status does not change.",
         "fps": "{fps} frames a second",
@@ -988,7 +988,8 @@
           "hired": "Hired"
         },
         "loading": "Loading the 3D floor.",
-        "failed": "The 3D floor could not be shown. The office is back in 2D."
+        "failed": "The 3D floor could not be shown. The office is back in 2D.",
+        "slow": "3D draws slowly on this device, so the office is shown in 2D. Press \"3D view\" (the V key) to try it again."
       },
       "walkingTo": "On the way to {room}",
       "feelings": {
