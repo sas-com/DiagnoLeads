@@ -47,16 +47,10 @@ import {
 import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
 import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
 import { officeFits } from './office-app';
+import { OfficeTags2D } from './office-floor-labels';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import { SceneDrawing } from './office-map';
-import {
-  AREA_RECTS,
-  DESK_SEATS,
-  FLOOR_DEPTH,
-  FLOOR_WIDTH,
-  areaOf,
-  spotOf,
-} from './office-map-layout';
+import { DESK_SEATS, areaOf, spotOf } from './office-map-layout';
 import {
   type TalkChoice,
   type TalkLine,
@@ -71,10 +65,10 @@ import {
   talkChoices,
   talkLineKey,
 } from './office-president';
-import { STATUS_LIGHT, shade } from './office-prims';
+import { shade } from './office-prims';
 import { ROLE_ACCENTS } from './office-robot';
-import { OfficeRoomDue } from './office-room-due';
-import { OfficeRoomLeads, type RoomKeys } from './office-room-leads';
+import type { RoomKeys } from './office-room-contract';
+import { ROOM_VIEWS } from './office-room-registry';
 import {
   DOOR_PAGES,
   FLOOR_PLACES,
@@ -89,7 +83,8 @@ import {
 import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
 import { RobotPortrait } from './office-scene-svg';
 import { OfficeStudio } from './office-studio';
-import { StatusDot, WorldTagButton } from './office-world-tag';
+import { OfficeTalkStaff, type StaffMatter } from './office-talk-staff';
+import { StatusDot } from './office-world-tag';
 
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 
@@ -163,19 +158,29 @@ export function OfficeImmersive({
   const rootRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
   const [stage, setStage] = useState<Stage>(startOn);
+  // The staff matter open in the conversation: a new name, the work log, the dismissal (#1170)
+  const [staff, setStaff] = useState<StaffMatter | null>(null);
+  // While a staff matter is being saved there is no way back: it is not given up with Esc
+  const [staffBusy, setStaffBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [size, setSize] = useState({ w: 1280, h: 800 });
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   // What the AI employee said to the last answer, and whether the answer was carried out
-  const [outcome, setOutcome] = useState<{ text: string; ok: boolean } | null>(null);
+  // `typed`: carried out in a staff matter, with Enter. The report keeps the focus, so that Enter
+  // pressed once more does not walk out of the conversation before the answer was read
+  const [outcome, setOutcome] = useState<{ text: string; ok: boolean; typed?: boolean } | null>(
+    null
+  );
   const [dragging, setDragging] = useState(false);
   // The room the president is in (stage 'room'), and what its keys do
   const [room, setRoom] = useState<OfficeRoom>(OFFICE_ROOMS[0]);
   const roomKeys = useRef<RoomKeys | null>(null);
   // Something is open inside the room (a customer file): Esc closes that first
   const [roomFileOpen, setRoomFileOpen] = useState(false);
+  // An answer given in the room is being saved: the way back to the floor is closed meanwhile
+  const [roomBusy, setRoomBusy] = useState(false);
   // The 3D spike (#1135): whether the floor is drawn in 3D, and what the trial panel pretends
   // (a status and an event for the chosen employee, on this screen only)
   const [threeD, setThreeD] = useState(false);
@@ -251,11 +256,14 @@ export function OfficeImmersive({
   // conversation the report of the AI employee (never a choice, so that Enter pressed once too
   // often cannot hire or pause), then the one way back once the answer was carried out
   const answered = outcome?.ok === true;
+  // The staff matter that is open. None once its employee is gone (dismissed by someone else while
+  // it was open): the keys, the focus and the panel all follow this one value
+  const matter = byRole.has(selected) ? staff : null;
   // biome-ignore lint/correctness/useExhaustiveDependencies: refocus when the stage or the outcome changes
   useEffect(() => {
     if (!mounted) return;
     rootRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
-  }, [mounted, stage, answered]);
+  }, [mounted, stage, answered, matter]);
 
   const refresh = () => utils.aiEmployees.office.invalidate({ organizationId });
   // What the chosen AI employee says, in its own tone (#1134)
@@ -299,6 +307,8 @@ export function OfficeImmersive({
     }
     onExit();
   }, [onExit]);
+  // What the room shows comes from the registry: the office does not know the rooms (#1142)
+  const RoomView = ROOM_VIEWS[room];
   const enterRoom = (next: OfficeRoom) => {
     setRoom(next);
     setStage('room');
@@ -312,6 +322,8 @@ export function OfficeImmersive({
   const talkTo = (role: AiEmployeeRole) => {
     setSelected(role);
     setOutcome(null);
+    setStaff(null);
+    setStaffBusy(false);
     setStage('talk');
   };
 
@@ -325,7 +337,11 @@ export function OfficeImmersive({
   const choices: TalkChoice[] = answered ? ['leave'] : talkChoices(selectedStatus, canManage);
   const busy = hire.isPending || update.isPending;
   const stepBack = () => {
-    if (stage === 'talk' || stage === 'room' || stage === 'studio') setStage('world');
+    // A staff matter (a new name, the work log, the dismissal) closes first, back to the choices.
+    // Not while it is being saved: stepping back would look like giving it up, and it is not
+    if (stage === 'talk' && matter) {
+      if (!staffBusy) setStaff(null);
+    } else if (stage === 'talk' || stage === 'room' || stage === 'studio') setStage('world');
     else if (stage === 'world') setStage('title');
     else leave();
   };
@@ -335,7 +351,14 @@ export function OfficeImmersive({
       setStage('world');
       return;
     }
+    if (choice === 'rename' || choice === 'log' || choice === 'dismiss') {
+      // Opens the matter: nothing is carried out by the number itself (#1170)
+      if (selectedEmployee) setStaff(choice);
+      return;
+    }
     if (choice === 'hire') {
+      // A matter left open for an employee who is gone does not open again for the new one
+      setStaff(null);
       hire.mutate({
         organizationId,
         role: selected,
@@ -391,7 +414,8 @@ export function OfficeImmersive({
       }
       return;
     }
-    if (stage === 'talk' && /^[1-9]$/.test(event.key)) {
+    // While a staff matter is open the numbers belong to what is typed there
+    if (stage === 'talk' && !matter && /^[1-9]$/.test(event.key)) {
       const choice = choices[Number(event.key) - 1];
       if (choice) {
         event.preventDefault();
@@ -580,23 +604,26 @@ export function OfficeImmersive({
                 statuses={statuses}
                 looks={looks}
                 night={stage === 'title' ? true : night}
-                labels={stage === 'world'}
+                // The names of the rooms are DOM over the floor, clear of the panels (#1177)
+                labels={false}
               />
-              {stage === 'world' &&
-                AI_EMPLOYEE_ROLES.map((role) => (
-                  <WorldTag
-                    key={role}
-                    role={role}
-                    status={statuses[role]}
-                    name={byRole.get(role)?.name ?? null}
-                    chosen={role === selected}
-                    scale={scale}
-                    onChoose={() => setSelected(role)}
-                    onTalk={() => talkTo(role)}
-                  />
-                ))}
             </div>
           </div>
+          {/* The name tags and the room names of the 2D floor, laid out clear of each other */}
+          {stage === 'world' && !(show3d && threeDReady) && (
+            <OfficeTags2D
+              statuses={statuses}
+              names={names3d}
+              selected={selected}
+              onChoose={setSelected}
+              onTalk={talkTo}
+              camera={camera}
+              scale={scale}
+              width={width}
+              size={size}
+              glide={!dragging && !reducedMotion}
+            />
+          )}
           {show3d && (
             <Office3DBoundary onError={() => leave3d(true)}>
               <OfficeCanvas3D
@@ -613,7 +640,8 @@ export function OfficeImmersive({
                 subject={subject3d}
                 attentive={stage === 'talk' ? selected : null}
                 zoom={zoom}
-                pan={pan}
+                // Centred between the side panels, like the 2D floor
+                pan={{ x: pan.x + home.x, y: pan.y }}
                 focus={selectedEmployee ? selected : null}
                 reducedMotion={reducedMotion}
                 onFps={setFps}
@@ -858,9 +886,6 @@ export function OfficeImmersive({
                 )}
               </div>
 
-              {/* The map of the floor */}
-              <FloorMap statuses={statuses} selected={selected} label={t('map')} />
-
               {/* The 3D spike's trial panel: pretend a status or an event to watch the robot */}
               {OFFICE_3D_TRIAL && threeD && threeDReady && selectedEmployee && (
                 <Office3DTrialPanel
@@ -892,11 +917,13 @@ export function OfficeImmersive({
               {/* The floor guide: every place of the work. A room is entered; a door opens a page */}
               <nav
                 aria-label={t('floorGuide')}
-                className="absolute inset-x-0 bottom-32 flex flex-wrap justify-center gap-2 px-6 lg:top-5 lg:bottom-auto"
+                // Between the side panels (HUD_SIDES), never over them (#1234): where the places
+                // do not fit in one row they wrap there
+                className="absolute inset-x-0 bottom-32 pointer-events-none flex flex-wrap justify-center gap-1.5 px-6 *:pointer-events-auto lg:top-5 lg:right-[21.5rem] lg:bottom-auto lg:left-[19.5rem] lg:px-0"
               >
                 {FLOOR_PLACES.map((place) => {
                   const look = cn(
-                    'flex min-h-11 items-center gap-2.5 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-3.5 text-left text-sm hover:bg-[rgba(36,44,64,0.95)]',
+                    'flex min-h-11 items-center gap-2 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-2.5 text-left text-sm whitespace-nowrap hover:bg-[rgba(36,44,64,0.95)] min-[1900px]:gap-2.5 min-[1900px]:px-3.5',
                     FOCUS
                   );
                   const label = {
@@ -912,7 +939,11 @@ export function OfficeImmersive({
                       className={look}
                     >
                       <PlaceLabel {...label} />
-                      <DoorOpen className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                      {/* A room needs no mark where the row is tight: a door keeps its arrow */}
+                      <DoorOpen
+                        className="hidden h-4 w-4 text-[#e9cf9a] min-[1600px]:block"
+                        aria-hidden="true"
+                      />
                     </button>
                   ) : (
                     <Link key={place} href={doorHref(place)} onClick={leave} className={look}>
@@ -925,42 +956,51 @@ export function OfficeImmersive({
               </nav>
 
               {/* The actions */}
-              <div className="absolute inset-x-0 bottom-6 flex flex-col items-center">
-                <div className="flex gap-2.5">
-                  <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
-                    <MessageCircle className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.talk')}
-                  </HudButton>
-                  {canCustomize && (
-                    <HudButton onClick={() => setStage('studio')} hotkey="C">
-                      <Palette className="h-6 w-6" aria-hidden="true" />
-                      {t('studio.open')}
+              {/* The row spans the screen only to centre the bar: it lets the pointer through to
+                  the staff list under its ends (#1234) */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-6 flex flex-col items-center">
+                {/* Three groups: the employee, the view, the way out */}
+                <div className="pointer-events-auto flex gap-5">
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
+                      <MessageCircle className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.talk')}
                     </HudButton>
-                  )}
-                  <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
-                    <ZoomIn className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.zoomIn')}
-                  </HudButton>
-                  <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
-                    <ZoomOut className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.zoomOut')}
-                  </HudButton>
-                  <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
-                    <Box className="h-6 w-6" aria-hidden="true" />
-                    {t(threeD ? 'trial3d.off' : 'trial3d.on')}
-                  </HudButton>
-                  <HudButton onClick={resetView} hotkey="0">
-                    <ScanSearch className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.resetView')}
-                  </HudButton>
-                  <HudButton onClick={leave} hotkey="">
-                    <List className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.list')}
-                  </HudButton>
-                  <HudButton onClick={() => setStage('title')} hotkey="Esc">
-                    <DoorOpen className="h-6 w-6" aria-hidden="true" />
-                    {t('actions.clockOut')}
-                  </HudButton>
+                    {canCustomize && (
+                      <HudButton onClick={() => setStage('studio')} hotkey="C">
+                        <Palette className="h-6 w-6" aria-hidden="true" />
+                        {t('studio.open')}
+                      </HudButton>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
+                      <ZoomIn className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomIn')}
+                    </HudButton>
+                    <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
+                      <ZoomOut className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomOut')}
+                    </HudButton>
+                    <HudButton onClick={resetView} hotkey="0">
+                      <ScanSearch className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.resetView')}
+                    </HudButton>
+                    <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
+                      <Box className="h-6 w-6" aria-hidden="true" />
+                      {t(threeD ? 'trial3d.off' : 'trial3d.on')}
+                    </HudButton>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={leave} hotkey="">
+                      <List className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.list')}
+                    </HudButton>
+                    <HudButton onClick={() => setStage('title')} hotkey="Esc">
+                      <DoorOpen className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.clockOut')}
+                    </HudButton>
+                  </div>
                 </div>
                 {/* How fast this device draws the 3D floor, to measure real devices (#1157) */}
                 {threeD && threeDReady && fps !== null && (
@@ -1060,9 +1100,14 @@ export function OfficeImmersive({
               </div>
               <button
                 type="button"
-                onClick={() => setStage('world')}
+                // Not disabled: a disabled button would drop the focus out of the room. While the
+                // room saves an answer it does nothing, like Esc (which the room's keys hold)
+                aria-disabled={roomBusy || undefined}
+                onClick={() => {
+                  if (!roomBusy) setStage('world');
+                }}
                 className={cn(
-                  'absolute top-5 right-6 flex min-h-11 items-center gap-2.5 px-2 text-sm font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)] hover:text-white',
+                  'absolute top-5 right-6 flex min-h-11 items-center gap-2.5 px-2 text-sm font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)] hover:text-white aria-disabled:cursor-wait aria-disabled:opacity-60',
                   FOCUS
                 )}
               >
@@ -1070,28 +1115,19 @@ export function OfficeImmersive({
                 {!roomFileOpen && <span className={cn(KEY, 'bg-[#0a0e18]/60')}>Esc</span>}
                 {t('room.back')}
               </button>
-              {room === 'marketing' ? (
-                <OfficeRoomLeads
-                  organizationId={organizationId}
-                  role={ROOM_ROLES[room]}
-                  status={statuses[ROOM_ROLES[room]]}
-                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
-                  look={looks[ROOM_ROLES[room]]}
-                  keysRef={roomKeys}
-                  onOpenLead={leave}
-                  onFileOpenChange={setRoomFileOpen}
-                />
-              ) : (
-                <OfficeRoomDue
-                  organizationId={organizationId}
-                  role={ROOM_ROLES[room]}
-                  status={statuses[ROOM_ROLES[room]]}
-                  employeeName={byRole.get(ROOM_ROLES[room])?.name ?? null}
-                  look={looks[ROOM_ROLES[room]]}
-                  keysRef={roomKeys}
-                  onOpenNormal={leave}
-                />
-              )}
+              <RoomView
+                organizationId={organizationId}
+                guide={{
+                  role: ROOM_ROLES[room],
+                  status: statuses[ROOM_ROLES[room]],
+                  name: byRole.get(ROOM_ROLES[room])?.name ?? null,
+                  look: looks[ROOM_ROLES[room]],
+                }}
+                keysRef={roomKeys}
+                onLeaveOffice={leave}
+                onFileOpenChange={setRoomFileOpen}
+                onBusyChange={setRoomBusy}
+              />
             </>
           )}
 
@@ -1135,7 +1171,7 @@ export function OfficeImmersive({
                   <p
                     // The report takes the focus when the conversation opens: it is read out, and
                     // Enter does nothing here
-                    data-autofocus={answered ? undefined : ''}
+                    data-autofocus={matter || (answered && !outcome?.typed) ? undefined : ''}
                     tabIndex={-1}
                     aria-live="polite"
                     className={cn(
@@ -1169,33 +1205,53 @@ export function OfficeImmersive({
                   )}
                 </div>
                 {/* On a panel of its own: by day the floor behind the choices is bright */}
-                <div className="flex w-full shrink-0 flex-col gap-2 border-t-2 border-[#e9cf9a] bg-[rgba(10,14,24,0.92)] p-3 lg:w-80">
-                  <h2 className={CAP}>{t('talk.you')}</h2>
-                  {choices.map((choice, index) => (
-                    <button
-                      // By position: the button under the focus stays when the choices change
-                      // biome-ignore lint/suspicious/noArrayIndexKey: the choices are a short fixed list
-                      key={index}
-                      type="button"
-                      data-autofocus={answered && index === 0 ? '' : undefined}
-                      // Not disabled: a disabled button would drop the focus out of the conversation
-                      aria-disabled={busy}
-                      onClick={() => answer(choice)}
-                      className={cn(
-                        'flex min-h-12 w-full items-center gap-3 border px-4 text-left text-base font-bold aria-disabled:opacity-60',
-                        index === 0
-                          ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130] hover:bg-[#f3dfb4]'
-                          : 'border-[#f5f1e8]/45 bg-[#101726] hover:border-[#e9cf9a] hover:bg-[#1c2540]',
-                        FOCUS
-                      )}
-                    >
-                      <span className={cn(KEY, index === 0 && 'border-[#1b2130]/60')}>
-                        {index + 1}
-                      </span>
-                      {choice === 'hire' && <UserPlus className="h-5 w-5" aria-hidden="true" />}
-                      {answered ? t('talk.choices.back') : t(`talk.choices.${choice}`)}
-                    </button>
-                  ))}
+                <div className="flex max-h-[calc(100dvh-10rem)] w-full shrink-0 flex-col gap-2 overflow-y-auto border-t-2 border-[#e9cf9a] bg-[rgba(10,14,24,0.92)] p-3 lg:w-80">
+                  {matter && selectedEmployee && (
+                    <OfficeTalkStaff
+                      // A fresh form for each matter and employee: nothing typed carries over
+                      key={`${matter}-${selectedEmployee.id}`}
+                      matter={matter}
+                      organizationId={organizationId}
+                      employee={selectedEmployee}
+                      onBusyChange={setStaffBusy}
+                      onDone={(text) => {
+                        setStaff(null);
+                        setStaffBusy(false);
+                        setOutcome({ text, ok: true, typed: true });
+                        void refresh();
+                      }}
+                      onBack={() => setStaff(null)}
+                    />
+                  )}
+                  {!matter && <h2 className={CAP}>{t('talk.you')}</h2>}
+                  {!matter &&
+                    choices.map((choice, index) => (
+                      <button
+                        // By position: the button under the focus stays when the choices change
+                        // biome-ignore lint/suspicious/noArrayIndexKey: the choices are a short fixed list
+                        key={index}
+                        type="button"
+                        data-autofocus={answered && !outcome?.typed && index === 0 ? '' : undefined}
+                        // Not disabled: a disabled button would drop the focus out of the conversation
+                        aria-disabled={busy}
+                        onClick={() => answer(choice)}
+                        className={cn(
+                          'flex min-h-12 w-full items-center gap-3 border px-4 text-left text-base font-bold aria-disabled:opacity-60',
+                          index === 0
+                            ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130] hover:bg-[#f3dfb4]'
+                            : 'border-[#f5f1e8]/45 bg-[#101726] hover:border-[#e9cf9a] hover:bg-[#1c2540]',
+                          // The one that cannot be taken back reads apart from the others
+                          choice === 'dismiss' && 'mt-2 text-[#fca5a5]',
+                          FOCUS
+                        )}
+                      >
+                        <span className={cn(KEY, index === 0 && 'border-[#1b2130]/60')}>
+                          {index + 1}
+                        </span>
+                        {choice === 'hire' && <UserPlus className="h-5 w-5" aria-hidden="true" />}
+                        {answered ? t('talk.choices.back') : t(`talk.choices.${choice}`)}
+                      </button>
+                    ))}
                 </div>
               </div>
             </>
@@ -1213,7 +1269,8 @@ function PlaceLabel({ hotkey, name, work }: { hotkey: string; name: string; work
     <>
       <span className={KEY}>{hotkey}</span>
       <span className="font-bold">{name}</span>
-      <span className="text-[#d8d2c4]">{work}</span>
+      {/* Shown where the row has room for it; always read out */}
+      <span className="sr-only text-[#d8d2c4] min-[1900px]:not-sr-only">{work}</span>
     </>
   );
 }
@@ -1237,7 +1294,7 @@ function HudButton({
       className={cn(
         // The cut corners are drawn on a layer behind the button: clipping the button itself would
         // clip its focus ring too
-        'relative isolate flex h-[5.25rem] w-[5.25rem] flex-col items-center justify-center gap-1.5 text-xs text-[#f5f1e8] before:absolute before:inset-0 before:-z-10 before:border before:border-[#e9cf9a]/55 before:bg-[rgba(10,14,24,0.86)] before:[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)] hover:before:bg-[rgba(36,44,64,0.95)]',
+        'relative isolate flex h-[5.25rem] w-[5.25rem] flex-col items-center justify-center gap-1.5 text-center text-xs leading-tight [word-break:auto-phrase] text-[#f5f1e8] before:absolute before:inset-0 before:-z-10 before:border before:border-[#e9cf9a]/55 before:bg-[rgba(10,14,24,0.86)] before:[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)] hover:before:bg-[rgba(36,44,64,0.95)]',
         FOCUS
       )}
     >
@@ -1246,96 +1303,5 @@ function HudButton({
         <span className={cn(KEY, 'absolute top-1 right-1 bg-[#0a0e18]/60')}>{hotkey}</span>
       )}
     </button>
-  );
-}
-
-/** The name over an AI employee in the office: choose it, or talk to the chosen one */
-function WorldTag({
-  role,
-  status,
-  name,
-  chosen,
-  scale,
-  onChoose,
-  onTalk,
-}: {
-  role: AiEmployeeRole;
-  status: DeskStatus;
-  name: string | null;
-  chosen: boolean;
-  /** The scale of the stage: the tag undoes it, so its text and its target keep their size */
-  scale: number;
-  onChoose: () => void;
-  onTalk: () => void;
-}) {
-  const spot = spotOf(role, status);
-  const [x, y] = project(spot.x, spot.y);
-  return (
-    <WorldTagButton
-      role={role}
-      status={status}
-      name={name}
-      chosen={chosen}
-      onChoose={onChoose}
-      onTalk={onTalk}
-      style={{
-        left: `${(x / SCENE_WIDTH) * 100}%`,
-        top: `${((y + 10) / SCENE_HEIGHT) * 100}%`,
-        transform: `translate(-50%, 0) scale(${1 / scale})`,
-        transformOrigin: 'top center',
-      }}
-    />
-  );
-}
-
-/** The floor seen from above, with a light where each AI employee is */
-function FloorMap({
-  statuses,
-  selected,
-  label,
-}: {
-  statuses: Record<AiEmployeeRole, DeskStatus>;
-  selected: AiEmployeeRole;
-  label: string;
-}) {
-  const unit = 8;
-  return (
-    <div className="absolute top-36 left-6 hidden h-28 w-28 overflow-hidden rounded-full border-2 border-[#e9cf9a] bg-[#101726] shadow-[0_14px_30px_rgba(4,8,18,0.5)] xl:block">
-      <svg
-        viewBox={`-28 -46 ${FLOOR_WIDTH * unit + 56} ${FLOOR_DEPTH * unit + 92}`}
-        role="img"
-        aria-label={label}
-        className="h-full w-full"
-      >
-        <g transform={`rotate(30 ${(FLOOR_WIDTH * unit) / 2} ${(FLOOR_DEPTH * unit) / 2})`}>
-          {Object.entries(AREA_RECTS).map(([area, r], index) => (
-            <rect
-              key={area}
-              x={r.x * unit}
-              y={r.y * unit}
-              width={r.w * unit}
-              height={r.h * unit}
-              fill={index % 2 === 0 ? '#3a4257' : '#2f3a4c'}
-              stroke="#e9cf9a"
-              strokeOpacity={0.5}
-            />
-          ))}
-          {AI_EMPLOYEE_ROLES.filter((role) => statuses[role] !== 'vacant').map((role) => {
-            const spot = spotOf(role, statuses[role]);
-            return (
-              <circle
-                key={role}
-                cx={spot.x * unit}
-                cy={spot.y * unit}
-                r={role === selected ? 7 : 5}
-                fill={STATUS_LIGHT[statuses[role]]}
-                stroke="#ffffff"
-                strokeWidth={role === selected ? 2.5 : 1.5}
-              />
-            );
-          })}
-        </g>
-      </svg>
-    </div>
   );
 }

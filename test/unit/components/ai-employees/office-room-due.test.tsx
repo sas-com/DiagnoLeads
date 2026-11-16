@@ -6,7 +6,7 @@
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -42,6 +42,24 @@ const mocks = vi.hoisted(() => ({
   fail: false,
   updates: [] as { organizationId: string; id: string; done: boolean }[],
   refreshed: vi.fn(),
+  members: [] as unknown[],
+  membersTotal: null as number | null,
+  membersInputs: [] as unknown[],
+  membersFail: false,
+  invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
+  revoked: [] as { organizationId: string; invitationId: string }[],
+  revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
+  revokePending: false,
+  invitationsRefreshed: vi.fn(),
+  // How long marking stays closed after the shelf of what is due opened
+  armMs: 0,
+}));
+
+vi.mock('@/components/features/ai-employees/rooms/reception', async (original) => ({
+  ...(await original<typeof import('@/components/features/ai-employees/rooms/reception')>()),
+  get DUE_ARM_MS() {
+    return mocks.armMs;
+  },
 }));
 
 vi.mock('@/lib/trpc/client', () => ({
@@ -53,10 +71,64 @@ vi.mock('@/lib/trpc/client', () => ({
         dueTasks: { invalidate: mocks.refreshed },
       },
       deals: { board: { invalidate: vi.fn() } },
+      members: { listInvitations: { invalidate: mocks.invitationsRefreshed } },
     }),
     aiEmployees: {
       hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
       update: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
+    },
+    members: {
+      list: {
+        useQuery: (input: unknown) => {
+          mocks.membersInputs.push(input);
+          if (mocks.membersFail) {
+            return {
+              data: undefined,
+              error: { data: { code: 'INTERNAL' } },
+              isError: true,
+              isFetching: false,
+            };
+          }
+          return {
+            data: { members: mocks.members, total: mocks.membersTotal ?? mocks.members.length },
+            error: null,
+            isError: false,
+            isFetching: false,
+          };
+        },
+      },
+      revokeInvitation: {
+        useMutation: (shared: { onSettled?: () => void } = {}) => ({
+          isPending: mocks.revokePending,
+          mutate: (
+            input: { organizationId: string; invitationId: string },
+            options: {
+              onSuccess?: () => void;
+              onError?: (error: { data: { code: string } }) => void;
+              onSettled?: () => void;
+            } = {}
+          ) => {
+            mocks.revoked.push(input);
+            if (mocks.revokeFails) options.onError?.({ data: { code: mocks.revokeFails } });
+            else options.onSuccess?.();
+            options.onSettled?.();
+            shared.onSettled?.();
+          },
+        }),
+      },
+      listInvitations: {
+        useQuery: () =>
+          Array.isArray(mocks.invitations)
+            ? { data: mocks.invitations, error: null, isError: false, isFetching: false }
+            : {
+                data: undefined,
+                error: {
+                  data: { code: mocks.invitations === 'forbidden' ? 'FORBIDDEN' : 'INTERNAL' },
+                },
+                isError: true,
+                isFetching: false,
+              },
+      },
     },
     leadFollowUp: {
       dueTasks: {
@@ -116,7 +188,7 @@ vi.mock('@/lib/trpc/client', () => ({
 
 const messages = mergeMessageFiles(MESSAGE_FILES.ja);
 
-async function enterReception(deskStatus: 'vacant' | 'idle' = 'vacant') {
+async function enterCounter(deskStatus: 'vacant' | 'idle' = 'vacant') {
   const user = userEvent.setup();
   const onExit = vi.fn();
   const employees =
@@ -135,7 +207,8 @@ async function enterReception(deskStatus: 'vacant' | 'idle' = 'vacant') {
             profile: DEFAULT_AI_EMPLOYEE_PROFILE,
           },
         ];
-  render(
+  // A new element each time: the office renders again and reads the queries anew
+  const ui = () => (
     <NextIntlClientProvider locale="ja" messages={messages} timeZone="Asia/Tokyo">
       <OfficeImmersive
         organizationId={ORG_ID}
@@ -147,12 +220,38 @@ async function enterReception(deskStatus: 'vacant' | 'idle' = 'vacant') {
       />
     </NextIntlClientProvider>
   );
+  const view = render(ui());
+  const refresh = () => view.rerender(ui());
   const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
   await user.click(within(office).getByRole('button', { name: /^出社する/ }));
   await user.keyboard('5');
-  const board = within(office).getByRole('region', { name: '今日の期限' });
-  return { user, office, board, onExit };
+  return { user, office, onExit, refresh };
 }
+
+/** Into the reception, and from its counter to the shelf of what is due */
+async function enterReception(deskStatus: 'vacant' | 'idle' = 'vacant') {
+  const entered = await enterCounter(deskStatus);
+  await entered.user.keyboard('1');
+  const board = within(entered.office).getByRole('region', { name: '今日の期限' });
+  // Marking opens a moment after the shelf (#1226)
+  await act(() => new Promise((resolve) => setTimeout(resolve, mocks.armMs + 5)));
+  return { ...entered, board };
+}
+
+const member = (n: number, role: string, name: string | null = `見本 ${n}子`) => ({
+  id: `00000000-0000-4000-8000-0000000000b${n}`,
+  role,
+  user: { id: `u${n}`, email: `member${n}@example.com`, name, image: null },
+});
+
+const invitation = (n: number, expired = false) => ({
+  id: `00000000-0000-4000-8000-0000000000c${n}`,
+  email: `invited${n}@example.com`,
+  role: 'member',
+  expiresAt: new Date('2026-11-15T03:00:00Z'),
+  createdAt: new Date('2026-11-13T03:00:00Z'),
+  expired,
+});
 
 describe('the reception', () => {
   beforeEach(() => {
@@ -164,6 +263,11 @@ describe('the reception', () => {
     mocks.fail = false;
     mocks.updates.length = 0;
     mocks.refreshed.mockClear();
+    mocks.armMs = 0;
+    mocks.members = [member(1, 'owner'), member(2, 'member')];
+    mocks.membersTotal = null;
+    mocks.membersInputs.length = 0;
+    mocks.invitations = 'forbidden';
   });
 
   it('is entered from the floor guide, and asks for the user’s own due actions of the organization', async () => {
@@ -183,10 +287,11 @@ describe('the reception', () => {
     const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
-    await user.click(within(guide).getByRole('button', { name: /総務・受付.*今日の期限/ }));
+    await user.click(within(guide).getByRole('button', { name: /総務・受付.*総務の窓口/ }));
 
-    expect(within(office).getByRole('region', { name: '今日の期限' })).toBeInTheDocument();
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
     expect(mocks.inputs.at(-1)).toMatchObject({ organizationId: ORG_ID, scope: 'mine' });
+    expect(mocks.membersInputs.at(-1)).toMatchObject({ organizationId: ORG_ID });
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
   });
@@ -195,7 +300,7 @@ describe('the reception', () => {
     const { office, board } = await enterReception();
     expect(
       within(office).getByText(
-        'あなたの、期限が今日までの次の行動は 3 件です。1 件目をお渡しします。'
+        '今日までが期限の、あなたの次の行動は 3 件です。1 件目をお渡しします。'
       )
     ).toBeInTheDocument();
     expect(
@@ -310,6 +415,9 @@ describe('the reception', () => {
     expect(mocks.updates).toHaveLength(1);
     expect(within(office).getByRole('region', { name: '今日の期限' })).toBeInTheDocument();
     expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
+    // Esc steps back one at a time: the counter, then the floor
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
   });
@@ -346,7 +454,7 @@ describe('the reception', () => {
     mocks.items = [];
     const { office, board } = await enterReception();
     expect(
-      within(board).getByText('あなたの、期限が今日までの次の行動は、ありません。')
+      within(board).getByText('今日までが期限の、あなたの次の行動は、ありません。')
     ).toBeInTheDocument();
     expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
   });
@@ -427,5 +535,329 @@ describe('the reception', () => {
     lead.addEventListener('click', (event) => event.preventDefault());
     await user.click(lead);
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the counter of the reception (#1196)', () => {
+  beforeEach(() => {
+    mocks.inputs.length = 0;
+    mocks.mode = 'ok';
+    mocks.items = [task(1, { dueOn: '2026-11-10' }), task(2), task(3)];
+    mocks.total = null;
+    mocks.canEdit = true;
+    mocks.fail = false;
+    mocks.updates.length = 0;
+    mocks.members = [member(1, 'owner'), member(2, 'member', null)];
+    mocks.membersTotal = null;
+    mocks.invitations = [invitation(1), invitation(2, true)];
+    mocks.revoked.length = 0;
+    mocks.revokeFails = null;
+    mocks.revokePending = false;
+    mocks.invitationsRefreshed.mockClear();
+  });
+
+  it('reports what is recorded, and carries nothing out', async () => {
+    const { user, office } = await enterCounter();
+    expect(
+      within(office).getByText(
+        '今日までが期限の、あなたの次の行動は 3 件で、うち 1 件は期限を過ぎています。メンバーは 2 人、招待中は 1 件です。どの棚を開きますか。'
+      )
+    ).toBeInTheDocument();
+    const counter = within(office).getByRole('region', { name: '総務の窓口' });
+    expect(within(counter).getByText('3 件')).toBeInTheDocument();
+    expect(within(counter).getByText('2 人')).toBeInTheDocument();
+    expect(within(counter).getByText('ほかに、有効期限が切れた招待が 1 件あります')).toBeInTheDocument();
+    // The focus is on the report: Enter pressed once too often opens nothing
+    expect(document.activeElement?.textContent).toContain('どの棚を開きますか');
+    await user.keyboard('{Enter}');
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
+    expect(mocks.updates).toHaveLength(0);
+  });
+
+  it('marks nothing when the key that opened the shelf is pressed twice in a row (#1226)', async () => {
+    mocks.armMs = 400;
+    const { user, office } = await enterCounter();
+    // 1 opens the shelf of what is due; the same key right after it must not mark the first one
+    await user.keyboard('11');
+    expect(within(office).getByRole('region', { name: '今日の期限' })).toBeInTheDocument();
+    expect(mocks.updates).toHaveLength(0);
+    const done = within(office).getByRole('button', { name: /済みにする/ });
+    expect(done).toHaveAttribute('aria-disabled', 'true');
+    await user.click(done);
+    expect(mocks.updates).toHaveLength(0);
+    // Once it was seen for a moment, the key marks
+    await waitFor(() => expect(done).not.toHaveAttribute('aria-disabled'));
+    await user.keyboard('1');
+    expect(mocks.updates).toHaveLength(1);
+    mocks.armMs = 0;
+  });
+
+  it('keeps marking closed until a queue that arrives late was shown for a moment (#1236)', async () => {
+    mocks.armMs = 1000;
+    mocks.mode = 'loading';
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('1');
+    // The shelf is open for longer than the moment, with nothing to see yet
+    await act(() => new Promise((resolve) => setTimeout(resolve, 1050)));
+    mocks.mode = 'ok';
+    refresh();
+    const done = await within(office).findByRole('button', { name: /済みにする/ });
+    expect(done).toHaveAttribute('aria-disabled', 'true');
+    await user.keyboard('1');
+    expect(mocks.updates).toHaveLength(0);
+    await waitFor(() => expect(done).not.toHaveAttribute('aria-disabled'), { timeout: 3000 });
+    await user.keyboard('1');
+    expect(mocks.updates).toHaveLength(1);
+    mocks.armMs = 0;
+  });
+
+  it('says what could not be read instead of leaving it out (#1236)', async () => {
+    mocks.invitations = 'error';
+    const { user, office } = await enterCounter();
+    expect(within(office).getByText(/メンバーは 2 人です。招待の件数を読めませんでした。/)).toBeInTheDocument();
+    // The shelf says so too, not only its board
+    await user.keyboard('2');
+    expect(
+      within(office).getByText('メンバーは 2 人です。招待を読めませんでした。')
+    ).toBeInTheDocument();
+  });
+
+  it('says that the members could not be read only when there is no figure at all', async () => {
+    mocks.membersFail = true;
+    const { office } = await enterCounter();
+    expect(within(office).getByText(/メンバーの人数を読めませんでした。どの棚を開きますか。/)).toBeInTheDocument();
+    expect(within(office).queryByText(/招待の件数を読めませんでした/)).not.toBeInTheDocument();
+    mocks.membersFail = false;
+  });
+
+  it('names the shelf that is open over its guide', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('1');
+    expect(within(office).getByText('期限の棚')).toBeInTheDocument();
+    await user.keyboard('{Escape}2');
+    expect(within(office).getByText('メンバーと招待の棚')).toBeInTheDocument();
+    await user.keyboard('{Escape}3');
+    expect(within(office).getByText('設定の棚')).toBeInTheDocument();
+    expect(within(office).getByRole('heading', { name: '開くページ' })).toBeInTheDocument();
+  });
+
+  it('does not say the invitations to who may not see them', async () => {
+    mocks.invitations = 'forbidden';
+    mocks.items = [];
+    const { office } = await enterCounter();
+    expect(
+      within(office).getByText(
+        '今日までが期限の、あなたの次の行動は、ありません。メンバーは 2 人です。どの棚を開きますか。'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(office).getByText('招待は、管理者とオーナーだけが見られます。')
+    ).toBeInTheDocument();
+  });
+
+  it('does not say what is due to who may not see it', async () => {
+    mocks.mode = 'forbidden';
+    const { office } = await enterCounter();
+    expect(
+      within(office).getByText(/次の行動を見る権限がないので、期限の数字はお伝えできません。/)
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the overdue count out when not every due one was read', async () => {
+    mocks.total = 250;
+    const { office } = await enterCounter();
+    expect(
+      within(office).getByText(/あなたの次の行動は 250 件です。/)
+    ).toBeInTheDocument();
+    expect(within(office).queryByText(/期限を過ぎています/)).not.toBeInTheDocument();
+  });
+
+  it('opens the members shelf with its key: members, roles and invitations, read only', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    const shelf = within(office).getByRole('region', { name: 'メンバーと招待' });
+    expect(within(shelf).getByText('見本 1子')).toBeInTheDocument();
+    expect(within(shelf).getByText('オーナー')).toBeInTheDocument();
+    // A member without a name is shown by the email
+    expect(within(shelf).getByText('member2@example.com')).toBeInTheDocument();
+    expect(within(shelf).getByText('invited1@example.com')).toBeInTheDocument();
+    expect(within(shelf).getByText('有効期限切れ')).toBeInTheDocument();
+    expect(within(shelf).getByRole('link', { name: '通常の表示でメンバーを開く' })).toHaveAttribute(
+      'href',
+      '/ja/settings/members'
+    );
+    expect(within(shelf).queryAllByRole('button')).toHaveLength(0);
+    // The other numbers do nothing in this shelf; Esc goes back to the counter, not to the floor
+    await user.keyboard('23');
+    expect(within(office).getByRole('region', { name: 'メンバーと招待' })).toBeInTheDocument();
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
+    expect(document.activeElement?.textContent).toContain('どの棚を開きますか');
+  });
+
+  it('hides the invitations of the shelf from who may not see them', async () => {
+    mocks.invitations = 'forbidden';
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    const shelf = within(office).getByRole('region', { name: 'メンバーと招待' });
+    expect(within(shelf).queryByText(/invited/)).not.toBeInTheDocument();
+    expect(
+      within(shelf).getByText('招待は、管理者とオーナーだけが見られます。')
+    ).toBeInTheDocument();
+    expect(within(office).getByText('メンバーは 2 人です。')).toBeInTheDocument();
+    // Revoking is not offered either, and its key does nothing
+    expect(within(office).queryByRole('button', { name: /招待を取り消す/ })).not.toBeInTheDocument();
+    await user.keyboard('1');
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('revokes an invitation only once the address of the invited person was typed (#1197)', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    expect(within(office).getByRole('button', { name: /招待を取り消す/ })).toHaveTextContent(
+      '1招待を取り消す'
+    );
+    // The key only opens the field: nothing is revoked, however often the keys are pressed
+    await user.keyboard('1');
+    const field = within(office).getByRole('textbox', {
+      name: '取り消す招待の、相手のメールアドレスを入力してください',
+    });
+    expect(field).toHaveFocus();
+    await user.keyboard('11{Enter}{Enter}');
+    expect(mocks.revoked).toHaveLength(0);
+    expect(
+      within(office).getByText('招待中の相手のメールアドレスと合っていません。')
+    ).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: 'この招待を取り消す' })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    // The width and the case of the letters do not count
+    await user.clear(field);
+    await user.type(field, ' Invited1@Example.com{Enter}');
+    expect(mocks.revoked).toEqual([
+      { organizationId: ORG_ID, invitationId: '00000000-0000-4000-8000-0000000000c1' },
+    ]);
+    expect(mocks.invitationsRefreshed).toHaveBeenCalledWith({ organizationId: ORG_ID });
+    expect(
+      within(office).getByText('invited1@example.com への招待を取り消しました。')
+    ).toBeInTheDocument();
+    // The field is gone, and the focus is on what was reported
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(document.activeElement?.textContent).toContain('への招待を取り消しました');
+  });
+
+  it('closes the field with Esc, not the shelf, and keeps what was typed out of the next time', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    await user.keyboard('invited1');
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: 'メンバーと招待' })).toBeInTheDocument();
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(mocks.revoked).toHaveLength(0);
+    await user.click(within(office).getByRole('button', { name: /招待を取り消す/ }));
+    expect(within(office).getByRole('textbox')).toHaveValue('');
+    await user.click(within(office).getByRole('button', { name: /やめて棚に戻る/ }));
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
+  });
+
+  it('has no way back while the revoking is being saved', async () => {
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    mocks.revokePending = true;
+    await user.keyboard('x');
+    expect(within(office).getByRole('button', { name: /やめて棚に戻る/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    await user.keyboard('{Escape}');
+    await user.click(within(office).getByRole('button', { name: /やめて棚に戻る/ }));
+    expect(within(office).getByRole('textbox')).toBeInTheDocument();
+    expect(within(office).getByRole('region', { name: 'メンバーと招待' })).toBeInTheDocument();
+  });
+
+  it('says so when the invitation is gone or the revoking failed, in its own words', async () => {
+    mocks.revokeFails = 'NOT_FOUND';
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    await user.keyboard('invited2@example.com{Enter}');
+    expect(
+      within(office).getByText(
+        'その招待は、もう取り消されているか、相手がすでに参加しています。一覧を読み直しました。'
+      )
+    ).toBeInTheDocument();
+    expect(mocks.invitationsRefreshed).toHaveBeenCalled();
+    mocks.revokeFails = 'INTERNAL';
+    await user.keyboard('1');
+    await user.keyboard('invited2@example.com{Enter}');
+    expect(
+      within(office).getByText(
+        'すみません、取り消せませんでした。時間をおいて、もう一度お願いします。'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('closes the choice while there is no invitation, and takes no key of a conversion (IME)', async () => {
+    mocks.invitations = [];
+    const { user, office } = await enterCounter();
+    await user.keyboard('2');
+    expect(within(office).getByRole('button', { name: /招待を取り消す/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    await user.keyboard('1');
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    mocks.invitations = [invitation(1)];
+    fireEvent.keyDown(office, { key: '1', isComposing: true });
+    fireEvent.keyDown(office, { key: '1', keyCode: 229 });
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('opens the settings shelf with its key: fixed doors to the normal view, moved over with the arrows', async () => {
+    const { user, office, onExit } = await enterCounter();
+    await user.keyboard('3');
+    const shelf = within(office).getByRole('region', { name: '設定の棚' });
+    const doors = within(shelf).getAllByRole('link');
+    expect(doors.map((door) => door.getAttribute('href'))).toEqual([
+      '/ja/settings/organization',
+      '/ja/settings/members',
+      '/ja/settings/webhooks',
+      '/ja/settings/embed',
+      '/ja/settings/qr-campaigns',
+      '/ja/settings/ax-playbook',
+      '/ja/settings/agency-links',
+      '/ja/settings/field-glossary',
+      '/ja/settings',
+    ]);
+    await user.keyboard('{ArrowDown}{ArrowDown}');
+    expect(doors[1]).toHaveFocus();
+    await user.keyboard('{ArrowUp}');
+    expect(doors[0]).toHaveFocus();
+    // A door closes the office
+    doors[0].addEventListener('click', (event) => event.preventDefault());
+    await user.click(doors[0]);
+    expect(onExit).toHaveBeenCalled();
+  });
+
+  it('shows the Esc of the room only at the counter, and takes no key of a conversion (IME)', async () => {
+    const { user, office } = await enterCounter();
+    fireEvent.keyDown(office, { key: '1', isComposing: true });
+    fireEvent.keyDown(office, { key: '2', keyCode: 229 });
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveTextContent('Esc');
+    await user.keyboard('3');
+    expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).not.toHaveTextContent(
+      'Esc'
+    );
+    expect(within(office).getByRole('button', { name: /窓口へ戻る/ })).toHaveTextContent('Esc');
+    fireEvent.keyDown(office, { key: 'Escape', isComposing: true });
+    expect(within(office).getByRole('region', { name: '設定の棚' })).toBeInTheDocument();
+    await user.click(within(office).getByRole('button', { name: /窓口へ戻る/ }));
+    expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
   });
 });

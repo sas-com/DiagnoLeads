@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import type { RoomKeys } from './office-lead-file';
+import { GUIDE_PANEL, ShelfBackButton, ShelfName } from './office-reception-parts';
 import {
   ROOM_BOARD,
   ROOM_FRAME,
@@ -29,6 +30,7 @@ import {
   dueState,
   roomGuide,
 } from './office-rooms';
+import { DUE_ARM_MS } from './rooms/reception';
 
 type Outcome = 'done' | 'undone' | 'failed' | 'undoFailed';
 
@@ -51,6 +53,7 @@ export function OfficeRoomDue({
   look,
   keysRef,
   onOpenNormal,
+  onBack,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -63,6 +66,8 @@ export function OfficeRoomDue({
   keysRef: MutableRefObject<RoomKeys | null>;
   /** A page of the normal view is opened: the office closes */
   onOpenNormal: () => void;
+  /** Back to the counter of the reception (#1196) */
+  onBack: () => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tDue = useTranslations('aiOffice.immersive.room.due');
@@ -77,6 +82,7 @@ export function OfficeRoomDue({
   const [index, setIndex] = useState(0);
   const [doneIds, setDoneIds] = useState<ReadonlySet<string>>(new Set());
   const [justDone, setJustDone] = useState<string | null>(null);
+  const [armed, setArmed] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const due = trpc.leadFollowUp.dueTasks.useQuery({
@@ -88,6 +94,16 @@ export function OfficeRoomDue({
   useEffect(() => {
     if (loaded) setQueue((current) => current ?? loaded.items);
   }, [loaded]);
+  // Marking is closed for a moment after the first one is shown: the key that opened the shelf at
+  // the counter is the key that marks here, and pressed twice it would mark the first one unseen
+  // (#1226). Counted from when the queue is there, not from when the shelf opened: a queue that
+  // arrives late must still be seen first.
+  const queued = queue !== null;
+  useEffect(() => {
+    if (!queued) return;
+    const timer = setTimeout(() => setArmed(true), DUE_ARM_MS);
+    return () => clearTimeout(timer);
+  }, [queued]);
 
   const refresh = () => {
     void utils.leadFollowUp.tasks.invalidate();
@@ -130,6 +146,7 @@ export function OfficeRoomDue({
 
   const answer = (action: DueAction) => {
     if (!queue || !dueActionOpen(action, state)) return;
+    if (action === 'done' && !armed) return;
     if (action === 'next') {
       setIndex((current) => current + 1);
       setJustDone(null);
@@ -195,10 +212,12 @@ export function OfficeRoomDue({
   return (
     <div className={ROOM_FRAME}>
       {/* Whose room this is, what is handed over, and what the president answers */}
-      <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
+      <div className={cn(PANEL, GUIDE_PANEL)}>
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         {/* The report takes the focus when the room opens: Enter pressed once too often does nothing */}
         <div ref={reportRef} tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
+          {/* Read out with the report: the focus comes here when the shelf opens */}
+          <ShelfName shelf="due" />
           <RoomGuideLine>
             {t(`guide.${guide}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
@@ -221,8 +240,8 @@ export function OfficeRoomDue({
                   <RoomChoiceButton
                     keyCap={DUE_KEYS.done}
                     main={mainAction === 'done'}
-                    closed={!dueActionOpen('done', state)}
-                    waiting={update.isPending}
+                    closed={!armed || !dueActionOpen('done', state)}
+                    waiting={!armed || update.isPending}
                     onClick={() => answer('done')}
                   >
                     {tDue('choices.done')}
@@ -255,6 +274,7 @@ export function OfficeRoomDue({
             </ul>
           </>
         )}
+        <ShelfBackButton onBack={onBack} />
       </div>
 
       {/* What is handed over now, and the order of the rest */}

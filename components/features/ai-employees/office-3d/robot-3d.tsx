@@ -9,30 +9,43 @@ import {
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
-import { CanvasTexture, type Group, SRGBColorSpace } from 'three';
-import { STATUS_LIGHT, shade } from '../office-prims';
+import { CanvasTexture, ExtrudeGeometry, type Group, SRGBColorSpace, Shape } from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { STATUS_LIGHT, shade, tint } from '../office-prims';
 import { ROBOT_SHELL_COLORS, ROLE_GEARS, robotAccent } from '../office-robot';
-import { type EmoteIcon, type Emotion, expressionOf, gestureScale } from './office-emotion';
+import {
+  type EmoteIcon,
+  type Emotion,
+  expressionOf,
+  gestureScale,
+  postureOf,
+} from './office-emotion';
 
 const DARK = '#1f2937';
 const VISOR = '#111827';
 const EYE = '#67e8f9';
 const EYE_ALERT = '#fcd34d';
+/** The tassel of the mortarboard: the brass of the office */
+const TASSEL = '#e9cf9a';
+
+/**
+ * The icons that float over the head as a badge. Studying is not one of them: it is the
+ * mortarboard on the head, like on the 2D floor
+ */
+type Badge = Exclude<EmoteIcon, 'none' | 'book'>;
 
 /** What floats over the head for each icon */
-const ICON_TEXT: Readonly<Record<Exclude<EmoteIcon, 'none'>, string>> = {
+const ICON_TEXT: Readonly<Record<Badge, string>> = {
   check: '✓',
   alert: '!',
   sleep: 'Zzz',
   wave: '♪',
-  book: '…',
 };
-const ICON_COLORS: Readonly<Record<Exclude<EmoteIcon, 'none'>, string>> = {
+const ICON_COLORS: Readonly<Record<Badge, string>> = {
   check: '#16a34a',
   alert: '#dc2626',
   sleep: '#475569',
   wave: '#db2777',
-  book: '#2563eb',
 };
 
 /** A round badge with a glyph, drawn once into a texture */
@@ -62,13 +75,97 @@ function useBadge(text: string, colour: string) {
   }, [text, colour]);
 }
 
-function Emote({ icon }: { icon: Exclude<EmoteIcon, 'none'> }) {
+function Emote({ icon }: { icon: Badge }) {
   const texture = useBadge(ICON_TEXT[icon], ICON_COLORS[icon]);
   return (
     <sprite position={[0.55, 2.55, 0]} scale={[0.62, 0.62, 0.62]}>
       <spriteMaterial map={texture} depthTest={false} />
     </sprite>
   );
+}
+
+/** How much larger than its build the robot stands: as tall beside the desks as the 2D one */
+export const ROBOT_SCALE = 1.25;
+
+/** A flat plate with round corners (the visor, the chest panel), lying in x and y */
+function usePlate(width: number, height: number, radius: number, depth: number) {
+  return useMemo(() => {
+    const [w, h] = [width / 2, height / 2];
+    const shape = new Shape();
+    shape.moveTo(-w + radius, -h);
+    shape.lineTo(w - radius, -h);
+    shape.quadraticCurveTo(w, -h, w, -h + radius);
+    shape.lineTo(w, h - radius);
+    shape.quadraticCurveTo(w, h, w - radius, h);
+    shape.lineTo(-w + radius, h);
+    shape.quadraticCurveTo(-w, h, -w, h - radius);
+    shape.lineTo(-w, -h + radius);
+    shape.quadraticCurveTo(-w, -h, -w + radius, -h);
+    return new ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: 6 });
+  }, [width, height, radius, depth]);
+}
+
+/** A box with round edges: the head of the square builds */
+function useRoundedBox(width: number, height: number, depth: number, radius: number) {
+  return useMemo(
+    () => new RoundedBoxGeometry(width, height, depth, 4, radius),
+    [width, height, depth, radius]
+  );
+}
+
+/**
+ * The emblem of the role on the chest, drawn once into a texture: the same four signs as on the
+ * 2D robot (a gauge, a checklist, code brackets, a clock), white with the accent
+ */
+function useEmblem(role: AiEmployeeRole, accent: string) {
+  return useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128;
+    canvas.height = 128;
+    const c = canvas.getContext('2d');
+    if (c) {
+      const light = tint(accent, 0.45);
+      c.lineWidth = 10;
+      c.lineCap = 'round';
+      c.lineJoin = 'round';
+      const line = (colour: string, ...points: number[]) => {
+        c.strokeStyle = colour;
+        c.beginPath();
+        c.moveTo(points[0], points[1]);
+        for (let i = 2; i < points.length; i += 2) c.lineTo(points[i], points[i + 1]);
+        c.stroke();
+      };
+      if (role === 'marketer') {
+        c.strokeStyle = '#ffffff';
+        c.beginPath();
+        c.arc(64, 84, 40, Math.PI, 0);
+        c.stroke();
+        line(light, 64, 84, 86, 52);
+        c.fillStyle = '#ffffff';
+        c.beginPath();
+        c.arc(64, 84, 8, 0, Math.PI * 2);
+        c.fill();
+      } else if (role === 'sales') {
+        line('#ffffff', 26, 44, 36, 54, 52, 34);
+        line('#ffffff', 26, 84, 36, 94, 52, 74);
+        line(light, 68, 44, 102, 44);
+        line(light, 68, 84, 102, 84);
+      } else if (role === 'engineer') {
+        line('#ffffff', 44, 36, 22, 64, 44, 92);
+        line('#ffffff', 84, 36, 106, 64, 84, 92);
+        line(light, 72, 30, 56, 98);
+      } else {
+        c.strokeStyle = '#ffffff';
+        c.beginPath();
+        c.arc(64, 64, 40, 0, Math.PI * 2);
+        c.stroke();
+        line(light, 64, 40, 64, 64, 82, 76);
+      }
+    }
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    return texture;
+  }, [role, accent]);
 }
 
 /** One eye on the visor, in the shape the emotion gives it */
@@ -79,11 +176,11 @@ function Eye({
   wide,
 }: { x: number; shape: string; colour: string; wide: boolean }) {
   const material = <meshBasicMaterial color={colour} toneMapped={false} />;
-  const size = wide ? 0.105 : 0.08;
+  const size = wide ? 0.125 : 0.1;
   if (shape === 'closed') {
     return (
       <mesh position={[x, 0, 0]}>
-        <boxGeometry args={[0.17, 0.028, 0.02]} />
+        <boxGeometry args={[0.2, 0.032, 0.02]} />
         {material}
       </mesh>
     );
@@ -92,7 +189,7 @@ function Eye({
     // A smiling arc: the upper half of a ring
     return (
       <mesh position={[x, -0.03, 0]}>
-        <torusGeometry args={[0.075, 0.022, 8, 16, Math.PI]} />
+        <torusGeometry args={[0.09, 0.026, 8, 16, Math.PI]} />
         {material}
       </mesh>
     );
@@ -116,7 +213,9 @@ function Eye({
  *
  * It hovers; while it walks it leans forward and swings its arms; its emotion shows in its eyes,
  * in how it bobs and leans, and in the badge over its head. The personality scales the gestures.
- * The origin is on the floor under the robot; it faces +z. About 2.2 units tall.
+ * At its desk it reaches for the keyboard while it works, and it wears a mortarboard while it
+ * studies: only what its real status says.
+ * The origin is on the floor under the robot; it faces +z. About 2.75 units tall (ROBOT_SCALE).
  */
 export function Robot3D({
   role,
@@ -141,6 +240,7 @@ export function Robot3D({
   const leftArm = useRef<Group>(null);
   const rightArm = useRef<Group>(null);
   const expression = expressionOf(emotion);
+  const posture = postureOf(status, { walking, emotion });
   const gesture = gestureScale(tone);
   const off = status === 'paused';
   const coat = ROBOT_SHELL_COLORS[look.shell];
@@ -169,19 +269,43 @@ export function Robot3D({
     // A wave: the near arm goes up and waves
     // (with less motion the arm stays raised, without waving)
     const wave = emotion === 'happy' || emotion === 'proud' ? -2.2 + Math.sin(t * 9) * 0.35 : 0;
-    if (leftArm.current) leftArm.current.rotation.x = swing;
+    // At work: both arms reach forward to the keyboard, and the hands tap a little
+    const reach = posture.reaching ? -1.05 : 0;
+    const tap = reach ? Math.sin(t * 11) * 0.06 : 0;
+    if (leftArm.current) leftArm.current.rotation.x = reach ? reach + tap : swing;
     if (rightArm.current) {
-      rightArm.current.rotation.x = wave ? 0 : -swing;
+      rightArm.current.rotation.x = wave ? 0 : reach ? reach - tap : -swing;
       rightArm.current.rotation.z = wave;
     }
   });
 
-  const shellMaterial = <meshStandardMaterial color={shell} roughness={0.45} metalness={0.05} />;
+  // A glazed shell, like the ceramic of the 2D robot
+  const shellMaterial = (
+    <meshPhysicalMaterial
+      color={shell}
+      roughness={0.32}
+      metalness={0.05}
+      clearcoat={0.7}
+      clearcoatRoughness={0.25}
+    />
+  );
+  const square = look.head === 'square';
+  const boxHead = useRoundedBox(
+    square ? 0.8 : 0.9,
+    square ? 0.68 : 0.72,
+    0.72,
+    square ? 0.14 : 0.24
+  );
+  const visor = usePlate(0.7, 0.42, 0.14, 0.05);
+  const chest = usePlate(0.4, 0.34, 0.08, 0.03);
+  const emblem = useEmblem(role, accent);
+  const faceZ = look.head === 'round' ? 0.31 : 0.345;
+  const studying = posture.capped;
   const headTop = look.head === 'dome' ? 0.5 : 0.36;
   const beaconY = look.antenna === 'none' ? headTop + 0.07 : headTop + 0.3;
 
   return (
-    <group>
+    <group scale={ROBOT_SCALE}>
       {/* The glow under the hovering base */}
       {!off && (
         <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -205,11 +329,16 @@ export function Robot3D({
           {shellMaterial}
         </mesh>
         {/* The chest panel, where the role's emblem goes, and the power light */}
-        <mesh position={[-0.08, 0.86, 0.39]} rotation={[-0.12, 0, 0]}>
-          <boxGeometry args={[0.36, 0.3, 0.06]} />
-          <meshStandardMaterial color={DARK} roughness={0.4} />
-        </mesh>
-        <mesh position={[0.2, 0.9, 0.4]}>
+        <group position={[-0.06, 0.86, 0.385]} rotation={[-0.12, 0, 0]}>
+          <mesh geometry={chest}>
+            <meshStandardMaterial color={DARK} roughness={0.4} />
+          </mesh>
+          <mesh position={[0, 0, 0.035]}>
+            <planeGeometry args={[0.3, 0.3]} />
+            <meshBasicMaterial map={emblem} transparent toneMapped={false} />
+          </mesh>
+        </group>
+        <mesh position={[0.22, 0.9, 0.4]}>
           <sphereGeometry args={[0.04, 12, 8]} />
           <meshBasicMaterial color={off ? '#6b7280' : '#22c55e'} toneMapped={false} />
         </mesh>
@@ -264,17 +393,15 @@ export function Robot3D({
               {shellMaterial}
             </mesh>
           ) : (
-            <mesh scale={look.head === 'square' ? [1, 1, 1] : [1, 0.92, 0.95]} castShadow>
-              <boxGeometry args={look.head === 'square' ? [0.8, 0.68, 0.7] : [0.84, 0.72, 0.74]} />
+            <mesh geometry={boxHead} castShadow>
               {shellMaterial}
             </mesh>
           )}
           {/* The visor and the eyes */}
-          <mesh position={[0, 0.02, look.head === 'round' ? 0.33 : 0.37]}>
-            <boxGeometry args={[0.62, 0.34, 0.08]} />
-            <meshStandardMaterial color={VISOR} roughness={0.2} metalness={0.3} />
+          <mesh geometry={visor} position={[0, 0.02, faceZ]}>
+            <meshStandardMaterial color={VISOR} roughness={0.15} metalness={0.4} />
           </mesh>
-          <group position={[0, 0.03, look.head === 'round' ? 0.38 : 0.42]}>
+          <group position={[0, 0.03, faceZ + 0.06]}>
             {look.eyes === 'bar' && eyes !== 'closed' ? (
               <mesh rotation={[0, 0, eyes === 'down' ? 0.12 : 0]}>
                 <boxGeometry args={[0.44, eyes === 'narrow' ? 0.04 : 0.07, 0.02]} />
@@ -323,6 +450,27 @@ export function Robot3D({
             <sphereGeometry args={[look.antenna === 'none' ? 0.06 : 0.08, 16, 12]} />
             <meshBasicMaterial color={STATUS_LIGHT[status]} toneMapped={false} />
           </mesh>
+          {/* Studying: the mortarboard of the 2D robot, on the head */}
+          {studying && (
+            <group position={[0, headTop + 0.02, 0]}>
+              <mesh position={[0, 0.05, 0]}>
+                <cylinderGeometry args={[0.24, 0.27, 0.12, 20]} />
+                <meshStandardMaterial color={DARK} roughness={0.7} />
+              </mesh>
+              <mesh position={[0, 0.12, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+                <boxGeometry args={[0.62, 0.035, 0.62]} />
+                <meshStandardMaterial color={DARK} roughness={0.7} />
+              </mesh>
+              <mesh position={[0.32, 0.03, 0.16]}>
+                <cylinderGeometry args={[0.012, 0.012, 0.2, 6]} />
+                <meshStandardMaterial color={TASSEL} />
+              </mesh>
+              <mesh position={[0.32, -0.08, 0.16]}>
+                <sphereGeometry args={[0.04, 10, 8]} />
+                <meshStandardMaterial color={TASSEL} />
+              </mesh>
+            </group>
+          )}
           {/* The gear */}
           {gear === 'headset' && (
             <>
@@ -357,7 +505,7 @@ export function Robot3D({
           )}
         </group>
       </group>
-      {expression.icon !== 'none' && <Emote icon={expression.icon} />}
+      {expression.icon !== 'none' && expression.icon !== 'book' && <Emote icon={expression.icon} />}
     </group>
   );
 }

@@ -8,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { type MutableRefObject, type ReactNode, useEffect, useRef, useState } from 'react';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
+import type { RoomKeys } from './office-room-contract';
 import { ROOM_BOARD, ROOM_FRAME, RoomChoiceButton } from './office-room-parts';
 import {
   FILE_CONTACT_CHOICES,
@@ -20,16 +21,8 @@ import {
 
 export type BoardLead = RouterOutputs['leads']['list']['items'][number];
 
-/**
- * The key a room is handed: enough of the browser's event to read the key and to tell whether it
- * belongs to a Japanese conversion (IME), which a room must never take as an answer
- */
-export type RoomKeyEvent = Pick<KeyboardEvent, 'key' | 'isComposing' | 'keyCode'> & {
-  preventDefault: () => void;
-};
-
-/** What the keys of a room do; true when the key was used */
-export type RoomKeys = (event: RoomKeyEvent) => boolean;
+// The contract of the rooms holds these now (#1142); kept here for the files that import them
+export type { RoomKeyEvent, RoomKeys } from './office-room-contract';
 
 /** The colour of a lead status on the dark board; the word is always shown with it */
 export const LEAD_STATUS_COLORS: Record<string, string> = {
@@ -64,6 +57,7 @@ export function OfficeLeadFile({
   keysRef,
   onClose,
   onOpenDetail,
+  onBusyChange,
 }: {
   organizationId: string;
   lead: BoardLead;
@@ -76,6 +70,8 @@ export function OfficeLeadFile({
   onClose: () => void;
   /** The lead's page is opened in the normal view: the office closes */
   onOpenDetail: () => void;
+  /** Told while a record is being saved (the office keeps the room open), and when it is over */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room.file');
   const tLeads = useTranslations('aiOffice.immersive.room.leads');
@@ -117,6 +113,11 @@ export function OfficeLeadFile({
       ),
   });
   const busy = record.isPending || remove.isPending;
+  // The office closes its own way to the floor meanwhile, like the file closes Esc (#1205)
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const canEdit = contacts.data?.canEdit === true;
   const recorded = outcome?.kind === 'recorded';
   const state = { canEdit, recorded, busy };
@@ -134,10 +135,14 @@ export function OfficeLeadFile({
 
   // The file's keys: each one keeps its meaning, and one that is closed right now does nothing
   // (it is still used up, so it never reaches the room behind the file). Enter and Tab are left
-  // to the focused control; Esc goes back, and is the room's.
+  // to the focused control. Esc goes back and is the room's, except while a record is being
+  // saved or taken back: the request is out already, so closing the file would look like
+  // calling it off while it is carried out, with its report unseen (#1205). The file uses the
+  // key up until the answer is there, like the deal file does.
   const onFileKey: RoomKeys = (event) => {
     // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
     if (isImeKey(event)) return false;
+    if (event.key === 'Escape') return busy;
     const action = fileActionOfKey(event.key);
     if (!action) return false;
     event.preventDefault();
@@ -168,7 +173,7 @@ export function OfficeLeadFile({
       minute: '2-digit',
     });
   const latest = contacts.data?.recent[0];
-  const report =
+  const settled =
     outcome?.kind === 'recorded'
       ? outcome.undoFailed
         ? t('undoFailed')
@@ -188,6 +193,9 @@ export function OfficeLeadFile({
                     total: contacts.data.total,
                   })
                 : t('noContact');
+  // While a request is out, the report says so: Esc and the way back do nothing until its
+  // answer is there, and the president is told why (#1227)
+  const report = record.isPending ? t('saving') : remove.isPending ? t('undoing') : settled;
   const company = lead.company || tLeads('noCompany');
   const marks = lead.mqlLevel === 'interest' ? 2 : lead.mqlLevel === 'fit' ? 1 : 0;
 
@@ -236,8 +244,13 @@ export function OfficeLeadFile({
           <li>
             <RoomChoiceButton
               keyCap="Esc"
-              main={recorded || (contacts.data !== undefined && !canEdit)}
-              onClick={onClose}
+              main={(recorded || (contacts.data !== undefined && !canEdit)) && !busy}
+              // Closed while saving, like Esc: it stays in its place and keeps the focus
+              closed={busy}
+              waiting={busy}
+              onClick={() => {
+                if (!busy) onClose();
+              }}
             >
               {t('choices.back')}
             </RoomChoiceButton>
@@ -375,9 +388,14 @@ export function OfficeLeadFile({
           <p className="text-xs">{t('detailHint')}</p>
           <Link
             href={`/${locale}/leads/${lead.id}`}
-            onClick={onOpenDetail}
+            // Closed while saving, like the way back: leaving would hide the answer
+            aria-disabled={busy || undefined}
+            onClick={(event) => {
+              if (busy) event.preventDefault();
+              else onOpenDetail();
+            }}
             className={cn(
-              'inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white',
+              'inline-flex min-h-11 items-center underline underline-offset-4 hover:text-white aria-disabled:cursor-wait aria-disabled:opacity-60',
               FOCUS
             )}
           >

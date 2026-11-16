@@ -89,6 +89,22 @@ describe('planTests', () => {
     });
   });
 
+  it('runs the test that reads the backup scripts (#1126)', () => {
+    expect(planTests([modified('scripts/prod-restore-to.sh')])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: ['test/unit/scripts/prod-backup-scripts.test.ts'],
+    });
+  });
+
+  it('runs the same test for the Supabase prepare script (#1184)', () => {
+    expect(planTests([modified('scripts/supabase/prepare.sql')])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: ['test/unit/scripts/prod-backup-scripts.test.ts'],
+    });
+  });
+
   it('runs nothing for a removed test', () => {
     expect(planTests([{ path: 'test/unit/lib/old.test.ts', status: 'deleted' }])).toEqual({
       kind: 'selected',

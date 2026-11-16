@@ -26,7 +26,7 @@ import {
   easeView,
   stageView,
 } from './office-view-3d';
-import { Robot3D } from './robot-3d';
+import { ROBOT_SCALE, Robot3D } from './robot-3d';
 
 const NO_PAN: ScreenPoint = { x: 0, y: 0 };
 
@@ -55,7 +55,8 @@ function VacantSeat({ role, night }: { role: AiEmployeeRole; night: boolean }) {
   const spot = spotOf(role, 'vacant');
   const color = night ? '#aab4c8' : '#8a93a6';
   return (
-    <group position={[spot.x, 0, spot.y]}>
+    // As tall as whoever will sit there
+    <group position={[spot.x, 0, spot.y]} scale={ROBOT_SCALE}>
       <mesh position={[0, 0.95, 0]}>
         <capsuleGeometry args={[0.38, 0.75, 6, 16]} />
         <meshStandardMaterial color={color} transparent opacity={0.22} depthWrite={false} />

@@ -169,7 +169,6 @@
       "day": "Day",
       "night": "Night",
       "staff": "Staff",
-      "map": "Map of the floor. The lit points are where the AI employees are.",
       "relay": "How value passes on",
       "relaySteps": {
         "marketer": "Finds prospects",
@@ -224,20 +223,46 @@
           "pause": "Rest for a while",
           "resume": "Come back",
           "leave": "Later",
-          "back": "Back to the office"
+          "back": "Back to the office",
+          "rename": "Change the name",
+          "log": "Show me the work log",
+          "dismiss": "Dismiss this employee"
         },
         "resumedTraining": "{name}, back to training. I will start working once my work is ready.",
-        "trainingFirst": " Until its work is ready, a new hire stays in training."
+        "trainingFirst": " Until its work is ready, a new hire stays in training.",
+        "staff": {
+          "back": "Back to the choices",
+          "failed": "That did not work. Please wait a moment and try again.",
+          "rename": {
+            "title": "Change the name",
+            "label": "New display name",
+            "save": "Use this name",
+            "done": "My name was {from} and is {name} now. I look forward to working with you."
+          },
+          "log": {
+            "title": "Work log",
+            "processed": "{count} processed",
+            "more": "Showing the latest {count}. More (up to {limit}) are in the desk details of the normal view.",
+            "failedDetail": "The result of a failed run is in the desk details of the normal view."
+          },
+          "dismiss": {
+            "title": "Dismiss this employee",
+            "label": "To confirm, type the name of this AI employee, \"{name}\"",
+            "confirm": "Dismiss {name}",
+            "done": "{name} was dismissed. The desk is vacant again.",
+            "mismatch": "The name does not match."
+          }
+        }
       },
       "floorGuide": "Floor guide",
       "room": {
         "back": "Back to the floor",
         "work": {
           "desk": "Today",
-          "marketing": "Leads",
+          "marketing": "Acquisition and prospects",
           "sales": "Deals",
           "engineering": "Surveys",
-          "backoffice": "Due today"
+          "backoffice": "General affairs"
         },
         "guide": {
           "employee": "{name} looks after this room.",
@@ -246,18 +271,135 @@
           "paused": "{name} is paused. The figures are read from the records.",
           "vacant": "The {role} seat is vacant. The figures are read from the records."
         },
+        "marketing": {
+          "report": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportWithTop": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}. The largest source is \"{source}\" with {count}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportNone": "There are no new prospects in the last {days} days.",
+          "reportLoading": "Reading the figures of this room.",
+          "reportUnavailable": "The figures of this room could not be read.",
+          "ask": {
+            "figures": "Show me the figures",
+            "leads": "Show me the prospects"
+          },
+          "figureBoards": {
+            "sources": "Sources",
+            "funnel": "Progress",
+            "campaigns": "Campaigns"
+          },
+          "leadViews": {
+            "needsAction": "Not started",
+            "consultation": "Consultations",
+            "newThisWeek": "New this week",
+            "mine": "Mine",
+            "all": "All"
+          },
+          "leadCount": "{count, number}",
+          "period": "Prospects created in the last {days} days: {count}",
+          "periodOnly": "Prospects created in the last {days} days",
+          "loading": "Loading",
+          "error": "The figures could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see prospects. Please ask an administrator.",
+          "empty": "No prospects were created in the last {days} days.",
+          "openAnalytics": "Open the analytics in the normal view",
+          "analyticsHint": "Other periods and finer breakdowns are on the analytics page of the normal view.",
+          "sources": {
+            "board": "Source board",
+            "caption": "Prospects, SQL, wins and acquisition cost by source (prospects created in the last {days} days)",
+            "columns": {
+              "source": "Source",
+              "leads": "Prospects",
+              "share": "Share",
+              "sql": "SQL",
+              "won": "Won",
+              "cost": "Acquisition cost",
+              "wonAmount": "Won amount",
+              "roi": "ROI"
+            },
+            "unset": "No source recorded",
+            "total": "Total",
+            "shareValue": "{share}%",
+            "roiValue": "{value}x",
+            "uncosted": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects. {count, plural, one {# has} other {# have}} no cost recorded.",
+            "costed": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects.",
+            "returns": "The won amount and the ROI are counted from the deals of these prospects (ROI = won amount ÷ acquisition cost).",
+            "keys": {
+              "open": "open its prospects"
+            },
+            "openHint": "Opening the row of a source shows its prospects of the last {days} days on the lead board.",
+            "leadsOf": "Source: {source}, last {days} days",
+            "back": "Back to the source board",
+            "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened.",
+            "openDescription": "Shows its prospects of the last {days} days on the lead board",
+            "closedRow": " (cannot be opened)",
+            "sqlNote": "The SQL of this table counts the prospects judged SQL. The SQL of the progress board counts the prospects that were won too, so the two can differ."
+          },
+          "funnel": {
+            "board": "Progress board",
+            "caption": "Prospects that reached each stage (prospects created in the last {days} days)",
+            "columns": {
+              "stage": "Stage",
+              "reached": "Reached",
+              "ofAll": "Of all",
+              "fromPrevious": "From the stage before"
+            },
+            "stages": {
+              "lead": "Prospect",
+              "mql": "MQL (interested)",
+              "deal": "Deal",
+              "sql": "SQL (qualified)",
+              "won": "Won"
+            },
+            "percent": "{value}%",
+            "reachedNote": "A prospect that went further counts for the stages before it too (one that entered a deal without MQL counts as MQL).",
+            "nurturing": "Prospects being nurtured now: {count} (not counted as a stage).",
+            "noPrevious": "No stage before"
+          },
+          "scroll": "Table of the {board}. Scroll with the arrow keys",
+          "scrollRows": "Table of the {board}. The up and down arrows choose a row, and scroll at the first and last row",
+          "onWall": "On the wall: {board}",
+          "boardOf": "{board} ({what})",
+          "campaigns": {
+            "board": "Campaign board",
+            "summary": "What the QR campaigns (since each was created) and the sales agencies (last {days} days) brought",
+            "hint": "Campaigns are created and changed, and other periods chosen, in the normal view.",
+            "openQr": "Open the QR campaigns in the normal view",
+            "qr": {
+              "title": "QR campaigns",
+              "period": " (since each was created)",
+              "empty": "There are no QR campaigns yet.",
+              "caption": "Scans, new prospects, their rate and breakdown by QR campaign (since each was created)",
+              "columns": {
+                "campaign": "Campaign",
+                "scans": "Scans",
+                "newLeads": "New prospects",
+                "rate": "New-prospect rate",
+                "interested": "Interested (MQL)",
+                "consultation": "Consultations",
+                "existing": "Answers from existing prospects",
+                "ofNewLeads": "Of the new prospects"
+              },
+              "closed": "Not taking answers",
+              "note": "The new-prospect rate is new prospects ÷ scans. Answers from visits that are not counted as scans are new prospects too, so it can exceed 100%.",
+              "breakdownUnavailable": "The breakdown (interested, consultations, answers from existing prospects) could not be read.",
+              "breakdownReading": "Reading the breakdown.",
+              "notRead": "Could not be read"
+            },
+            "agencies": {
+              "title": "Sales agencies",
+              "empty": "No prospect of the last {days} days has an agency name recorded.",
+              "caption": "Prospects, SQL, wins and acquisition cost by sales agency (prospects created in the last {days} days)",
+              "columns": {
+                "agency": "Agency",
+                "sqlRate": "SQL rate"
+              },
+              "note": "Prospects with an agency name recorded, counted by agency. The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects.",
+              "period": " (prospects created in the last {days} days)"
+            }
+          },
+          "notComputable": "Cannot be computed"
+        },
         "leads": {
           "board": "Lead board",
-          "report": "New leads this week: {newThisWeek}. Consultation requests: {consultation}. Not started yet: {needsAction}.",
-          "reportLoading": "Reading the figures from the board.",
-          "reportUnavailable": "The figures could not be read from the board.",
-          "ask": {
-            "needsAction": "Show me what nobody has started on",
-            "consultation": "Show me the consultation requests",
-            "newThisWeek": "Show me this week's new leads",
-            "mine": "Show me my own leads",
-            "all": "Show me everything"
-          },
           "views": {
             "needsAction": "Not started yet (new)",
             "consultation": "Consultation requested",
@@ -321,7 +463,9 @@
           "by": "recorded by {name}",
           "openDetail": "Open the details in the normal view",
           "detailHint": "Hearings, next actions and edits are done on the details page in the normal view.",
-          "undoFailed": "The record could not be undone and is still there. Please try again."
+          "undoFailed": "The record could not be undone and is still there. Please try again.",
+          "saving": "Recording. The file stays open until it is done.",
+          "undoing": "Taking the record back. The file stays open until it is done."
         },
         "due": {
           "board": "Due today",
@@ -363,7 +507,300 @@
           "undoFailed": "It could not be undone and is still marked as done. Please try again.",
           "reportNext": "Here is number {index} of {total}."
         },
-        "door": "opens a page"
+        "deals": {
+          "board": "Deal board",
+          "report": "There are {open} open deals, {amount} in total. {overdue} are past their day, {soon} have to move within a week, and {noNextAction} have no next action.",
+          "reportNone": "There are no open deals.",
+          "reportLoading": "Reading the figures of the board.",
+          "reportUnavailable": "The figures of the board could not be read.",
+          "ask": {
+            "soon": "Show me what has to move within a week",
+            "noNextAction": "Show me those without a next action",
+            "mine": "Show me my own",
+            "all": "Show me everything"
+          },
+          "views": {
+            "soon": "To move within a week (by {date}, with what is late)",
+            "noNextAction": "No next action",
+            "mine": "My deals",
+            "all": "All"
+          },
+          "empty": {
+            "soon": "No deal has to move within a week.",
+            "noNextAction": "Every open deal has a next action.",
+            "mine": "You have no open deals.",
+            "all": "There are no open deals."
+          },
+          "count": "{count, plural, one {# deal} other {# deals}}",
+          "stages": {
+            "all": "Deals and amounts by stage (all open deals)",
+            "mine": "Deals and amounts by stage (all of my deals)"
+          },
+          "keys": {
+            "rows": "Choose a row",
+            "open": "Open"
+          },
+          "columns": {
+            "deal": "Deal / company",
+            "stage": "Stage",
+            "nextAction": "Next action",
+            "amount": "Amount (excl. tax)",
+            "owner": "Owner"
+          },
+          "noLead": "No company name",
+          "noAmount": "No amount yet",
+          "unassigned": "Unassigned",
+          "noNextAction": "No next action",
+          "late": "Overdue",
+          "loading": "Loading",
+          "error": "The deals could not be read. Please open the room again later.",
+          "forbidden": "You do not have permission to see deals. Please ask an administrator.",
+          "range": "{from}–{to} of {total}",
+          "openHint": "Opening a row opens the deal file inside this room.",
+          "prev": "Previous",
+          "next": "Next",
+          "page": "{page} / {pages}",
+          "truncated": "There are many deals, so the board lists the first {limit}. The counts and amounts by stage include all of them.",
+          "normalPages": "Pages of the normal view",
+          "open": {
+            "deals": "Open the deals in the normal view",
+            "forecast": "Open the sales forecast",
+            "prospects": "Open the customer search"
+          },
+          "reportTruncated": "There are {open} open deals, {amount} in total. There are too many to list them all on the board, so please check in the deals of the normal view how many are late, how many have to move within a week and how many have no next action.",
+          "closesOn": "Expected close {date}",
+          "closeLate": "Close date passed"
+        },
+        "dealFile": {
+          "label": "Deal file of \"{name}\"",
+          "title": "Deal file",
+          "standing": "This deal is in the \"{stage}\" stage (probability {probability}%). ",
+          "next": "Its next action is \"{title}\", due {date}.",
+          "noNext": "It has no next action.",
+          "moved": "Moved to \"{stage}\" (probability {probability}%). You can undo this if it was a mistake.",
+          "movedHandedOff": "Moved to \"{stage}\" (probability {probability}%). The handoff sheet was sent to the technical team, so this move cannot be undone.",
+          "done": "Marked the next action \"{title}\" as done. You can undo this if it was a mistake.",
+          "added": "Set the next action \"{title}\", due {date}. To change it, use the deal in the normal view.",
+          "undone": "Undone.",
+          "undoFailed": "The undo did not go through. The change still stands. Please try again.",
+          "failed": "Sorry, that did not work. Please try again later.",
+          "readOnly": "You do not have permission to change deals.",
+          "choices": {
+            "advance": "Move on to \"{stage}\"",
+            "advanceEnd": "Move on (a win is recorded on the deal's page)",
+            "back": "Move back to \"{stage}\"",
+            "backStart": "Move back a stage",
+            "done": "Mark the next action as done",
+            "add": "Set a next action",
+            "undo": "Undo that",
+            "close": "Back to the board",
+            "advanceSql": "Move on to \"{stage}\" (SQL decision first)",
+            "advanceAsk": "Move on to \"{stage}\" (a word first)",
+            "doneNamed": "Mark \"{title}\" as done"
+          },
+          "sql": {
+            "title": "SQL decision",
+            "notQualified": "Not qualified: lose the deal on its page",
+            "back": "Leave it and go back to the choices"
+          },
+          "add": {
+            "title": "Set a next action",
+            "what": "What to do next (required)",
+            "due": "Due (required)",
+            "save": "Set it",
+            "back": "Leave it and go back to the choices",
+            "missing": "Please enter what to do next and a due date.",
+            "days": {
+              "tomorrow": "Tomorrow",
+              "in3Days": "In 3 days",
+              "nextMonday": "Next Monday"
+            }
+          },
+          "stages": "Stages of the deal",
+          "here": "Here now",
+          "deal": "Deal",
+          "nextAction": "Next action",
+          "nextActionMissing": "Not set",
+          "dueOn": "Due {date}",
+          "late": "Overdue",
+          "takeaway": "Takeaway",
+          "notSet": "Not set",
+          "noLead": "No company name",
+          "unassigned": "Unassigned",
+          "openDetail": "Open the deal in the normal view",
+          "detailHint": "Winning and losing, changes to the amount or the expected close date, and contact records are made on the deal's page in the normal view.",
+          "closeLate": "Close date passed",
+          "noAmount": "No amount yet",
+          "gone": "This deal is no longer on the board (it was deleted, or closed as won or lost). It is shown as it was when opened.",
+          "saving": "Saving. This file stays open until it is done.",
+          "failedKept": "Sorry, that answer did not go through. The one before it still stands.",
+          "handoff": {
+            "title": "Before moving on",
+            "warning": "The first time this prospect moves on from qualification, the handoff sheet is sent to the technical team. A move that sent it cannot be undone.",
+            "go": "Move on to \"{stage}\""
+          }
+        },
+        "reception": {
+          "board": "General affairs counter",
+          "back": "Back to the counter",
+          "reading": "Checking the figures.",
+          "ask": " Which shelf shall I open?",
+          "note": "Only what is recorded is shown. What is due is your own share.",
+          "due": {
+            "forbidden": "You do not have permission to see next actions, so I cannot report what is due.",
+            "error": "What is due could not be read.",
+            "none": "You have no next actions due today or earlier.",
+            "some": "Your next actions due today or earlier: {total}.",
+            "overdue": "Your next actions due today or earlier: {total}, of which {overdue} overdue."
+          },
+          "members": {
+            "members": " Members: {count}.",
+            "withInvitations": " Members: {count}. Pending invitations: {waiting}.",
+            "unread": " The members could not be read.",
+            "invitationsUnread": " The invitations could not be read."
+          },
+          "choices": {
+            "due": "Take what is due today",
+            "members": "See members and invitations",
+            "settings": "Choose a settings page"
+          },
+          "figures": {
+            "due": "Due by today",
+            "dueValue": "{count}",
+            "overdueValue": "{count} overdue",
+            "members": "Members",
+            "membersValue": "{count}",
+            "invitations": "Pending invitations",
+            "invitationsValue": "{count}",
+            "expiredValue": "{count} more whose link has expired",
+            "invitationsHidden": "Only admins and owners can see invitations.",
+            "unread": "Could not be read"
+          },
+          "membersShelf": {
+            "board": "Members and invitations",
+            "reading": "Checking the members.",
+            "error": "The members could not be read. Please open the shelf again in a while.",
+            "report": "Members: {count}.",
+            "reportWithInvitations": "Members: {count}. Pending invitations: {waiting}.",
+            "readOnly": "Inviting, roles and removing a member are on the members page of the normal view.",
+            "members": "Members ({count})",
+            "more": "There are {count} more. Please check them in the normal view.",
+            "invitations": "Invitations sent (expired ones included)",
+            "invitationsHidden": "Only admins and owners can see invitations.",
+            "invitationsError": " The invitations could not be read.",
+            "noInvitations": "No invitation is waiting to be accepted.",
+            "expires": "Expires: {date}",
+            "expired": "Link expired",
+            "open": "Open members in the normal view",
+            "revoke": {
+              "choice": "Revoke an invitation",
+              "title": "Revoke an invitation",
+              "note": "Once revoked, the link that was sent no longer works. It cannot be undone (to invite again, send a new one from the members page of the normal view).",
+              "label": "Type the email address of the invitation to revoke",
+              "confirm": "Revoke this invitation",
+              "mismatch": "That is not the address of a pending invitation.",
+              "back": "Give up and go back to the shelf",
+              "done": "The invitation to {email} was revoked.",
+              "gone": "That invitation was already revoked, or the person has joined. The list was read again.",
+              "failed": "Sorry, it could not be revoked. Please try again in a while."
+            },
+            "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles."
+          },
+          "settingsShelf": {
+            "board": "Settings shelf",
+            "report": "Choose a page; it opens in the normal view.",
+            "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view.",
+            "heading": "Pages to open"
+          },
+          "shelves": {
+            "due": "What is due",
+            "members": "Members and invitations",
+            "settings": "Settings"
+          }
+        },
+        "door": "opens a page",
+        "engineering": {
+          "board": "Survey board",
+          "report": "{open} surveys are in progress. {proposal} are in the proposal stage, and {withoutTask} have no next action.",
+          "reportTruncated": "{open} surveys are in progress. {proposal} are in the proposal stage. There are many deals and the board shows only part of them: please check how many have no next action in the deals of the normal view.",
+          "reportEmpty": "No survey is in progress right now.",
+          "reportLoading": "Reading the figures of the board.",
+          "reportUnavailable": "The figures of the board could not be read.",
+          "ask": {
+            "open": "Show me everything in progress",
+            "qualification": "Show me the ones in qualification",
+            "discovery": "Show me the ones in discovery",
+            "proposal": "Show me the ones in the proposal stage",
+            "negotiation": "Show me the ones in negotiation"
+          },
+          "views": {
+            "open": "All in progress"
+          },
+          "columns": {
+            "deal": "Company and deal",
+            "stage": "Stage",
+            "nextAction": "Next action",
+            "owner": "Owner"
+          },
+          "daysInStage": "{days} days in this stage",
+          "due": "Due {date}",
+          "noTask": "Not set",
+          "empty": "No survey deal matches this view.",
+          "error": "The deals could not be read. Please open the room again later.",
+          "forbidden": "You do not have permission to see the deals. Please check with an administrator.",
+          "truncated": "There are many deals: the board shows the first {limit}. The counts by stage count every deal.",
+          "openHint": "Opening a row opens its preparation file inside this room.",
+          "openList": "Open in the deals of the normal view",
+          "file": {
+            "label": "Preparation file of {company}",
+            "title": "Preparation file",
+            "reading": "Reading the hearing and the preparation.",
+            "readError": "The records could not be read. Please open the file again later.",
+            "hearingUnavailable": "The hearing could not be read.",
+            "hearingLatest": "The latest hearing was recorded on {date}. Required fields not filled: {missing}. Not confirmed: {unconfirmed}. To confirm next time: {next}.",
+            "noHearing": "No hearing has been recorded yet.",
+            "prepReady": "The prep card of the first meeting is ready.",
+            "prepNone": "The prep card of the first meeting is not ready yet.",
+            "handedOff": "Moved on from the first hearing on {date}; the handoff sheet is ready.",
+            "notHandedOff": "Has not moved on from the first hearing yet.",
+            "choices": {
+              "hearing": "Show me the hearing summary",
+              "prep": "Show me the prep card",
+              "draft": "Draft the prep card",
+              "undo": "Undo this draft",
+              "back": "Back to the board"
+            },
+            "parts": {
+              "hearing": "Hearing summary",
+              "prep": "Prep card"
+            },
+            "hearingOn": "Hearing of {date}",
+            "notRecorded": "Not filled",
+            "flags": {
+              "missing": "Required, not filled",
+              "unconfirmed": "Not confirmed",
+              "next": "Confirm next time",
+              "changed": "Changed since last time"
+            },
+            "hearingEmpty": "No hearing has been recorded. You can record one under Hearings on the lead's page.",
+            "hearingForbidden": "You do not have permission to see the hearing. Please check with an administrator.",
+            "prepEmpty": "The prep card has not been written yet. You can prepare it on the lead's page.",
+            "readOnlyHint": "Hearings are recorded and the card is edited field by field in the normal view.",
+            "openHandoff": "Open the handoff sheet",
+            "openLead": "Open the lead's page",
+            "openDeal": "Open the deal's page",
+            "drafted": "The empty fields of the prep card were filled from the Web diagnosis and the sales playbook, and saved. What was already written was kept. You can undo this.",
+            "undone": "The draft was undone and the prep card is as it was.",
+            "failed": "Sorry, that did not work. Please try again later.",
+            "refused": "The prep card was saved from another screen just before this save. The draft was not saved. You can ask for the draft again, from the latest card.",
+            "undoFailed": "The draft could not be undone and is still saved. You can ask to undo it again.",
+            "changedSince": "The prep card was saved from another screen after the draft. Undoing would wipe that, so it cannot be undone here. To change it, open the lead's page.",
+            "noMaterial": "There is nothing to draft from for this customer (no Web diagnosis answers, no sales playbook).",
+            "nothingToFill": "The prep card has no empty field a draft could fill.",
+            "refusedNothing": "The prep card was saved from another screen just before this save. The draft was not saved. The latest card has no empty field a draft could fill.",
+            "checking": "Checking the prep card."
+          }
+        }
       },
       "tones": {
         "brisk": {

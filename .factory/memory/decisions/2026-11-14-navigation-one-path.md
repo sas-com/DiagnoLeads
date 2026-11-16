@@ -21,7 +21,7 @@ paths: ["components/features/ai-employees/office-rooms.ts", "components/layout/A
   | 鍵 | 場所 | 今 |
   |---|---|---|
   | 1 | 社長のデスク | 扉 → `/today` |
-  | 2 | マーケティング室 | 部屋（リード） |
+  | 2 | マーケティング室 | 部屋（集客と見込み客。#1213） |
   | 3 | 営業フロア | 扉 → `/deals` |
   | 4 | 開発室 | 扉 → `/deals?kind=survey`（現行調査の商談） |
   | 5 | 総務・受付 | 部屋（今日の期限） |

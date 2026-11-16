@@ -61,6 +61,12 @@ export const DISK_READERS: { pattern: RegExp; tests: string[] }[] = [
     pattern: /^lib\/features\/ax-site\/web-checklist-pdf\.json$/,
     tests: ['test/unit/features/ax-web-checklist.test.ts'],
   },
+  // The backup leaves out a table the restore recreates (#1126), and the restore withdraws the
+  // Data API grants with prepare.sql (#1184)
+  {
+    pattern: /^scripts\/(prod-(dump|restore-to)\.sh|supabase\/prepare\.sql)$/,
+    tests: ['test/unit/scripts/prod-backup-scripts.test.ts'],
+  },
   // Reads every key handler of the screens for the guard of a conversion (#1129). Last, so the rules
   // above still name their own tests for their files
   {

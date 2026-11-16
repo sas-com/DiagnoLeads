@@ -3,7 +3,9 @@ import type { DeskStatus } from '@/lib/features/ai-employees/office';
  * The rooms of the full-screen office that hold work (#1127, decision
  * 2026-11-13-office-is-the-base): the business screens live inside the office. The marketing room
  * is the first: its wall board is the lead list. The reception (back office) hands over what is
- * due, one at a time (#1133).
+ * due, one at a time (#1133). The sales floor holds the deals (#1171; its functions are in
+ * rooms/deals-board.ts). The engineering room shows the surveys of the current systems (#1194;
+ * its pure functions are in rooms/survey-board.ts).
  *
  * Pure functions only.
  */
@@ -19,12 +21,14 @@ import {
 import type { ListLeadsInput } from '@/lib/features/leads/types/schemas';
 
 /** The rooms the president can walk into */
-export const OFFICE_ROOMS = ['marketing', 'backoffice'] as const;
+export const OFFICE_ROOMS = ['marketing', 'sales', 'engineering', 'backoffice'] as const;
 export type OfficeRoom = (typeof OFFICE_ROOMS)[number];
 
 /** The AI employee each room belongs to */
 export const ROOM_ROLES: Readonly<Record<OfficeRoom, AiEmployeeRole>> = {
   marketing: 'marketer',
+  sales: 'sales',
+  engineering: 'engineer',
   backoffice: 'back_office',
 };
 
@@ -53,6 +57,8 @@ export const PLACE_KEYS: Readonly<Record<FloorPlace, string>> = {
 /** The key that enters each room from the floor */
 export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
   marketing: PLACE_KEYS.marketing,
+  sales: PLACE_KEYS.sales,
+  engineering: PLACE_KEYS.engineering,
   backoffice: PLACE_KEYS.backoffice,
 };
 
@@ -63,9 +69,6 @@ export const ROOM_KEYS: Readonly<Record<OfficeRoom, string>> = {
 export const DOOR_PAGES: Readonly<Record<FloorDoor, string>> = {
   // The president's day: what is planned and what is left to do
   desk: '/today',
-  sales: '/deals',
-  // Surveys of the current system: the engineers' share of the deals
-  engineering: '/deals?kind=survey',
 };
 
 export function isOfficeRoom(place: FloorPlace): place is OfficeRoom {
@@ -110,25 +113,8 @@ export const LEAD_BOARD_VIEWS = [
 ] as const satisfies readonly (LeadListPreset | 'all')[];
 export type LeadBoardView = (typeof LEAD_BOARD_VIEWS)[number];
 
-/** The view the board opens on: what nobody has started on yet */
-export const LEAD_BOARD_FIRST_VIEW: LeadBoardView = 'needsAction';
-
-/** The views whose totals the room reports */
-export const LEAD_REPORT_VIEWS = [
-  'newThisWeek',
-  'consultation',
-  'needsAction',
-] as const satisfies readonly LeadBoardView[];
-export type LeadReportView = (typeof LEAD_REPORT_VIEWS)[number];
-
 /** Rows of the board per page: what fits on the wall without scrolling */
 export const LEAD_BOARD_PAGE_SIZE = 8;
-
-/** The view a number key chooses (1 is the first), if any */
-export function leadBoardViewOfKey(key: string): LeadBoardView | null {
-  if (!/^[1-9]$/.test(key)) return null;
-  return LEAD_BOARD_VIEWS[Number(key) - 1] ?? null;
-}
 
 /** The filters of a view, the same as the lead list's preset of that name */
 export function leadBoardFilters(view: LeadBoardView, now: Date): LeadListFilters {
@@ -147,15 +133,6 @@ export function leadBoardInput(
     organizationId,
     LEAD_BOARD_PAGE_SIZE
   );
-}
-
-/** Input of `leads.list` that only asks how many leads a view holds */
-export function leadCountInput(
-  view: LeadBoardView,
-  organizationId: string,
-  now: Date
-): ListLeadsInput {
-  return { ...leadBoardInput(view, 1, organizationId, now), limit: 1 };
 }
 
 /** Pages of the board for a total; an empty board still has its first page */
@@ -241,7 +218,8 @@ export function dueActionOpen(
   return action === 'undo' ? state.justDone : !state.justDone && !state.finished;
 }
 
-function actionOfKey<Action extends string>(
+/** The answer a key stands for in a table of fixed keys (letters in either case) */
+export function actionOfKey<Action extends string>(
   keys: Readonly<Record<Action, string>>,
   key: string
 ): Action | null {

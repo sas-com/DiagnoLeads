@@ -614,6 +614,9 @@ const READ_SCRIPTS = new Map<string, (args: string[]) => string | null>([
   ['test:lib', vitestViolation],
   ['typecheck', (args) => tscViolation(['--noEmit', ...args])],
   ['lint', (args) => biomeViolation(['check', '.', ...args])],
+  // Runs lint, arch:check, vitest and tsc, writing no more than lint, typecheck and test:run do
+  // (caches); its own flags aside, the arguments go to vitest (scripts/verify-changed.ts)
+  ['verify', (args) => vitestViolation(args.filter((w) => w !== '--full' && w !== '--plan'))],
   // These ignore their arguments
   ['memory:index', () => null],
   ['i18n:check', () => null],
@@ -623,7 +626,9 @@ const READ_SCRIPTS = new Map<string, (args: string[]) => string | null>([
 function scriptViolation(runner: string, script: string, args: string[]): string | null {
   const check = READ_SCRIPTS.get(script);
   if (!check) return `\`${runner} run ${script}\` は読み取りのスクリプトではない`;
-  return check(args.filter((w) => w !== '--'));
+  // npm and bun drop only the leading --; a later one reaches the program, where it ends the
+  // options (vitest then reads the words after it as positional, so `-t -- init` runs init)
+  return check(args[0] === '--' ? args.slice(1) : args);
 }
 
 function bunViolation(args: string[]): string | null {
@@ -683,7 +688,11 @@ function vitestViolation(args: string[]): string | null {
     if (!VITEST_FLAGS.has(name)) {
       return `vitest の \`${name}\`（ファイルを書くか、コードを読み込むことがある）`;
     }
-    const value = eq !== -1 ? word.slice(eq + 1) : VITEST_VALUES.has(name) ? args[++i] : undefined;
+    // A word starting with - is the next option, not a value, as vitest (cac/mri) reads it too, so
+    // `--project --config x` checks --config (a value starting with - can be written as --name=value)
+    const next = args[i + 1];
+    const takesNext = eq === -1 && VITEST_VALUES.has(name) && !next?.startsWith('-');
+    const value = eq !== -1 ? word.slice(eq + 1) : takesNext ? args[++i] : undefined;
     if (name === '--reporter' && !VITEST_REPORTERS.has(value ?? '')) {
       return `vitest の reporter \`${value ?? ''}\`（ファイルを書くか、コードを読み込む）`;
     }
