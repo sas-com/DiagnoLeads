@@ -3,6 +3,7 @@
 import { ignoreImeEscape, isImeKey } from '@/components/ui/ime';
 import type { DeskStatus } from '@/lib/features/ai-employees/office';
 import type { OfficeEmployee } from '@/lib/features/ai-employees/service';
+import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
 import { AI_EMPLOYEE_ROLES, type AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
 import { roleHasWork } from '@/lib/features/ai-employees/types/works';
 import { trpc } from '@/lib/trpc/client';
@@ -47,6 +48,8 @@ import {
 import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
 import { type FpsMeter, createFpsMeter, useFps } from './office-3d/office-fps';
 import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
+import type { ScreenRect } from './office-3d/office-view-3d';
+import { type DisplayNote, useOfficeDisplay } from './office-3d/use-office-display';
 import { officeFits } from './office-app';
 import { OfficeTags2D } from './office-floor-labels';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
@@ -73,6 +76,7 @@ import {
   talkLineKey,
 } from './office-president';
 import { shade } from './office-prims';
+import { useRecentEvents } from './office-recent-events';
 import { ROLE_ACCENTS } from './office-robot';
 import type { RoomKeys } from './office-room-contract';
 import { ROOM_VIEWS } from './office-room-registry';
@@ -99,8 +103,9 @@ type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 const ENTERABLE_AREAS: readonly OfficeArea[] = ['training'];
 
 /**
- * The floor in 3D (#1135, spike): three.js is loaded only when the president switches to it, so
- * the rest of the app does not carry it
+ * The floor in 3D (#1135, #1150): three.js is loaded only when the 3D floor is shown (after
+ * clocking in, on a screen and a browser that can show it), so the rest of the app does not
+ * carry it
  */
 const OfficeCanvas3D = dynamic(() => import('./office-3d/office-canvas-3d'), { ssr: false });
 
@@ -193,7 +198,19 @@ export function OfficeImmersive({
   const [roomBusy, setRoomBusy] = useState(false);
   // The 3D spike (#1135): whether the floor is drawn in 3D, and what the trial panel pretends
   // (a status and an event for the chosen employee, on this screen only)
-  const [threeD, setThreeD] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  // Followed while the office is open: someone may switch the setting on to stop the motion
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return;
+    const read = () => setReducedMotion(query.matches);
+    read();
+    query.addEventListener?.('change', read);
+    return () => query.removeEventListener?.('change', read);
+  }, []);
+  // Which floor is drawn: what this device remembers, else the default (#1150)
+  const display = useOfficeDisplay({ reducedMotion });
+  const threeD = display.threeD;
   const [trialStatus, setTrialStatus] = useState<Partial<Record<AiEmployeeRole, DeskStatus>>>({});
   const [trialEvent, setTrialEvent] = useState<Partial<Record<AiEmployeeRole, OfficeEvent>>>({});
   // How fast the 3D floor is drawn: read only by what shows it, never the office's state (#1270)
@@ -205,13 +222,29 @@ export function OfficeImmersive({
   const onWalking = useCallback((role: AiEmployeeRole, on: boolean) => {
     setWalking((current) => (current[role] === on ? current : { ...current, [role]: on }));
   }, []);
+  // What really just happened to an employee (hired, called back): shown for a short while
+  const [recentEvents, noteEvent] = useRecentEvents(walking);
+  // The customization (#1148): the look of its draft, shown on the 3D robot before it is saved,
+  // and the opening it keeps between its panels for that robot (in the pixels of this screen)
+  const [studioLook, setStudioLook] = useState<RobotLook | null>(null);
+  const [studioOpening, setStudioOpening] = useState<ScreenRect | null>(null);
+  const onStudioOpening = useCallback((rect: ScreenRect | null) => {
+    const root = rootRef.current?.getBoundingClientRect();
+    const next = rect && root ? { ...rect, x: rect.x - root.left, y: rect.y - root.top } : rect;
+    setStudioOpening((current) =>
+      current?.x === next?.x &&
+      current?.y === next?.y &&
+      current?.w === next?.w &&
+      current?.h === next?.h
+        ? current
+        : next
+    );
+  }, []);
   // The 2D floor stays until the 3D one drew its first frame, and comes back if it cannot be shown
   const [threeDReady, setThreeDReady] = useState(false);
-  const [threeDFailed, setThreeDFailed] = useState(false);
-  const leave3d = (failed: boolean) => {
-    setThreeD(false);
+  // What the 3D floor showed ends with it, however it ended
+  const clear3d = () => {
     setThreeDReady(false);
-    setThreeDFailed(failed);
     // What the trial panel pretended ends with the trial
     setTrialStatus({});
     setTrialEvent({});
@@ -219,23 +252,23 @@ export function OfficeImmersive({
     setWalking({});
     shown3dView.current = null;
   };
-  const toggle3d = () => {
-    if (threeD) leave3d(false);
-    else {
-      setThreeDFailed(false);
-      setThreeD(true);
-    }
+  // The office leaves 3D by itself (it could not be shown, or this device is too slow) and says so
+  const leave3d = (why: DisplayNote) => {
+    display.fallBack(why);
+    clear3d();
   };
-  const [reducedMotion, setReducedMotion] = useState(false);
-  // Followed while the office is open: someone may switch the setting on to stop the motion
-  useEffect(() => {
-    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    if (!query) return;
-    const read = () => setReducedMotion(query.matches);
-    read();
-    query.addEventListener?.('change', read);
-    return () => query.removeEventListener?.('change', read);
-  }, []);
+  // The president switches: the choice is remembered on this device (#1150)
+  const toggle3d = () => {
+    if (threeD) clear3d();
+    display.choose(threeD ? '2d' : '3d');
+  };
+  // The 3D floor reports how fast it is drawn: shown under the bar, and watched once (#1150)
+  const fpsReport = useRef<(value: number) => void>(() => undefined);
+  fpsReport.current = (value) => {
+    fpsMeter.report(value);
+    if (display.tooSlow(value)) leave3d('slow');
+  };
+  const onFps3d = useCallback((value: number) => fpsReport.current(value), []);
 
   const statuses = statusByRole(employees);
   const byRole = new Map(employees.map((employee) => [employee.role, employee]));
@@ -286,6 +319,7 @@ export function OfficeImmersive({
   const hire = trpc.aiEmployees.hire.useMutation({
     onSuccess: async (_data, variables) => {
       setOutcome({ text: t('talk.hired', { name: variables.name }), ok: true });
+      noteEvent(variables.role, 'hired');
       await refresh();
     },
     onError: () => setOutcome({ text: t('talk.failed'), ok: false }),
@@ -302,6 +336,12 @@ export function OfficeImmersive({
               }),
         ok: true,
       });
+      // Called back from its rest: it cheers when it is back at its place. A rest is no event:
+      // the employee simply sleeps
+      if (variables.status === 'active') {
+        const role = employees.find((employee) => employee.id === variables.employeeId)?.role;
+        if (role) noteEvent(role, 'resumed');
+      }
       await refresh();
     },
     onError: () => setOutcome({ text: say('failed'), ok: false }),
@@ -531,10 +571,13 @@ export function OfficeImmersive({
     ])
   ) as Record<AiEmployeeRole, DeskStatus>;
   const names3d = Object.fromEntries(employees.map((employee) => [employee.role, employee.name]));
+  // What happened to the employees: what was really carried out, with what the trial panel
+  // pretends on top (development only)
+  const events3d = { ...recentEvents, ...trialEvent };
   // What an employee feels beyond its status: only after something happened to it, never made up
   const feeling = (role: AiEmployeeRole): (typeof SAID_FEELINGS)[number] | null => {
     const status = shown3d[role];
-    const event = trialEvent[role];
+    const event = events3d[role];
     if (status === 'vacant' || !event || walking[role]) return null;
     const emotion = emotionOf(status, event);
     return SAID_FEELINGS.find((said) => said === emotion) ?? null;
@@ -545,7 +588,11 @@ export function OfficeImmersive({
       role: employee.role,
       name: employee.name,
       status: status === 'vacant' ? ('idle' as const) : status,
-      look: employee.profile.look,
+      // In the customization the robot wears the draft, before it is saved
+      look:
+        stage === 'studio' && employee.role === selected && studioLook
+          ? studioLook
+          : employee.profile.look,
       tone: employee.profile.tone,
     };
   });
@@ -638,26 +685,31 @@ export function OfficeImmersive({
             />
           )}
           {show3d && (
-            <Office3DBoundary onError={() => leave3d(true)}>
+            <Office3DBoundary onError={() => leave3d('failed')}>
               <OfficeCanvas3D
                 employees={floor3d}
                 vacant={AI_EMPLOYEE_ROLES.filter((role) => statuses[role] === 'vacant')}
-                // The president standing in front of an employee is something that happens to it
+                // The president standing in front of an employee is something that happens to it.
+                // In the customization it comes before anything else: the employee looks at the
+                // president with its eyes open and nothing over its head, so that the eyes of the
+                // draft can be told apart (a cheer would close them into the same arc)
                 events={
-                  stage === 'talk' && !trialEvent[selected]
-                    ? { ...trialEvent, [selected]: 'president_near' }
-                    : trialEvent
+                  stage === 'studio' || (stage === 'talk' && !events3d[selected])
+                    ? { ...events3d, [selected]: 'president_near' }
+                    : events3d
                 }
                 night={night}
                 stage={stage}
                 subject={subject3d}
-                attentive={stage === 'talk' ? selected : null}
+                opening={stage === 'studio' ? studioOpening : null}
+                // Talked to or customized: the employee turns to the viewer
+                attentive={stage === 'talk' || stage === 'studio' ? selected : null}
                 zoom={zoom}
                 // Centred between the side panels, like the 2D floor
                 pan={{ x: pan.x + home.x, y: pan.y }}
                 focus={selectedEmployee ? selected : null}
                 reducedMotion={reducedMotion}
-                onFps={fpsMeter.report}
+                onFps={onFps3d}
                 onReady={() => setThreeDReady(true)}
                 onView={(view, places) => {
                   shown3dView.current = { view, places };
@@ -918,14 +970,14 @@ export function OfficeImmersive({
                 />
               )}
               {/* While the 3D floor loads the 2D one stays; if it cannot be shown, the office says so */}
-              {((threeD && !threeDReady) || threeDFailed) && (
+              {((threeD && !threeDReady) || display.note) && (
                 <output
                   className={cn(
                     PANEL,
                     'absolute bottom-32 left-1/2 block -translate-x-1/2 px-4 py-3 text-sm'
                   )}
                 >
-                  {t(threeDFailed ? 'trial3d.failed' : 'trial3d.loading')}
+                  {t(`trial3d.${display.note ?? 'loading'}`)}
                 </output>
               )}
 
@@ -1070,13 +1122,29 @@ export function OfficeImmersive({
 
           {stage === 'studio' && selectedEmployee && (
             <>
+              {/* Over the 3D floor the studio darkens towards its board, like a room: the employee
+                  stays in the light, in the opening on the left. Over the 2D floor it is a curtain */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-[rgba(6,10,20,0.78)]"
+                className={cn(
+                  'pointer-events-none absolute inset-0',
+                  show3d && threeDReady
+                    ? // The light part is as wide as the opening (26rem), whatever the screen;
+                      // stacked on a narrow screen the opening is in the middle: one thin curtain
+                      'max-lg:bg-[rgba(6,10,20,0.3)] lg:bg-[linear-gradient(90deg,rgba(6,10,20,0.2)_0,rgba(6,10,20,0.2)_28rem,rgba(6,10,20,0.84)_34rem)]'
+                    : 'bg-[rgba(6,10,20,0.78)]'
+                )}
               />
+              {/* By day the floor behind the title is bright: the title keeps a dark band */}
+              {show3d && threeDReady && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(6,10,20,0.85)_0%,rgba(6,10,20,0)_100%)]"
+                />
+              )}
               <div className="absolute top-4 left-6">
                 <p className={CAP}>{tOffice(`roles.${selected}.title`)}</p>
-                <h2 className="text-xl font-bold">
+                <h2 className="text-xl font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)]">
                   {t('studio.of', { name: selectedEmployee.name })}
                 </h2>
               </div>
@@ -1088,6 +1156,10 @@ export function OfficeImmersive({
                 status={selectedStatus}
                 keysRef={roomKeys}
                 onClose={() => setStage('world')}
+                // The preview is the robot on the 3D floor, once that floor is drawn
+                floor3d={show3d && threeDReady}
+                onLook={setStudioLook}
+                onOpening={onStudioOpening}
               />
             </>
           )}

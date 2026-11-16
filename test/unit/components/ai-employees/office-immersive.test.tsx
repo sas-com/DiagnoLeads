@@ -305,7 +305,7 @@ describe('OfficeImmersive', () => {
     // The chosen seat is vacant here: nobody to customize
     expect(groups).toEqual([
       ['話しかけるE'],
-      ['近づく+', '全体を見る-', '視点を戻す0', '3D（試験中）V'],
+      ['近づく+', '全体を見る-', '視点を戻す0', '3D 表示V'],
       ['通常の表示に戻る', '退社するEsc'],
     ]);
   });

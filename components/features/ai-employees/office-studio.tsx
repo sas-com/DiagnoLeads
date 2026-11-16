@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { Dices, Minus, Plus, RotateCcw, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
+import type { ScreenRect } from './office-3d/office-view-3d';
 import { CAP, FOCUS, KEY, PANEL } from './office-hud';
 import type { RoomKeys } from './office-lead-file';
 import { talkLineKey } from './office-president';
@@ -51,6 +52,11 @@ type Outcome = 'saved' | 'failed' | 'discard';
  *
  * Nothing is written until "save": the choices change a draft. Esc with unsaved changes warns
  * first, and leaves on the second press.
+ *
+ * The preview is a picture of the robot next to the choices. Over the 3D floor (`floor3d`, #1148)
+ * it is the robot on that floor instead: the studio keeps an opening where the picture was, tells
+ * the office where it is (`onOpening`) and what the draft looks like (`onLook`), and the office
+ * shows the employee there, wearing the draft. Without the 3D floor nothing changes.
  */
 export function OfficeStudio({
   organizationId,
@@ -58,6 +64,9 @@ export function OfficeStudio({
   status,
   keysRef,
   onClose,
+  floor3d = false,
+  onLook,
+  onOpening,
   random = Math.random,
 }: {
   organizationId: string;
@@ -66,6 +75,12 @@ export function OfficeStudio({
   /** Filled with the studio's key handler while it is shown */
   keysRef: MutableRefObject<RoomKeys | null>;
   onClose: () => void;
+  /** The 3D floor is drawn behind the studio: the preview is the robot on it */
+  floor3d?: boolean;
+  /** Told the look of the draft each time it changes, and null when the studio goes away */
+  onLook?: (look: RobotLook | null) => void;
+  /** Told where on the screen the opening for the 3D robot is, and null when there is none */
+  onOpening?: (rect: ScreenRect | null) => void;
   /** What "leave it to me" draws from; fixed in tests */
   random?: () => number;
 }) {
@@ -133,6 +148,40 @@ export function OfficeStudio({
     };
   }, [keysRef]);
 
+  // The office shows the draft on the 3D robot before it is saved; leaving takes it off again
+  const lookKey = JSON.stringify(draft.look);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the look itself, not the object that holds it
+  useEffect(() => {
+    onLook?.(draft.look);
+  }, [onLook, lookKey]);
+  useEffect(() => () => onLook?.(null), [onLook]);
+
+  // Where the opening for the 3D robot is: measured when it is laid out, and again when the
+  // screen or the panels around it change
+  const opening = useRef<HTMLDivElement>(null);
+  const measureOpening = () => {
+    const box = opening.current?.getBoundingClientRect();
+    onOpening?.(box ? { x: box.left, y: box.top, w: box.width, h: box.height } : null);
+  };
+  const latestMeasure = useRef(measureOpening);
+  latestMeasure.current = measureOpening;
+  const latestOnOpening = useRef(onOpening);
+  latestOnOpening.current = onOpening;
+  useEffect(() => {
+    if (!floor3d) return;
+    const measure = () => latestMeasure.current();
+    measure();
+    window.addEventListener('resize', measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    if (opening.current) observer?.observe(opening.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+      // No opening any more: the picture is back, or the studio went away
+      latestOnOpening.current?.(null);
+    };
+  }, [floor3d]);
+
   const left = AI_STAT_POINTS - aiStatPointsUsed(draft.stats);
   const role = employee.role;
   const swatch = (part: RobotLookPart, option: string): string | null =>
@@ -157,65 +206,109 @@ export function OfficeStudio({
             : t('hint');
 
   return (
-    <div className={ROOM_FRAME}>
+    // On a narrow screen the frame scrolls: the opening moves with it
+    <div className={ROOM_FRAME} onScroll={floor3d ? measureOpening : undefined}>
       {/* The employee as the draft makes it, and how it talks */}
-      <div className={cn(PANEL, 'shrink-0 space-y-3 px-5 pt-4 pb-6 lg:w-[26rem]')}>
-        <p className={CAP}>{t('title')}</p>
-        <div
-          role="img"
-          aria-label={t('preview', { name: employee.name })}
-          style={{ borderColor: robotAccent(role, draft.look) }}
-          className="flex h-72 items-end justify-center overflow-hidden border-2 bg-[radial-gradient(ellipse_at_50%_85%,#ffffff_0%,#e7ecf3_55%,#cbd3de_100%)]"
-        >
-          <RobotPortrait role={role} status={status} look={draft.look} className="h-[17rem] w-48" />
-        </div>
-        <div>
-          <p className="truncate text-lg font-bold">{employee.name}</p>
-          <p className="text-sm text-[#d8d2c4]">
-            {tOffice(`roles.${role}.title`)}・{tOffice(`status.${status}`)}
+      <div
+        // On a low screen the column may be taller than the frame: it then runs out at the top,
+        // so that the buttons at its end stay on the screen
+        className={cn(
+          'flex shrink-0 flex-col gap-3 lg:w-[26rem] lg:justify-end',
+          floor3d && 'lg:self-stretch'
+        )}
+      >
+        {floor3d && (
+          // Over the 3D floor the preview is the robot itself, on the floor behind this opening:
+          // nothing is drawn in it. The office puts the employee there, wearing the draft
+          <div
+            ref={opening}
+            data-testid="studio-opening"
+            role="img"
+            aria-label={t('preview', { name: employee.name })}
+            style={{ borderColor: robotAccent(role, draft.look) }}
+            // Stacked on a narrow screen it is as tall as the picture it stands for, and no wider
+            // than the column of a wide screen. Its edges are darker: what stands around the
+            // employee on the floor (a desk, a neighbour) steps back
+            className="mx-auto min-h-72 w-full max-w-[26rem] flex-1 border-2 bg-[radial-gradient(ellipse_at_50%_50%,rgba(6,10,20,0)_45%,rgba(6,10,20,0.55)_100%)] lg:mx-0 lg:min-h-56 lg:max-w-none"
+          />
+        )}
+        <div className={cn(PANEL, 'space-y-3 px-5 pt-4 pb-6')}>
+          <p className={CAP}>{t('title')}</p>
+          {!floor3d && (
+            <div
+              role="img"
+              aria-label={t('preview', { name: employee.name })}
+              style={{ borderColor: robotAccent(role, draft.look) }}
+              className="flex h-72 items-end justify-center overflow-hidden border-2 bg-[radial-gradient(ellipse_at_50%_85%,#ffffff_0%,#e7ecf3_55%,#cbd3de_100%)]"
+            >
+              <RobotPortrait
+                role={role}
+                status={status}
+                look={draft.look}
+                className="h-[17rem] w-48"
+              />
+            </div>
+          )}
+          <div>
+            <p className="truncate text-lg font-bold">{employee.name}</p>
+            <p className="text-sm text-[#d8d2c4]">
+              {tOffice(`roles.${role}.title`)}・{tOffice(`status.${status}`)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-[#bdb7a9]">{t('sample')}</p>
+            {/* Read out when the personality changes: the sample is the answer to that choice */}
+            {/* Two lines kept over the 3D floor, here and for the message: a longer text must not
+                make the opening lower, and the robot in it jump */}
+            <output
+              className={cn(
+                'block text-base leading-relaxed font-medium',
+                floor3d && 'min-h-[2lh]'
+              )}
+            >
+              {sample}
+            </output>
+          </div>
+          {/* The message takes the focus when the studio opens */}
+          <p
+            tabIndex={-1}
+            data-autofocus=""
+            aria-live="polite"
+            className={cn(
+              'text-sm leading-relaxed text-[#d8d2c4] outline-none',
+              floor3d && 'min-h-[2lh]'
+            )}
+          >
+            {message}
           </p>
-        </div>
-        <div>
-          <p className="text-xs text-[#bdb7a9]">{t('sample')}</p>
-          {/* Read out when the personality changes: the sample is the answer to that choice */}
-          <output className="block text-base leading-relaxed font-medium">{sample}</output>
-        </div>
-        {/* The message takes the focus when the studio opens */}
-        <p
-          tabIndex={-1}
-          data-autofocus=""
-          aria-live="polite"
-          className="text-sm leading-relaxed text-[#d8d2c4] outline-none"
-        >
-          {message}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={save}
-            aria-disabled={!dirty || update.isPending}
-            className={cn(
-              'flex min-h-11 flex-1 items-center justify-center gap-2 border px-3 text-sm font-bold aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
-              choiceClass(true),
-              FOCUS
-            )}
-          >
-            <Save className="h-4 w-4" aria-hidden="true" />
-            {t('save')}
-          </button>
-          <button
-            type="button"
-            onClick={() => change(saved)}
-            aria-disabled={!dirty}
-            className={cn(
-              'flex min-h-11 items-center justify-center gap-2 border px-3 text-sm font-bold aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
-              choiceClass(false),
-              FOCUS
-            )}
-          >
-            <RotateCcw className="h-4 w-4" aria-hidden="true" />
-            {t('reset')}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={save}
+              aria-disabled={!dirty || update.isPending}
+              className={cn(
+                'flex min-h-11 flex-1 items-center justify-center gap-2 border px-3 text-sm font-bold aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
+                choiceClass(true),
+                FOCUS
+              )}
+            >
+              <Save className="h-4 w-4" aria-hidden="true" />
+              {t('save')}
+            </button>
+            <button
+              type="button"
+              onClick={() => change(saved)}
+              aria-disabled={!dirty}
+              className={cn(
+                'flex min-h-11 items-center justify-center gap-2 border px-3 text-sm font-bold aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
+                choiceClass(false),
+                FOCUS
+              )}
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              {t('reset')}
+            </button>
+          </div>
         </div>
       </div>
 
