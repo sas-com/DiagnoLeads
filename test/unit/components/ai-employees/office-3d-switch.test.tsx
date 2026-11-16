@@ -1,8 +1,9 @@
 /**
  * The switch to the 3D floor of the full-screen office (#1135, spike): its own key, the 2D floor
  * kept until the 3D one drew, and the way back to 2D when it cannot be shown. A production build
- * offers the switch and the frame rate but not the trial panel (#1157). The 3D canvas itself is
- * mocked: three.js is never loaded here.
+ * offers the switch and the frame rate but not the trial panel (#1157). Which floor the office
+ * starts with, what the device remembers and the way back from a slow device are at the end
+ * (#1150). The 3D canvas itself is mocked: three.js is never loaded here.
  */
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DESK_SEATS, spotOf } from '@/components/features/ai-employees/office-map-layout';

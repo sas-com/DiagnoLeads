@@ -9,8 +9,9 @@ import type { OfficeEvent } from './office-emotion';
 
 /**
  * The trial panel of the 3D floor (#1135) exists in development only: a production build never
- * shows a panel that pretends statuses. The switch between 2D and 3D is offered everywhere, 2D
- * first (#1157), and the 3D chunk is asked for only when someone switches.
+ * shows a panel that pretends statuses. The switch between 2D and 3D is offered everywhere; the
+ * office starts in 3D unless the device remembers otherwise (#1150, office-display.ts), and the
+ * 3D chunk is asked for only when the 3D floor is shown.
  */
 export const OFFICE_3D_TRIAL = process.env.NODE_ENV !== 'production';
 

@@ -90,8 +90,9 @@ import { StatusDot } from './office-world-tag';
 type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
 
 /**
- * The floor in 3D (#1135, spike): three.js is loaded only when the president switches to it, so
- * the rest of the app does not carry it
+ * The floor in 3D (#1135, #1150): three.js is loaded only when the 3D floor is shown (after
+ * clocking in, on a screen and a browser that can show it), so the rest of the app does not
+ * carry it
  */
 const OfficeCanvas3D = dynamic(() => import('./office-3d/office-canvas-3d'), { ssr: false });
 

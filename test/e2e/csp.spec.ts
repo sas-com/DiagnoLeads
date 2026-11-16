@@ -85,6 +85,9 @@ test.describe('Content Security Policy on the admin screens', () => {
     // so the office may fall back to 2D some seconds later: only the first frames are checked
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    // Opened again, as someone who just came in: the page is loaded under watch this time, with
+    // the strict policy, and no second sign-in is spent
+    expectStrictPolicy(await page.goto('/ja/office?source=login'));
     const office = page.getByRole('dialog');
     await office.getByRole('button', { name: /^出社する/ }).click();
     await expect(office.locator('canvas')).toBeVisible({ timeout: 30 * 1000 });
