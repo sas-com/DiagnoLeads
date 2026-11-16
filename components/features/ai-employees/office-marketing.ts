@@ -24,7 +24,12 @@ import {
 import { INFLOW_SOURCES, type InflowSource } from '@/lib/features/leads/types/pipeline';
 import type { ListLeadsInput } from '@/lib/features/leads/types/schemas';
 import { dashboardPeriod, jstDay } from '@/lib/jst';
-import { LEAD_BOARD_PAGE_SIZE, LEAD_BOARD_VIEWS, type LeadBoardView } from './office-rooms';
+import {
+  LEAD_BOARD_PAGE_SIZE,
+  LEAD_BOARD_VIEWS,
+  type LeadBoardView,
+  leadBoardFilters,
+} from './office-rooms';
 
 /** The period of the room's figures: prospects created in the last 30 days (Japan days) */
 export const MARKETING_RANGE = '30d' as const satisfies DateRange;
@@ -280,4 +285,29 @@ export function qrCampaignRows(
         : null,
     };
   });
+}
+
+/**
+ * The views of the lead board whose totals show on their choices as soon as the room opens
+ * (#1246): what waits for somebody to start, and who asked for a consultation. The report of the
+ * room is about the last 30 days; these two are not bound to a period, so they are shown on
+ * their own choices and not in the sentence of the report.
+ */
+export const LEAD_COUNT_VIEWS = [
+  'needsAction',
+  'consultation',
+] as const satisfies readonly LeadBoardView[];
+export type LeadCountView = (typeof LEAD_COUNT_VIEWS)[number];
+
+export function isLeadCountView(view: LeadBoardView): view is LeadCountView {
+  return (LEAD_COUNT_VIEWS as readonly string[]).includes(view);
+}
+
+/** Input of `leads.list` that only asks how many leads a view holds: the same filters, one row */
+export function leadCountInput(
+  view: LeadCountView,
+  organizationId: string,
+  now: Date
+): ListLeadsInput {
+  return { ...leadBoardInputFor(leadBoardFilters(view, now), 1, organizationId), limit: 1 };
 }

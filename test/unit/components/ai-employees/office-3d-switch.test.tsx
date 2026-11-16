@@ -23,6 +23,10 @@ const mocks = vi.hoisted(() => ({
   opening: undefined as undefined | null | { x: number; y: number; w: number; h: number },
   vacant: [] as string[],
   walks: null as null | ((role: string, walking: boolean) => void),
+  // How often the canvas rendered, and what it was given to report the frame rate (#1270)
+  canvasRenders: 0,
+  reportFps: null as null | ((fps: number) => void),
+  reporters: new Set<unknown>(),
   scene: null as null | {
     stage?: string;
     subject?: { x: number; y: number } | null;
@@ -63,6 +67,9 @@ vi.mock('@/components/features/ai-employees/office-3d/office-canvas-3d', () => (
     mocks.opening = opening;
     mocks.vacant = [...(vacant ?? [])];
     mocks.walks = onWalking ?? null;
+    mocks.canvasRenders += 1;
+    mocks.reportFps = onFps ?? null;
+    mocks.reporters.add(onFps);
     mocks.scene = { stage, subject, attentive, events };
     useEffect(() => {
       if (!mocks.draws) return;
@@ -523,3 +530,44 @@ describe('the switch to the 3D floor in a production build (#1157)', () => {
     errors.mockRestore();
   });
 });
+
+describe('the frame rate of the 3D floor (#1270)', () => {
+  beforeEach(() => {
+    mocks.trial = false;
+    mocks.breaks = false;
+    mocks.draws = true;
+    mocks.canvasRenders = 0;
+    mocks.reportFps = null;
+    mocks.reporters = new Set();
+  });
+
+  it('shows each new figure without rendering the office or the canvas again', async () => {
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    expect(await within(office).findByText('毎秒 42 コマ')).toBeInTheDocument();
+    const renders = mocks.canvasRenders;
+
+    act(() => mocks.reportFps?.(55));
+    expect(within(office).getByText('毎秒 55 コマ')).toBeInTheDocument();
+    act(() => mocks.reportFps?.(31));
+    expect(within(office).getByText('毎秒 31 コマ')).toBeInTheDocument();
+    // The figure lives outside the office's state: nothing above the line rendered again
+    expect(mocks.canvasRenders).toBe(renders);
+    // and the canvas was always given the same function to report with
+    expect(mocks.reporters.size).toBe(1);
+  });
+
+  it('forgets the figure when the 3D floor is left, and waits for a new one when it comes back', async () => {
+    mocks.draws = true;
+    const { user, office } = await enterOffice();
+    await user.keyboard('v');
+    await within(office).findByText('毎秒 42 コマ');
+    await user.keyboard('v');
+    expect(within(office).queryByText(/毎秒 \d+ コマ/)).not.toBeInTheDocument();
+    mocks.draws = false;
+    await user.keyboard('v');
+    expect(await screen.findByTestId('floor-3d')).toBeInTheDocument();
+    expect(within(office).queryByText(/毎秒 \d+ コマ/)).not.toBeInTheDocument();
+  });
+});
+
