@@ -2,9 +2,11 @@
  * PreToolUse (.claude/settings.json): stops hand edits of node_modules (files linked into Bun's
  * shared cache), bun.lock and `.env*`, secrets in anything Claude writes or sends, and reading
  * or printing `.env*`. Inside a read-only specialist subagent it also stops anything that writes.
- * A refusal exits 2 with the reason for Claude; an edit of a node_modules copy taken out by
- * `bun patch` asks the user instead. The guard fails closed: when it cannot decide, it refuses.
- * Rules: ./lib/guard.ts, ./lib/readonly.ts
+ * A refusal exits 2 with the reason for Claude. Three things ask the user instead: an edit of a
+ * node_modules copy taken out by `bun patch`, a change to Claude's own guards (the project
+ * settings, the hooks, the agent definitions) and merging a pull request (#1209). The guard fails
+ * closed: when it cannot decide, it refuses.
+ * Rules: ./lib/guard.ts, ./lib/protect.ts, ./lib/readonly.ts
  */
 import { evaluateToolCall } from './lib/guard';
 import { projectDir, readHookInput, runHook } from './lib/io';

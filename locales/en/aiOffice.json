@@ -294,6 +294,7 @@
             "mine": "Mine",
             "all": "All"
           },
+          "leadCount": "{count, number}",
           "period": "Prospects created in the last {days} days: {count}",
           "periodOnly": "Prospects created in the last {days} days",
           "loading": "Loading",
@@ -330,7 +331,8 @@
             "back": "Back to the source board",
             "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened.",
             "openDescription": "Shows its prospects of the last {days} days on the lead board",
-            "closedRow": " (cannot be opened)"
+            "closedRow": " (cannot be opened)",
+            "sqlNote": "The SQL of this table counts the prospects judged SQL. The SQL of the progress board counts the prospects that were won too, so the two can differ."
           },
           "funnel": {
             "board": "Progress board",
@@ -654,7 +656,9 @@
           },
           "members": {
             "members": " Members: {count}.",
-            "withInvitations": " Members: {count}. Pending invitations: {waiting}."
+            "withInvitations": " Members: {count}. Pending invitations: {waiting}.",
+            "unread": " The members could not be read.",
+            "invitationsUnread": " The invitations could not be read."
           },
           "choices": {
             "due": "Take what is due today",
@@ -662,7 +666,7 @@
             "settings": "Choose a settings page"
           },
           "figures": {
-            "due": "Due today",
+            "due": "Due by today",
             "dueValue": "{count}",
             "overdueValue": "{count} overdue",
             "members": "Members",
@@ -684,7 +688,7 @@
             "more": "There are {count} more. Please check them in the normal view.",
             "invitations": "Invitations sent (expired ones included)",
             "invitationsHidden": "Only admins and owners can see invitations.",
-            "invitationsError": "The invitations could not be read.",
+            "invitationsError": " The invitations could not be read.",
             "noInvitations": "No invitation is waiting to be accepted.",
             "expires": "Expires: {date}",
             "expired": "Link expired",
@@ -705,8 +709,9 @@
           },
           "settingsShelf": {
             "board": "Settings shelf",
-            "report": "This is the settings shelf. Choose a page; it opens in the normal view.",
-            "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view."
+            "report": "Choose a page; it opens in the normal view.",
+            "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view.",
+            "heading": "Pages to open"
           },
           "shelves": {
             "due": "What is due",

@@ -70,9 +70,10 @@ export function OfficeRoomSettings({
   return (
     <div className={ROOM_FRAME}>
       <div className={cn(PANEL, GUIDE_PANEL)}>
-        <ShelfName shelf="settings" />
         <RoomGuideHeader role={role} status={status} employeeName={employeeName} look={look} />
         <div tabIndex={-1} data-autofocus="" className="space-y-2 outline-none">
+          {/* Read out with the report: the focus comes here when the shelf opens */}
+          <ShelfName shelf="settings" />
           <RoomGuideLine>
             {t(`guide.${roomGuide(status)}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
@@ -83,7 +84,7 @@ export function OfficeRoomSettings({
 
       <section aria-label={tShelf('board')} className={ROOM_BOARD}>
         <header className="border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
-          <h2 className="text-xl font-bold">{tShelf('board')}</h2>
+          <h2 className="text-xl font-bold">{tShelf('heading')}</h2>
         </header>
         <ul
           ref={listRef}

@@ -45,6 +45,7 @@ import {
   Office3DTrialPanel,
 } from './office-3d/office-3d-trial';
 import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
+import { type FpsMeter, createFpsMeter, useFps } from './office-3d/office-fps';
 import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
 import { officeFits } from './office-app';
 import { OfficeTags2D } from './office-floor-labels';
@@ -195,7 +196,8 @@ export function OfficeImmersive({
   const [threeD, setThreeD] = useState(false);
   const [trialStatus, setTrialStatus] = useState<Partial<Record<AiEmployeeRole, DeskStatus>>>({});
   const [trialEvent, setTrialEvent] = useState<Partial<Record<AiEmployeeRole, OfficeEvent>>>({});
-  const [fps, setFps] = useState<number | null>(null);
+  // How fast the 3D floor is drawn: read only by what shows it, never the office's state (#1270)
+  const [fpsMeter] = useState(createFpsMeter);
   // The 3D floor: the name tags over it, and who is on the way to another room right now
   const tags3d = useRef<Office3DTagsHandle>(null);
   const shown3dView = useRef<Shown3D | null>(null);
@@ -213,7 +215,7 @@ export function OfficeImmersive({
     // What the trial panel pretended ends with the trial
     setTrialStatus({});
     setTrialEvent({});
-    setFps(null);
+    fpsMeter.reset();
     setWalking({});
     shown3dView.current = null;
   };
@@ -655,7 +657,7 @@ export function OfficeImmersive({
                 pan={{ x: pan.x + home.x, y: pan.y }}
                 focus={selectedEmployee ? selected : null}
                 reducedMotion={reducedMotion}
-                onFps={setFps}
+                onFps={fpsMeter.report}
                 onReady={() => setThreeDReady(true)}
                 onView={(view, places) => {
                   shown3dView.current = { view, places };
@@ -905,7 +907,7 @@ export function OfficeImmersive({
                   name={selectedEmployee.name}
                   status={trialStatus[selected] ?? selectedStatus}
                   event={trialEvent[selected]}
-                  fps={fps}
+                  fpsMeter={fpsMeter}
                   onStatus={(status) => {
                     setTrialStatus((current) => ({ ...current, [selected]: status }));
                     setTrialEvent((current) => ({ ...current, [selected]: undefined }));
@@ -1016,11 +1018,7 @@ export function OfficeImmersive({
                   </div>
                 </div>
                 {/* How fast this device draws the 3D floor, to measure real devices (#1157) */}
-                {threeD && threeDReady && fps !== null && (
-                  <p className="absolute top-full mt-1 text-xs text-[#d8d2c4] tabular-nums [text-shadow:0_1px_6px_rgba(4,8,18,0.9)]">
-                    {t('trial3d.fps', { fps })}
-                  </p>
-                )}
+                {threeD && threeDReady && <FpsLine meter={fpsMeter} />}
               </div>
 
               {/* The one in front of the president */}
@@ -1278,6 +1276,18 @@ export function OfficeImmersive({
 }
 
 /** A square action of the bar at the bottom, with its key */
+/** The frames a second under the action bar: the only part that renders when the figure changes */
+function FpsLine({ meter }: { meter: FpsMeter }) {
+  const t = useTranslations('aiOffice.immersive');
+  const fps = useFps(meter);
+  if (fps === null) return null;
+  return (
+    <p className="absolute top-full mt-1 text-xs text-[#d8d2c4] tabular-nums [text-shadow:0_1px_6px_rgba(4,8,18,0.9)]">
+      {t('trial3d.fps', { fps })}
+    </p>
+  );
+}
+
 /** What a place of the floor guide says: its key, its name and the work done there */
 function PlaceLabel({ hotkey, name, work }: { hotkey: string; name: string; work: string }) {
   return (
