@@ -78,7 +78,7 @@ async function enterOffice(props: { canManage?: boolean; employees?: (typeof sal
       />
     </NextIntlClientProvider>
   );
-  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
   await user.click(within(office).getByRole('button', { name: /^出社する/ }));
   return { user, office };
 }

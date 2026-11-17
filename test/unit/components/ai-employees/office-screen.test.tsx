@@ -213,12 +213,12 @@ describe('OfficeScreen', () => {
   it('enters the full-screen office from the header and comes back to the button', async () => {
     const user = userEvent.setup();
     renderScreen();
-    const enter = screen.getByRole('button', { name: '出社する（全画面）' });
+    const enter = screen.getByRole('button', { name: '出社する' });
     await user.click(enter);
-    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
     expect(within(office).getByText(/社長 山田 太郎/)).toBeInTheDocument();
     await user.click(within(office).getByRole('button', { name: /^通常の表示に戻る/ }));
-    expect(screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })).not.toBeInTheDocument();
   });
 
   describe('opened as the app', () => {
@@ -236,15 +236,15 @@ describe('OfficeScreen', () => {
     it('starts in the full-screen office on a wide screen', async () => {
       openAt(1440);
       expect(
-        await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+        await screen.findByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })
       ).toBeInTheDocument();
     });
 
     it('stays in the normal view on a narrow screen, with the way in still there (#1139)', async () => {
       openAt(390);
-      expect(await screen.findByRole('button', { name: '出社する（全画面）' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: '出社する' })).toBeInTheDocument();
       expect(
-        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })
       ).not.toBeInTheDocument();
     });
   });
@@ -264,7 +264,7 @@ describe('OfficeScreen', () => {
     it('starts in the full-screen office, and drops the mark of coming in from the address', async () => {
       arriveAt(1440);
       expect(
-        await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+        await screen.findByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })
       ).toBeInTheDocument();
       // A reload, or coming back to the page, is not coming in again
       expect(`${window.location.pathname}${window.location.search}`).toBe('/ja/office');
@@ -272,9 +272,9 @@ describe('OfficeScreen', () => {
 
     it('stays in the normal view on a narrow screen, and drops the mark there too', async () => {
       arriveAt(390);
-      expect(await screen.findByRole('button', { name: '出社する（全画面）' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: '出社する' })).toBeInTheDocument();
       expect(
-        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })
       ).not.toBeInTheDocument();
       expect(window.location.search).toBe('');
     });
@@ -284,7 +284,7 @@ describe('OfficeScreen', () => {
       window.history.replaceState(null, '', '/ja/office');
       renderScreen();
       expect(
-        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })
       ).not.toBeInTheDocument();
     });
 
@@ -303,7 +303,7 @@ describe('OfficeScreen', () => {
 
     it('opens the full-screen office on the floor, past the title, and drops the mark', async () => {
       comeHomeAt(1440);
-      const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+      const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
       // The floor: the staff list is there, and nobody is asked to clock in again
       expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
       expect(within(office).queryByRole('button', { name: /^出社する/ })).not.toBeInTheDocument();
@@ -315,7 +315,7 @@ describe('OfficeScreen', () => {
       window.history.replaceState(null, '', '/ja/office');
       const view = renderScreen();
       expect(
-        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })
       ).not.toBeInTheDocument();
       // The router moves to the same page with the mark, and tells the page
       window.history.replaceState(null, '', '/ja/office?source=home');
@@ -325,7 +325,7 @@ describe('OfficeScreen', () => {
           <OfficeScreen />
         </NextIntlClientProvider>
       );
-      const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+      const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
       expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
       expect(window.location.search).toBe('');
     });
@@ -340,7 +340,7 @@ describe('OfficeScreen', () => {
         window.history.replaceState(null, '', '/ja/office?source=home');
         nav.mark = 'home';
         const view = renderScreen();
-        const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+        const office = await screen.findByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
         expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
         // The router reports the address without the mark
         nav.mark = null;
@@ -358,9 +358,9 @@ describe('OfficeScreen', () => {
 
     it('stays in the normal view on a narrow screen, and drops the mark there too', async () => {
       comeHomeAt(390);
-      expect(await screen.findByRole('button', { name: '出社する（全画面）' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: '出社する' })).toBeInTheDocument();
       expect(
-        screen.queryByRole('dialog', { name: 'AI社員オフィス（全画面）' })
+        screen.queryByRole('dialog', { name: 'AI社員オフィス（出社の画面）' })
       ).not.toBeInTheDocument();
       expect(window.location.search).toBe('');
     });

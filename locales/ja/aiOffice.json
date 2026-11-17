@@ -164,7 +164,7 @@
     },
     "loading": "読み込み中",
     "immersive": {
-      "label": "AI社員オフィス（全画面）",
+      "label": "AI社員オフィス（出社の画面）",
       "president": "社長",
       "day": "昼",
       "night": "夜",
@@ -258,7 +258,7 @@
       "room": {
         "back": "フロアへ戻る",
         "work": {
-          "desk": "今日の予定",
+          "desk": "今日の全体",
           "marketing": "集客と見込み客",
           "sales": "商談",
           "engineering": "現行調査",
@@ -1151,7 +1151,7 @@
         "attentive": "こちらを見ています"
       }
     },
-    "enterOffice": "出社する（全画面）",
+    "enterOffice": "出社する",
     "installApp": "アプリとしてインストール",
     "levels": {
       "training": "研修中",
