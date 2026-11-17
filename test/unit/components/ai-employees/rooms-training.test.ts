@@ -26,10 +26,11 @@ const session = (kind: 'onboarding' | 'review', status: 'running' | 'waiting' | 
 });
 
 describe('the boards', () => {
-  it('are on the keys 1 to 4', () => {
-    expect(TRAINING_BOARDS.map((board) => BOARD_KEYS[board])).toEqual(['1', '2', '3', '4']);
-    expect(boardOfKey('3')).toBe('review');
-    expect(boardOfKey('5')).toBeNull();
+  it('are on the keys 1 to 5, the training first (#1280)', () => {
+    expect(TRAINING_BOARDS.map((board) => BOARD_KEYS[board])).toEqual(['1', '2', '3', '4', '5']);
+    expect(boardOfKey('1')).toBe('curriculum');
+    expect(boardOfKey('4')).toBe('review');
+    expect(boardOfKey('6')).toBeNull();
   });
 });
 

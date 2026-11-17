@@ -288,6 +288,13 @@
       "when": 1794665124865,
       "tag": "0040_training_room",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794870977079,
+      "tag": "0041_training_curriculum",
+      "breakpoints": true
     }
   ]
 }

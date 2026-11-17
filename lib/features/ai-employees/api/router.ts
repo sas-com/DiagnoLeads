@@ -8,6 +8,13 @@
 import { organizationProcedure, router } from '@/lib/trpc/init';
 import { TRPCError } from '@trpc/server';
 import { advanceSession } from '../agent/runtime';
+import {
+  copyTemplate,
+  getEmployeeTrainings,
+  getTemplates,
+  saveEmployeeTraining,
+  saveTemplate,
+} from '../curriculum';
 import { dismissEmployee, getOffice, hireEmployee, listRuns, updateEmployee } from '../service';
 import {
   type TrainingFailure,
@@ -20,6 +27,12 @@ import {
   startOnboarding,
   startReview,
 } from '../training';
+import {
+  copyTemplateSchema,
+  curriculumScopeSchema,
+  saveEmployeeTrainingSchema,
+  saveTemplateSchema,
+} from '../types/curriculum';
 import {
   employeeScopeSchema,
   hireAiEmployeeSchema,
@@ -149,6 +162,57 @@ export const aiEmployeesRouter = router({
             session: employee.session && { ...employee.session, report: null },
           })),
     };
+  }),
+
+  /**
+   * The training of the AI employees (#1280): the organization's templates and each employee's
+   * own copy. What the company teaches is for the managers only, like the policy
+   */
+  curriculum: organizationProcedure.input(curriculumScopeSchema).query(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    const [templates, trainings] = await Promise.all([
+      getTemplates(ctx.db, { organizationId: ctx.organization.id, locale: input.locale }),
+      getEmployeeTrainings(ctx.db, { organizationId: ctx.organization.id }),
+    ]);
+    return { templates, employees: Object.fromEntries(trainings) };
+  }),
+
+  saveTemplate: organizationProcedure.input(saveTemplateSchema).mutation(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    return saveTemplate(ctx.db, {
+      organizationId: ctx.organization.id,
+      scope: input.scope,
+      sections: input.sections,
+      userId: ctx.user.id,
+    });
+  }),
+
+  saveTraining: organizationProcedure
+    .input(saveEmployeeTrainingSchema)
+    .mutation(async ({ ctx, input }) => {
+      assertCanManage(ctx.ability.can('update', 'Settings'));
+      const saved = await saveEmployeeTraining(ctx.db, {
+        organizationId: ctx.organization.id,
+        employeeId: input.employeeId,
+        kind: input.kind,
+        sections: input.sections,
+        userId: ctx.user.id,
+      });
+      if (!saved) throw notFound();
+      return saved;
+    }),
+
+  copyTemplate: organizationProcedure.input(copyTemplateSchema).mutation(async ({ ctx, input }) => {
+    assertCanManage(ctx.ability.can('update', 'Settings'));
+    const copied = await copyTemplate(ctx.db, {
+      organizationId: ctx.organization.id,
+      employeeId: input.employeeId,
+      kind: input.kind,
+      locale: input.locale,
+      userId: ctx.user.id,
+    });
+    if (!copied) throw notFound();
+    return copied;
   }),
 
   setPolicy: organizationProcedure.input(setPolicySchema).mutation(async ({ ctx, input }) => {
