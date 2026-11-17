@@ -2,123 +2,30 @@ import { expect, test } from '@playwright/test';
 import { TEST_USERS, setupAuthenticatedTest } from './helpers/auth';
 
 /**
- * E2E Test: Dashboard Flow
+ * E2E Test: the old dashboard address (#1164)
  *
- * Tests the main dashboard:
- * - Dashboard display
- * - Stats cards
- * - Charts loading
- * - Navigation
+ * The dashboard became part of 今日 and of the analytics page (decision
+ * 2026-11-14-navigation-one-path). Old links and bookmarks land on 今日, which leads with what
+ * the team acts on, and the side menu no longer offers the dashboard.
  */
-
-test.describe('Dashboard', () => {
+test.describe('The old dashboard address', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuthenticatedTest(page, TEST_USERS.owner);
   });
 
-  test.describe('Dashboard Display', () => {
-    test('should display dashboard page @smoke', async ({ page }) => {
-      await page.goto('/dashboard');
+  test('opens 今日, with the team’s waiting requests on top @smoke', async ({ page }) => {
+    await page.goto('/ja/dashboard');
 
-      // Check page loaded
-      await expect(page).toHaveURL(/\/dashboard/);
-    });
-
-    test('should display welcome message or heading', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Look for heading
-      const heading = page.locator('h1, h2').first();
-      await expect(heading).toBeVisible();
-    });
-
-    test('should display stats cards', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Look for stat cards
-      const statCards = page.locator('[data-testid="stat-card"], .stat-card, [class*="card"]');
-      const count = await statCards.count();
-      expect(count).toBeGreaterThanOrEqual(0);
-    });
+    await expect(page).toHaveURL(/\/ja\/today$/);
+    await expect(page.getByRole('heading', { level: 1, name: '今日' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /連絡待ちの相談申込/ })).toBeVisible();
   });
 
-  test.describe('Navigation', () => {
-    test('should navigate to leads page', async ({ page }) => {
-      await page.goto('/dashboard');
+  test('is no longer in the side menu', async ({ page }) => {
+    await page.goto('/ja/today');
 
-      // Click leads link
-      const leadsLink = page.locator('a[href*="/leads"], [data-testid="leads-link"]').first();
-      if (await leadsLink.isVisible()) {
-        await leadsLink.click();
-        await expect(page).toHaveURL(/\/leads/);
-      }
-    });
-
-    test('should navigate to analytics page', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Click analytics link
-      const analyticsLink = page.locator('a[href*="/analytics"], [data-testid="analytics-link"]').first();
-      if (await analyticsLink.isVisible()) {
-        await analyticsLink.click();
-        await expect(page).toHaveURL(/\/analytics/);
-      }
-    });
-
-    test('should navigate to settings page', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Click settings link
-      const settingsLink = page.locator('a[href*="/settings"], [data-testid="settings-link"]').first();
-      if (await settingsLink.isVisible()) {
-        await settingsLink.click();
-        await expect(page).toHaveURL(/\/settings/);
-      }
-    });
-  });
-
-  test.describe('Sidebar', () => {
-    test('should display sidebar navigation', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Check sidebar exists
-      const sidebar = page.locator('[data-testid="sidebar"], nav, aside').first();
-      await expect(sidebar).toBeVisible();
-    });
-
-    test('should toggle sidebar on mobile', async ({ page }) => {
-      // Set mobile viewport
-      await page.setViewportSize({ width: 375, height: 667 });
-      await page.goto('/dashboard');
-
-      // Look for hamburger menu
-      const menuButton = page.locator('[data-testid="menu-toggle"], button[aria-label*="menu"]').first();
-      if (await menuButton.isVisible()) {
-        await menuButton.click();
-        await page.waitForTimeout(300);
-
-        // Check sidebar is visible
-        const sidebar = page.locator('[data-testid="sidebar"], nav').first();
-        await expect(sidebar).toBeVisible();
-      }
-    });
-  });
-
-  test.describe('Quick Actions', () => {
-    test('should have quick action to create lead', async ({ page }) => {
-      await page.goto('/dashboard');
-
-      // Look for quick action button
-      const quickAction = page.locator('[data-testid="quick-add-lead"], button:has-text("新規リード"), button:has-text("Add Lead")').first();
-      if (await quickAction.isVisible()) {
-        await quickAction.click();
-        
-        // Check dialog opens
-        await page.waitForTimeout(300);
-        const dialog = page.locator('[role="dialog"]');
-        const dialogVisible = await dialog.isVisible();
-        // Dialog may or may not open depending on implementation
-      }
-    });
+    const menu = page.getByRole('complementary');
+    await expect(menu.getByRole('link', { name: '今日' })).toBeVisible();
+    await expect(menu.getByRole('link', { name: 'ダッシュボード' })).toHaveCount(0);
   });
 });

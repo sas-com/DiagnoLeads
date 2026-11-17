@@ -124,6 +124,11 @@ vi.mock('next/dynamic', () => ({ default: () => () => null }));
 vi.mock('@/app/[locale]/(dashboard)/analytics/_components/agency-contract-report-card', () => ({
   AgencyContractReportCard: () => null,
 }));
+// The team's review on top (#1164) has its own test (test/unit/components/dashboard/team-sections.test.tsx)
+vi.mock('@/components/dashboard/team-review', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/dashboard/team-review')>()),
+  TeamReview: ({ days }: { days: number }) => <div data-testid="team-review" data-days={days} />,
+}));
 vi.mock('@/components/charts', () => ({
   AreaChart: () => <div data-testid="area-chart" />,
   ChartLegend: ({ categories }: { categories: string[] }) => (
@@ -373,3 +378,12 @@ describe('AnalyticsPage', () => {
     expect(screen.queryByText('パフォーマンスの概要')).not.toBeInTheDocument();
   });
 });
+
+describe('the team review on the analytics page (#1164)', () => {
+  it('stands above the page’s own figures, for the period chosen on the page', async () => {
+    renderPage();
+    const review = await screen.findByTestId('team-review');
+    expect(review).toHaveAttribute('data-days', '30');
+  });
+});
+

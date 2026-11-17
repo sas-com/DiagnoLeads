@@ -6,11 +6,13 @@ import { useTranslations } from 'next-intl';
 import { Component, type ReactNode } from 'react';
 import { CAP, FOCUS, PANEL } from '../office-hud';
 import type { OfficeEvent } from './office-emotion';
+import { type FpsMeter, useFps } from './office-fps';
 
 /**
  * The trial panel of the 3D floor (#1135) exists in development only: a production build never
- * shows a panel that pretends statuses. The switch between 2D and 3D is offered everywhere, 2D
- * first (#1157), and the 3D chunk is asked for only when someone switches.
+ * shows a panel that pretends statuses. The switch between 2D and 3D is offered everywhere; the
+ * office starts in 3D unless the device remembers otherwise (#1150, office-display.ts), and the
+ * 3D chunk is asked for only when the 3D floor is shown.
  */
 export const OFFICE_3D_TRIAL = process.env.NODE_ENV !== 'production';
 
@@ -30,7 +32,7 @@ export function Office3DTrialPanel({
   name,
   status,
   event,
-  fps,
+  fpsMeter,
   onStatus,
   onEvent,
 }: {
@@ -38,13 +40,15 @@ export function Office3DTrialPanel({
   /** The status the robot shows now (pretended, or the real one) */
   status: DeskStatus;
   event: OfficeEvent | undefined;
-  fps: number | null;
+  /** How fast the floor is drawn: read here, so only this panel renders when it changes */
+  fpsMeter: FpsMeter;
   onStatus: (status: TrialStatus) => void;
   /** The same event again takes it back */
   onEvent: (event: OfficeEvent | undefined) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.trial3d');
   const tOffice = useTranslations('aiOffice');
+  const fps = useFps(fpsMeter);
   return (
     <div
       className={cn(

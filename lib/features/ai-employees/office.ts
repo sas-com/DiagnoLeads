@@ -8,7 +8,8 @@ import type { AiEmployeeRunStatus, AiEmployeeStatus } from './types/schemas';
  * What a desk shows:
  * - vacant: nobody hired for the role
  * - paused: hired and paused by an admin
- * - training: hired, but the role has no work yet (its issue is not done)
+ * - training: hired, but its onboarding is not approved yet (#1189), or the role has no work
+ *   yet (its issue is not done)
  * - working: a run started less than RUN_STALE_MS ago and has not finished
  * - attention: the last run failed, or it has run for too long to still be working
  * - idle: waiting for the next run
@@ -34,14 +35,15 @@ export interface DeskRun {
 export function deskStatus(input: {
   /** Whether the role has work yet (roleHasWork, types/works.ts) */
   hasWork: boolean;
-  employee: { status: AiEmployeeStatus } | null;
+  /** onboarded: the president approved its onboarding (level 1 or more, #1189) */
+  employee: { status: AiEmployeeStatus; onboarded: boolean } | null;
   lastRun: DeskRun | null;
   now: Date;
 }): DeskStatus {
   const { hasWork, employee, lastRun, now } = input;
   if (!employee) return 'vacant';
   if (employee.status === 'paused') return 'paused';
-  if (!hasWork) return 'training';
+  if (!employee.onboarded || !hasWork) return 'training';
   if (!lastRun) return 'idle';
   if (lastRun.status === 'failed') return 'attention';
   if (lastRun.status === 'running') {

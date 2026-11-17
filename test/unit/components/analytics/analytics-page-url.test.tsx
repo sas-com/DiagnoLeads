@@ -68,6 +68,11 @@ vi.mock('@/app/[locale]/(dashboard)/analytics/_components/agency-contract-report
 vi.mock('@/app/[locale]/(dashboard)/analytics/_components/delivery-report-cards', () => ({
   DeliveryReportCards: () => null,
 }));
+// The team's figures read tRPC directly (#1164); here only the period they are given matters
+vi.mock('@/components/dashboard/team-review', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/dashboard/team-review')>()),
+  TeamReview: ({ days }: { days: number }) => <div data-testid="team-review" data-days={days} />,
+}));
 vi.mock('@/components/charts', () => ({
   AreaChart: () => null,
   ChartLegend: () => null,
@@ -104,6 +109,8 @@ describe('AnalyticsPage and its address (#1216)', () => {
     // Every figure of the page is asked for that period
     expect(Object.keys(mocks.ranges)).toHaveLength(8);
     expect(askedRanges()).toEqual(new Set(['90d']));
+    // The team's review at the top follows the same period (#1164)
+    expect(screen.getByTestId('team-review')).toHaveAttribute('data-days', '90');
     // Reading the address does not rewrite it
     expect(mocks.replace).not.toHaveBeenCalled();
   });

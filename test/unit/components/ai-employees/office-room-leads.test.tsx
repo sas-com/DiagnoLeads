@@ -423,7 +423,7 @@ async function enterMarketing(
   );
   const view = render(ui());
   const office = screen.getByRole('dialog', {
-    name: locale === 'ja' ? 'AI社員オフィス（全画面）' : 'AI office (full screen)',
+    name: locale === 'ja' ? 'AI社員オフィス（出社の画面）' : 'AI office (office view)',
   });
   await user.click(
     within(office).getByRole('button', { name: locale === 'ja' ? /^出社する/ : /^Enter the office/ })
@@ -481,7 +481,7 @@ describe('the marketing room', () => {
         />
       </NextIntlClientProvider>
     );
-    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
     await user.click(within(guide).getByRole('button', { name: /マーケティング室.*集客と見込み客/ }));

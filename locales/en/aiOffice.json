@@ -164,7 +164,7 @@
     },
     "loading": "Loading",
     "immersive": {
-      "label": "AI office (full screen)",
+      "label": "AI office (office view)",
       "president": "President",
       "day": "Day",
       "night": "Night",
@@ -258,11 +258,12 @@
       "room": {
         "back": "Back to the floor",
         "work": {
-          "desk": "Today",
+          "desk": "Today at a glance",
           "marketing": "Acquisition and prospects",
           "sales": "Deals",
           "engineering": "Surveys",
-          "backoffice": "General affairs"
+          "backoffice": "General affairs",
+          "training": "Bringing up the staff"
         },
         "guide": {
           "employee": "{name} looks after this room.",
@@ -326,11 +327,11 @@
             "keys": {
               "open": "open its prospects"
             },
-            "openHint": "Opening the row of a source shows its prospects of the last {days} days on the lead board.",
+            "openHint": "Opening the row of a source shows its prospects of the last {days} days on the prospect board.",
             "leadsOf": "Source: {source}, last {days} days",
             "back": "Back to the source board",
             "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened.",
-            "openDescription": "Shows its prospects of the last {days} days on the lead board",
+            "openDescription": "Shows its prospects of the last {days} days on the prospect board",
             "closedRow": " (cannot be opened)",
             "sqlNote": "The SQL of this table counts the prospects judged SQL. The SQL of the progress board counts the prospects that were won too, so the two can differ."
           },
@@ -400,7 +401,7 @@
           "notComputable": "Cannot be computed"
         },
         "leads": {
-          "board": "Lead board",
+          "board": "Prospect board",
           "views": {
             "needsAction": "Not started yet (new)",
             "consultation": "Consultation requested",
@@ -423,10 +424,10 @@
           "noCompany": "No company name",
           "noLevel": "—",
           "unassigned": "Unassigned",
-          "empty": "No leads match this view.",
+          "empty": "No prospects match this view.",
           "loading": "Loading",
-          "error": "The leads could not be read. Please open the room again in a while.",
-          "forbidden": "You do not have permission to see leads. Please ask an administrator.",
+          "error": "The prospects could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see prospects. Please ask an administrator.",
           "range": "{from}–{to} of {total}",
           "openHint": "Opening a row opens the customer file in this room.",
           "openList": "Open the list in the normal view",
@@ -439,7 +440,7 @@
           "title": "Customer file",
           "reading": "Reading the contact records.",
           "readError": "The contact records could not be read. Please open the file again in a while.",
-          "noContact": "There is no contact record for this lead yet.",
+          "noContact": "There is no contact record for this prospect yet.",
           "latest": "The last contact was \"{kind}\" on {date}. Contact records in all: {total}.",
           "recorded": "Recorded \"{kind}\". You can undo it if it was a mistake.",
           "undone": "The record was undone.",
@@ -801,6 +802,137 @@
             "refusedNothing": "The prep card was saved from another screen just before this save. The draft was not saved. The latest card has no empty field a draft could fill.",
             "checking": "Checking the prep card."
           }
+        },
+        "training": {
+          "subtitle": "Where the AI employees are brought up",
+          "reading": "Reading the training records…",
+          "readError": "The training records could not be read. Please wait a moment and enter the room again.",
+          "guide": {
+            "empty": "No AI employee is hired yet. Talk to an AI employee on the floor and hire it to bring it up here.",
+            "staff": "{count} AI employees are hired, {training} of them in training. Choose one with the up and down keys, and a board with the number keys."
+          },
+          "disabled": "The AI employees cannot think and work with Claude yet (switched off until the legal and information systems departments have agreed). Onboarding and reviews cannot be started yet.",
+          "staffList": "AI employees of the training room",
+          "boards": {
+            "report": "Report (onboarding)",
+            "notes": "Notes",
+            "review": "Review",
+            "policy": "President's policy"
+          },
+          "step": {
+            "disabled": "Being prepared",
+            "paused": "Paused",
+            "start": "Not started",
+            "running": "In training",
+            "waiting": "Report in",
+            "onboarded": "Approved"
+          },
+          "report": {
+            "disabled": "{name}'s onboarding can start once the system is ready.",
+            "paused": "{name} is paused. Resume it to start its onboarding.",
+            "start": "{name} has not been onboarded yet. It will read its job description and your policy, write its role in its own words in its notes, and report to you.",
+            "running": "{name} is reading its job description and writing its notes (step {steps}). It moves on while this room is open.",
+            "waiting": "{name} handed in its report. Read what it understood, then approve it or tell it what to correct. Approving puts it on probation (Lv.1).",
+            "onboarded": "{name} finished its onboarding on {date}.",
+            "writing": "Writing its notes",
+            "introduction": "Introduction",
+            "roleSummary": "What it understood of its role",
+            "goals": "Goals for the first 30 days",
+            "questions": "Questions for you"
+          },
+          "result": {
+            "refused": "The last onboarding stopped because Claude declined. You can start it again.",
+            "max_tokens": "The last one stopped because an answer was too long. You can start it again.",
+            "context_full": "The last one stopped because the conversation grew too long. You can start it again.",
+            "step_limit": "The last one did not reach its report within the steps allowed. You can start it again.",
+            "token_limit": "The last one reached the limit of what it may use. You can start it again.",
+            "no_report": "The last one stopped without a report. You can start it again.",
+            "claude_error": "The last one stopped because of a problem with the Claude settings. Operations have been told.",
+            "cancelled": "The last onboarding was stopped. You can start it again.",
+            "other": "The last onboarding stopped. You can start it again."
+          },
+          "notes": {
+            "about": "The notes the AI employee wrote itself. Fixing or deleting one keeps a record of the change.",
+            "empty": "{name} has no notes yet.",
+            "forManagers": "Only those who manage the AI employees can read the notes."
+          },
+          "review": {
+            "training": "Reviews start after the onboarding is approved.",
+            "disabled": "Reviews can start once the system is ready.",
+            "paused": "{name} is paused. Resume it to hold a review.",
+            "running": "{name} is reading the counted facts and writing its self-review.",
+            "waiting": "{name} handed in its self-review. Look at the facts and decide.",
+            "open": "The facts are counted. Please decide.",
+            "due": "{name}'s review can be held now. The facts of the period are counted, and {name} writes a self-review.",
+            "not_due": "The next review can be held from {date}.",
+            "writing": "Writing its self-review",
+            "selfReview": "Self-review",
+            "nextGoals": "Goals for the next 30 days",
+            "confirmPromote": "{name} will be raised to {level} and trusted with more. Are you sure?"
+          },
+          "facts": {
+            "period": "Period",
+            "runs": "Runs",
+            "runsValue": "{runs} ({failed} failed)",
+            "daysAtLevel": "Days at this grade",
+            "days": "{days} days",
+            "proposals": "Proposals approved",
+            "proposalsValue": "{approved} / {answered}",
+            "noProposals": "No record (counted once the works hand in proposals)",
+            "recommendation": "What the records show",
+            "level": "Grade"
+          },
+          "recommendation": {
+            "promote": "Meets the bar for a promotion",
+            "keep": "Keep",
+            "narrow": "Trust it with less"
+          },
+          "narrowed": "Its runs failed more often than the bar allows: its grade was lowered by one, and it is trusted with less.",
+          "policy": {
+            "about": "Write in a few words what you expect of the AI employee. It reads this at its onboarding and its reviews.",
+            "empty": "Nothing written yet.",
+            "forManagers": "Only those who manage the AI employees can read the policy."
+          },
+          "fields": {
+            "correction": "What should be corrected",
+            "note": "Content of {path}",
+            "policy": "What you expect of {name}"
+          },
+          "actions": {
+            "start": "Start the onboarding",
+            "resume": "Continue",
+            "cancel": "Stop",
+            "approve": "Approve (to probation)",
+            "correct": "Tell what to correct",
+            "sendCorrection": "Send the correction",
+            "close": "Close",
+            "editNote": "Fix",
+            "saveNote": "Save",
+            "deleteNote": "Delete this note",
+            "startReview": "Start the review",
+            "promote": "Approve the promotion",
+            "confirmPromote": "Raise to {level} (confirm)",
+            "keep": "Keep",
+            "editPolicy": "Write or fix",
+            "savePolicy": "Save",
+            "cancelPromote": "Do not raise"
+          },
+          "errors": {
+            "not_found": "Not found. Please enter the room again.",
+            "agent_disabled": "The system is not ready, so this cannot start.",
+            "paused": "A paused AI employee does not work.",
+            "already_onboarded": "This AI employee has already been onboarded.",
+            "in_training": "This can start after the onboarding is approved.",
+            "open_session": "This AI employee is in the middle of other training.",
+            "not_waiting": "This was already answered. The screen was read again.",
+            "review_not_due": "The next review is not due yet.",
+            "not_recommended": "The records do not call for a promotion.",
+            "level_changed": "The grade had changed. The screen was read again.",
+            "self_review_running": "Please decide once the self-review is in.",
+            "invalid_note": "This note cannot be saved (no contact details or key-like text).",
+            "generic": "That did not work. Please wait a moment and try again.",
+            "personal_data": "Contact details (e-mail addresses, telephone numbers) and key-like text cannot be written. Write about the role and the work only."
+          }
         }
       },
       "tones": {
@@ -978,8 +1110,8 @@
         "soon": "Not yet in use"
       },
       "trial3d": {
-        "on": "3D (trial)",
-        "off": "Back to 2D",
+        "on": "3D view",
+        "off": "2D view",
         "title": "3D trial",
         "note": "Switch the status of {name} and what happened to it, on this screen only, to watch it walk and feel. The real status does not change.",
         "fps": "{fps} frames a second",
@@ -989,7 +1121,8 @@
           "hired": "Hired"
         },
         "loading": "Loading the 3D floor.",
-        "failed": "The 3D floor could not be shown. The office is back in 2D."
+        "failed": "The 3D floor could not be shown. The office is back in 2D.",
+        "slow": "3D draws slowly on this device, so the office is shown in 2D. Press \"3D view\" (the V key) to try it again."
       },
       "walkingTo": "On the way to {room}",
       "feelings": {
@@ -998,7 +1131,14 @@
         "attentive": "Looking at you"
       }
     },
-    "enterOffice": "Enter the office (full screen)",
-    "installApp": "Install as an app"
+    "enterOffice": "Enter the office",
+    "installApp": "Install as an app",
+    "levels": {
+      "training": "In training",
+      "probation": "Lv.1 Probation",
+      "member": "Lv.2 Full member",
+      "lead": "Lv.3 Lead",
+      "ace": "Lv.4 Ace"
+    }
   }
 }
