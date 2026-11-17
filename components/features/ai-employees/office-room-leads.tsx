@@ -117,6 +117,7 @@ export function OfficeRoomLeads({
   const costState = figureState(cost);
   // What waits for somebody, on the choices that show it (#1246): totals of the lead list, read
   // when the room opens. The API scopes them to the organization and checks the permission.
+  const utils = trpc.useUtils();
   const waiting = {
     needsAction: trpc.leads.list.useQuery(leadCountInput('needsAction', organizationId, now)),
     consultation: trpc.leads.list.useQuery(leadCountInput('consultation', organizationId, now)),
@@ -134,6 +135,10 @@ export function OfficeRoomLeads({
   const roleTitle = tOffice(`roles.${role}.title`);
 
   const choose = (next: MarketingChoice) => {
+    // The totals on the choices were read when the room opened, and a board read before is kept
+    // for a while: a lead board is read anew with the totals, so the two say the same (others
+    // may have changed the leads since)
+    if (isLeadBoardView(next)) void utils.leads.list.invalidate();
     setChoice(next);
     setSource(null);
     lastSource.current = null;
@@ -317,7 +322,13 @@ export function OfficeRoomLeads({
                     {/* How many wait there; nothing while it is not read (never a zero instead) */}
                     {isLeadCountView(option) && waiting[option].data && (
                       <span className="ml-auto whitespace-nowrap text-xs tabular-nums">
-                        {tRoom('leadCount', { count: waiting[option].data.total })}
+                        {/* Read out with what it counts (en shows the number alone) */}
+                        <span aria-hidden="true">
+                          {tRoom('leadCount', { count: waiting[option].data.total })}
+                        </span>
+                        <span className="sr-only">
+                          {tRoom('leadCountSpoken', { count: waiting[option].data.total })}
+                        </span>
                       </span>
                     )}
                   </span>
