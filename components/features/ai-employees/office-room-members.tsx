@@ -58,6 +58,7 @@ export function OfficeRoomMembers({
   keysRef,
   onOpenNormal,
   onBack,
+  onBusyChange,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -71,6 +72,8 @@ export function OfficeRoomMembers({
   onOpenNormal: () => void;
   /** Back to the counter */
   onBack: () => void;
+  /** Told while the revoking is being saved, and when it no longer is */
+  onBusyChange: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tShelf = useTranslations('aiOffice.immersive.room.reception.membersShelf');
@@ -102,6 +105,14 @@ export function OfficeRoomMembers({
 
   const utils = trpc.useUtils();
   const reportRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLParagraphElement>(null);
+  // The focus goes to what was answered once it is shown: put there at once, the sentence that
+  // was there before would be read out, and the new one after it
+  const [answered, setAnswered] = useState(0);
+  useEffect(() => {
+    if (answered > 0) resultRef.current?.focus();
+  }, [answered]);
+  const focusResult = () => setAnswered((count) => count + 1);
   const fieldRef = useRef<HTMLInputElement>(null);
   const fieldId = useId();
   const noteId = useId();
@@ -124,6 +135,10 @@ export function OfficeRoomMembers({
   const canOpen = mayRevoke && pending.length > 0;
   const named = invitationNamed(typed, pending);
   const busy = revoke.isPending;
+  useEffect(() => {
+    onBusyChange(busy);
+    return () => onBusyChange(false);
+  }, [busy, onBusyChange]);
 
   const close = () => {
     setRevoking(false);
@@ -155,7 +170,7 @@ export function OfficeRoomMembers({
           setOutcome({ kind: error.data?.code === 'NOT_FOUND' ? 'gone' : 'failed' }),
         onSettled: () => {
           close();
-          reportRef.current?.focus();
+          focusResult();
         },
       }
     );
@@ -171,7 +186,7 @@ export function OfficeRoomMembers({
       event.preventDefault();
       if (!busy) {
         close();
-        reportRef.current?.focus();
+        focusResult();
       }
       return true;
     }
@@ -218,7 +233,12 @@ export function OfficeRoomMembers({
           <RoomGuideLine>
             {t(`guide.${roomGuide(status)}`, { name: employeeName ?? roleTitle, role: roleTitle })}
           </RoomGuideLine>
-          <p className="text-base leading-relaxed font-medium" aria-live="polite">
+          <p
+            ref={resultRef}
+            tabIndex={-1}
+            className="text-base leading-relaxed font-medium outline-none"
+            aria-live="polite"
+          >
             {report}
           </p>
           <p className="text-sm text-[#d8d2c4]">
@@ -281,7 +301,7 @@ export function OfficeRoomMembers({
               onBack={() => {
                 close();
                 // The button goes away with the field: the focus goes to the report, not nowhere
-                reportRef.current?.focus();
+                focusResult();
               }}
               closed={busy}
               label={tShelf('revoke.back')}

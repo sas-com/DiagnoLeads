@@ -469,7 +469,7 @@
           "undoing": "Taking the record back. The file stays open until it is done."
         },
         "due": {
-          "board": "Due today",
+          "board": "Due by today",
           "position": "{index} of {total}",
           "reading": "Checking what is due.",
           "error": "What is due could not be read. Please open the room again in a while.",
@@ -661,7 +661,7 @@
             "invitationsUnread": " The invitations could not be read."
           },
           "choices": {
-            "due": "Take what is due today",
+            "due": "Take what is due by today",
             "members": "See members and invitations",
             "settings": "Choose a settings page"
           },
