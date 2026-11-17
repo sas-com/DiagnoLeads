@@ -212,6 +212,8 @@ describe('merging a pull request', () => {
       'gh pr -R sas-com/DiagnoLeads merge 12',
       'gh api -X PUT repos/sas-com/DiagnoLeads/pulls/12/merge',
       'gh api --method=PUT /repos/o/r/pulls/12/merge -f merge_method=squash',
+      'gh api -X PUT repos/sas-com/DiagnoLeads/pulls/12/ccr/auto_merge -f merge_method=merge',
+      "gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
       "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
     ]) {
       expect(checkBashCommand(command, ROOT), command).toMatchObject({
@@ -227,6 +229,9 @@ describe('merging a pull request', () => {
       'gh pr list --search merge',
       'gh pr checks 12',
       'gh api repos/sas-com/DiagnoLeads/pulls/12/merge',
+      'gh api -X DELETE repos/sas-com/DiagnoLeads/pulls/12/ccr/auto_merge',
+      'gh api repos/sas-com/DiagnoLeads/pulls/12/ccr/review_threads',
+      'gh api -X PUT repos/sas-com/DiagnoLeads/pulls/12/update-branch',
       'gh api repos/sas-com/DiagnoLeads/pulls/12 --jq .merged',
       'gh pr comment 12 --body "gh pr merge は確認が出ます"',
       'git merge --ff-only origin/main',
