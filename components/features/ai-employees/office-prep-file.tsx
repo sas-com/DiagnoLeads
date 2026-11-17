@@ -67,6 +67,7 @@ export function OfficePrepFile({
   keysRef,
   onClose,
   onOpenNormal,
+  onBusyChange,
 }: {
   organizationId: string;
   deal: DealCard;
@@ -79,6 +80,8 @@ export function OfficePrepFile({
   onClose: () => void;
   /** A page of the normal view is opened: the office closes */
   onOpenNormal: () => void;
+  /** Told while the card is read and saved for an answer, and when it no longer is */
+  onBusyChange: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room.engineering.file');
   const tLeads = useTranslations('aiOffice.immersive.room.leads');
@@ -128,10 +131,20 @@ export function OfficePrepFile({
   // runs when the file was closed (a link at the foot) before the save came back
   const save = trpc.leadPrep.save.useMutation({
     onSuccess: () => void utils.leadPrep.get.invalidate(scope),
+    // Sent at once also while the browser says it is offline: by default a save then waits,
+    // without failing, for the network to come back, and "working" would never end. This way
+    // it fails, and the file says so (#1232, the first way out named in #1251)
+    networkMode: 'always',
   });
   // An answer first reads the card again, then saves: both count as working on it
   const [checking, setChecking] = useState(false);
   const working = checking || save.isPending;
+  // The office keeps the room open meanwhile: its own way back to the floor (the button at the
+  // top right) would otherwise close the file under an answer that is on its way (#1232)
+  useEffect(() => {
+    onBusyChange(working);
+    return () => onBusyChange(false);
+  }, [working, onBusyChange]);
   // While the card is read again, nothing is taken: an answer would start from an old card
   const rereading = prep.isFetching === true;
   // Somebody changed the card after the draft (on the lead's page): putting the old card back
@@ -147,7 +160,9 @@ export function OfficePrepFile({
    * and the save is not written over either: the server refuses, and the file says so.
    */
   // Not tried again: while it runs, Esc and the way back are closed
-  const readNow = () => utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false });
+  // ...and not left waiting while offline either (networkMode, like the save)
+  const readNow = () =>
+    utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false, networkMode: 'always' });
   // The file can be left while the card is read (a link at the foot): then nothing is saved
   const shown = useRef(true);
   useEffect(() => {

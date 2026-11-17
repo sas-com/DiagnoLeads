@@ -65,6 +65,7 @@ const mocks = vi.hoisted(() => ({
   }[],
   // The card somebody saves right before the next save arrives (the server then refuses it)
   conflictWith: undefined as unknown,
+  saveOptions: {} as { networkMode?: string },
   saving: false,
   failSave: false,
   refreshed: vi.fn(),
@@ -207,8 +208,15 @@ vi.mock('@/lib/trpc/client', () => ({
       },
       save: {
         useMutation: (
-          hook: { onSuccess?: () => void; onError?: (error: unknown) => void } = {}
-        ) => ({
+          hook: {
+            onSuccess?: () => void;
+            onError?: (error: unknown) => void;
+            networkMode?: string;
+          } = {}
+        ) => {
+          // What the file asked of the mutation (networkMode)
+          mocks.saveOptions = hook;
+          return {
           isPending: mocks.saving,
           mutate: (
             input: {
@@ -242,7 +250,8 @@ vi.mock('@/lib/trpc/client', () => ({
             hook.onSuccess?.();
             options.onSuccess?.();
           },
-        }),
+          };
+        },
       },
     },
   },
@@ -396,11 +405,12 @@ describe('the engineering room', () => {
   it('moves over the rows with the arrow keys and turns the pages', async () => {
     mocks.deals = Array.from({ length: 10 }, (_entry, index) => deal(index + 1, 'qualification'));
     const { user, board } = await enterRoom();
-    expect(rowNames(board)).toHaveLength(8);
+    // 7 rows a page: what fits at 1024x768 and 1280x720 without scrolling (measured, #1232)
+    expect(rowNames(board)).toHaveLength(7);
     await user.keyboard('{ArrowDown}');
     expect(board.querySelectorAll('[data-deal-row]')[0]).toHaveFocus();
     await user.keyboard('{ArrowRight}');
-    expect(rowNames(board)).toEqual(['見本商事9', '見本商事10']);
+    expect(rowNames(board)).toEqual(['見本商事8', '見本商事9', '見本商事10']);
     expect(within(board).getByText('2 / 2')).toBeInTheDocument();
     await user.keyboard('{ArrowRight}');
     expect(within(board).getByText('2 / 2')).toBeInTheDocument();
@@ -631,7 +641,8 @@ describe('the engineering room', () => {
       // The undo read the card first, saw the change and put nothing back
       expect(mocks.fetches.at(-1)).toEqual({
         input: { organizationId: ORG_ID, leadId: '00000000-0000-4000-8000-000000000101' },
-        options: { staleTime: 0, retry: false },
+        // Not kept waiting while offline, and not tried again (#1232)
+        options: { staleTime: 0, retry: false, networkMode: 'always' },
       });
       expect(mocks.saves).toHaveLength(1);
       expect(
@@ -807,6 +818,32 @@ describe('the engineering room', () => {
       expect(
         within(office).getByRole('button', { name: /いまの下書きを取り消す/ })
       ).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('keeps the room open while the card is being saved: the way back to the floor is closed (#1232)', async () => {
+      mocks.saving = true;
+      const { user, office } = await openFile();
+      const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+      expect(toFloor).toHaveAttribute('aria-disabled', 'true');
+      await user.click(toFloor);
+      // Still in the room, with the file open
+      expect(
+        within(office).getByRole('region', { name: '見本商事1の準備ファイル' })
+      ).toBeInTheDocument();
+      expect(within(office).queryByRole('navigation', { name: 'フロア案内' })).not.toBeInTheDocument();
+    });
+
+    it('leaves the way back to the floor open when nothing is being saved (#1232)', async () => {
+      const { user, office } = await openFile();
+      const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+      expect(toFloor).not.toHaveAttribute('aria-disabled');
+      await user.click(toFloor);
+      expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
+    });
+
+    it('does not wait for the network to come back: a save while offline fails at once (#1232)', async () => {
+      await openFile();
+      expect(mocks.saveOptions.networkMode).toBe('always');
     });
 
     it('starts one read and one save when the key arrives twice at once', async () => {
