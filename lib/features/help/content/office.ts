@@ -7,7 +7,7 @@ export const officeArticle: HelpArticle = {
   summary:
     '組織で採用した AI社員の働きぶりを、バーチャルオフィスで見ます。AI社員はロボットの姿で、状態に合わせてフロアを移動します。管理者は空席から AI社員を採用し、名前の変更・休止・解雇ができます。',
   routes: ['/office'],
-  reviewedAt: '2026-11-16',
+  reviewedAt: '2026-11-17',
   blocks: [
     { type: 'h2', id: 'floor', text: 'フロアの見方' },
     {
@@ -185,6 +185,7 @@ export const officeArticle: HelpArticle = {
           { type: 'ui', text: 'フロアへ戻る' },
           { type: 'text', text: '（Esc キー）でフロアに戻ります。' },
         ],
+        '顧客ファイルで記録を送ったあと、応答が無いまま35秒たつと、待つのをやめて「応答がありませんでした」と出ます。このときは、保存されていることがあるので、連絡の記録で確かめてから、記録が無ければもう一度選びます。',
       ],
     },
     {

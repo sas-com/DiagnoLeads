@@ -41,6 +41,17 @@ describe('planTests', () => {
     });
   });
 
+  it('runs the tests that read vercel.json: the headers, and the time limit of the requests (#1254)', () => {
+    expect(planTests([modified('vercel.json')])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: [
+        'test/unit/lib/middleware/security-headers.test.ts',
+        'test/unit/lib/trpc/request-timeout.test.ts',
+      ],
+    });
+  });
+
   it('follows the import graph as well for a hook that tests also read from disk', () => {
     expect(planTests([modified('.claude/hooks/lib/guard.ts')])).toEqual({
       kind: 'selected',

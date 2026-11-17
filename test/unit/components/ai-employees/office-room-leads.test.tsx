@@ -16,6 +16,7 @@ import {
   FUNNEL_STAGES,
 } from '@/lib/features/analytics/types/schemas';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
+import { RequestTimeoutError } from '@/lib/trpc/request-timeout';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
@@ -86,6 +87,13 @@ const mocks = vi.hoisted(() => ({
   saving: false,
   contactsFail: false,
   refreshed: vi.fn(),
+  /**
+   * What a failing save fails with. A request that got no answer within the time limit fails
+   * with a tRPC client error made from the limit; the server may have saved it all the same
+   */
+  failure: new Error('network') as Error,
+  /** The save reached the server although no answer came back */
+  savedWithoutAnswer: false,
 }));
 
 /** 12 leads in all; 3 are new, none asked for a consultation, 5 came this week */
@@ -316,13 +324,13 @@ vi.mock('@/lib/trpc/client', () => ({
         useMutation: (
           options: {
             onSuccess?: (saved: ContactRecord, input: { kind: string }) => void;
-            onError?: () => void;
+            onError?: (error: unknown) => void;
           } = {}
         ) => ({
           isPending: mocks.saving,
           mutate: (input: { organizationId: string; leadId: string; kind: ContactRecord['kind'] }) => {
-            if (mocks.failRecord) {
-              options.onError?.();
+            if (mocks.failRecord && !mocks.savedWithoutAnswer) {
+              options.onError?.(mocks.failure);
               return;
             }
             const saved: ContactRecord = {
@@ -337,16 +345,22 @@ vi.mock('@/lib/trpc/client', () => ({
             };
             mocks.recorded.push(input);
             mocks.records.unshift(saved);
+            if (mocks.failRecord) {
+              options.onError?.(mocks.failure);
+              return;
+            }
             options.onSuccess?.(saved, input);
           },
         }),
       },
       deleteContact: {
-        useMutation: (options: { onSuccess?: () => void; onError?: () => void } = {}) => ({
+        useMutation: (
+          options: { onSuccess?: () => void; onError?: (error: unknown) => void } = {}
+        ) => ({
           isPending: false,
           mutate: (input: { organizationId: string; id: string }) => {
             if (mocks.failDelete) {
-              options.onError?.();
+              options.onError?.(mocks.failure);
               return;
             }
             mocks.deleted.push(input);
@@ -459,6 +473,8 @@ function reset() {
   mocks.canEdit = true;
   mocks.failRecord = false;
   mocks.failDelete = false;
+  mocks.failure = new Error('network');
+  mocks.savedWithoutAnswer = false;
   mocks.saving = false;
   mocks.contactsFail = false;
   mocks.refreshed.mockClear();
@@ -1492,6 +1508,55 @@ describe('the customer file in the room', () => {
       )
     ).toBeInTheDocument();
     expect(within(office).getByRole('button', { name: /電話した/ })).toBeInTheDocument();
+  });
+
+  it('reads the contact records again when a record fails (#1254)', async () => {
+    mocks.failRecord = true;
+    const { user } = await openFile();
+    mocks.refreshed.mockClear();
+    await user.keyboard('1');
+    expect(mocks.refreshed).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      leadId: '00000000-0000-4000-8000-000000000001',
+    });
+  });
+
+  it('does not say "try again" when no answer came: the record may be saved (#1254)', async () => {
+    mocks.failRecord = true;
+    mocks.savedWithoutAnswer = true;
+    // What the tRPC client gives when the request ran into the time limit
+    mocks.failure = new Error('fetch failed', { cause: new RequestTimeoutError(35_000) });
+    const { user, office, file, redraw } = await openFile();
+    mocks.refreshed.mockClear();
+    await user.keyboard('1');
+    expect(
+      within(office).getByText(
+        '応答がありませんでした。保存されたかどうかは、連絡の記録で確かめてください。記録が無ければ、もう一度お願いします。'
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(office).queryByText(/うまくいきませんでした。時間をおいて、もう一度/)
+    ).not.toBeInTheDocument();
+    // The records are read again, and the one the server saved shows in the file
+    expect(mocks.refreshed).toHaveBeenCalledTimes(1);
+    redraw();
+    expect(within(file).getByText(/^1 件/)).toBeInTheDocument();
+    // The ways out are open again: nothing is being saved
+    expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).not.toHaveAttribute(
+      'aria-disabled'
+    );
+  });
+
+  it('reads the records again when an undo gets no answer, and does not claim the record is still there (#1254)', async () => {
+    const { user, office } = await openFile();
+    await user.keyboard('2');
+    mocks.failDelete = true;
+    mocks.failure = new Error('fetch failed', { cause: new RequestTimeoutError(35_000) });
+    mocks.refreshed.mockClear();
+    await user.keyboard('Z');
+    expect(within(office).getByText(/^応答がありませんでした。/)).toBeInTheDocument();
+    expect(within(office).queryByText(/記録は残っています/)).not.toBeInTheDocument();
+    expect(mocks.refreshed).toHaveBeenCalledTimes(1);
   });
 
   it('offers only the way back to a member who may not change leads', async () => {

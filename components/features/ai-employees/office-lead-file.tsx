@@ -2,6 +2,7 @@
 
 import { isImeKey } from '@/components/ui/ime';
 import { type RouterOutputs, trpc } from '@/lib/trpc/client';
+import { isRequestTimeout } from '@/lib/trpc/request-timeout';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
@@ -37,7 +38,9 @@ type Outcome =
   // undoFailed: the undo did not go through, so the record is still there and can be undone again
   | { kind: 'recorded'; contact: FileContactChoice; id: string; undoFailed?: boolean }
   | { kind: 'undone' }
-  | { kind: 'failed' };
+  | { kind: 'failed' }
+  // No answer came within the time limit (#1254): whether it was saved is not known
+  | { kind: 'unanswered' };
 
 /**
  * A customer file opened inside a room of the full-screen office (#1128): the lead, its contact
@@ -87,8 +90,10 @@ export function OfficeLeadFile({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const contacts = trpc.leadFollowUp.contacts.useQuery({ organizationId, leadId: lead.id });
-  const refresh = () => {
+  const rereadContacts = () =>
     void utils.leadFollowUp.contacts.invalidate({ organizationId, leadId: lead.id });
+  const refresh = () => {
+    rereadContacts();
     void utils.leadActivity.list.invalidate();
     void utils.leadActivity.forDeal.invalidate();
     void utils.leadActivity.myDay.invalidate({ organizationId });
@@ -99,18 +104,28 @@ export function OfficeLeadFile({
       setOutcome({ kind: 'recorded', contact: input.kind as FileContactChoice, id: saved.id });
       refresh();
     },
-    onError: () => setOutcome({ kind: 'failed' }),
+    // Without an answer the server may still have saved the record: it is not offered as
+    // "try again", and the records are read again so the file shows what is there (#1254)
+    onError: (error) => {
+      setOutcome({ kind: isRequestTimeout(error) ? 'unanswered' : 'failed' });
+      rereadContacts();
+    },
   });
   const remove = trpc.leadFollowUp.deleteContact.useMutation({
     onSuccess: () => {
       setOutcome({ kind: 'undone' });
       refresh();
     },
-    // The record is still there: keep it in hand, so the undo can be asked for again
-    onError: () =>
-      setOutcome((current) =>
-        current?.kind === 'recorded' ? { ...current, undoFailed: true } : { kind: 'failed' }
-      ),
+    // The record is still there: keep it in hand, so the undo can be asked for again. Without an
+    // answer it may be gone already: the records are read again (#1254)
+    onError: (error) => {
+      if (isRequestTimeout(error)) setOutcome({ kind: 'unanswered' });
+      else
+        setOutcome((current) =>
+          current?.kind === 'recorded' ? { ...current, undoFailed: true } : { kind: 'failed' }
+        );
+      rereadContacts();
+    },
   });
   const busy = record.isPending || remove.isPending;
   // The office closes its own way to the floor meanwhile, like the file closes Esc (#1205)
@@ -180,19 +195,21 @@ export function OfficeLeadFile({
         : t('recorded', { kind: tKinds(outcome.contact) })
       : outcome?.kind === 'undone'
         ? t('undone')
-        : outcome?.kind === 'failed'
-          ? t('failed')
-          : contacts.isError
-            ? t('readError')
-            : !contacts.data
-              ? t('reading')
-              : latest
-                ? t('latest', {
-                    date: moment(latest.contactedAt),
-                    kind: tKinds(latest.kind),
-                    total: contacts.data.total,
-                  })
-                : t('noContact');
+        : outcome?.kind === 'unanswered'
+          ? t('unanswered')
+          : outcome?.kind === 'failed'
+            ? t('failed')
+            : contacts.isError
+              ? t('readError')
+              : !contacts.data
+                ? t('reading')
+                : latest
+                  ? t('latest', {
+                      date: moment(latest.contactedAt),
+                      kind: tKinds(latest.kind),
+                      total: contacts.data.total,
+                    })
+                  : t('noContact');
   // While a request is out, the report says so: Esc and the way back do nothing until its
   // answer is there, and the president is told why (#1227)
   const report = record.isPending ? t('saving') : remove.isPending ? t('undoing') : settled;

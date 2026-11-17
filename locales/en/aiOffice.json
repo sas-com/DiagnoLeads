@@ -445,6 +445,7 @@
           "recorded": "Recorded \"{kind}\". You can undo it if it was a mistake.",
           "undone": "The record was undone.",
           "failed": "Sorry, that did not work. Please try again in a while.",
+          "unanswered": "There was no answer. Please check the contact records to see whether it was saved, and try again if it is not there.",
           "readOnly": "You do not have permission to record contacts.",
           "choices": {
             "call": "I called",
