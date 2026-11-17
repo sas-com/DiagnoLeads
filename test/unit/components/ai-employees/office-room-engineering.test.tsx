@@ -6,7 +6,7 @@
 import { OfficeImmersive } from '@/components/features/ai-employees/office-immersive';
 import { DEFAULT_AI_EMPLOYEE_PROFILE } from '@/lib/features/ai-employees/types/profile';
 import { MESSAGE_FILES, mergeMessageFiles } from '@/lib/i18n/messages';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -55,6 +55,9 @@ const mocks = vi.hoisted(() => ({
   fetches: [] as { input: unknown; options: unknown }[],
   failFetch: false,
   cancels: 0,
+  // The calls of an answer in the order they were made
+  order: [] as string[],
+  holdFetch: null as Promise<void> | null,
   rereading: false,
   prepOptions: undefined as unknown,
   draftSource: null as unknown,
@@ -94,10 +97,14 @@ vi.mock('@/lib/trpc/client', () => ({
           // A read under way is given up before the card is read for an answer
           cancel: async () => {
             mocks.cancels += 1;
+            mocks.order.push('cancel');
           },
           // Reads the card the server holds right now, and the screen's copy follows
           fetch: async (input: unknown, options: unknown) => {
             mocks.fetches.push({ input, options });
+            mocks.order.push('fetch');
+            // Held back until the test lets the read through
+            if (mocks.holdFetch) await mocks.holdFetch;
             if (mocks.failFetch) throw new Error('failed');
             if (mocks.server !== undefined) mocks.card = mocks.server;
             return {
@@ -328,6 +335,8 @@ describe('the engineering room', () => {
     mocks.fetches.length = 0;
     mocks.failFetch = false;
     mocks.cancels = 0;
+    mocks.order.length = 0;
+    mocks.holdFetch = null;
     mocks.rereading = false;
     mocks.conflictWith = undefined;
     mocks.draftSource = null;
@@ -847,7 +856,7 @@ describe('the engineering room', () => {
       expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
     });
 
-    it('does not wait for the network to come back: a save while offline fails at once (#1232)', async () => {
+    it('asks for a read and a save that do not wait for the network, the waiting read given up first (#1232)', async () => {
       const { user } = await openFile();
       expect(mocks.saveOptions.networkMode).toBe('always');
       // The card behind the file is never left paused either, and a read under way is given
@@ -856,6 +865,32 @@ describe('the engineering room', () => {
       await user.keyboard('3');
       expect(mocks.cancels).toBe(1);
       expect(mocks.fetches).toHaveLength(1);
+      // In this order: a read asked for before the waiting one is given up would join it
+      expect(mocks.order).toEqual(['cancel', 'fetch']);
+    });
+
+    it('keeps the room open while the card is read for an answer, and opens it again after (#1232)', async () => {
+      const { office } = await openFile();
+      let release: () => void = () => {};
+      mocks.holdFetch = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      fireEvent.keyDown(office, { key: '3' });
+      // The read is under way: nothing is saved yet, and the way back to the floor is closed
+      await waitFor(() =>
+        expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveAttribute(
+          'aria-disabled',
+          'true'
+        )
+      );
+      expect(mocks.saves).toHaveLength(0);
+      release();
+      await within(office).findByText(/下書きを入れて保存しました/);
+      await waitFor(() =>
+        expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).not.toHaveAttribute(
+          'aria-disabled'
+        )
+      );
     });
 
     it('starts one read and one save when the key arrives twice at once', async () => {
