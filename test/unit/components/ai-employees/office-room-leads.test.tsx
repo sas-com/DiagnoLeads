@@ -410,7 +410,7 @@ async function enterMarketing(employees: ReturnType<typeof marketer>[] = []) {
     </NextIntlClientProvider>
   );
   const view = render(ui());
-  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
   await user.click(within(office).getByRole('button', { name: /^出社する/ }));
   await user.keyboard('2');
   // Draws the office again as it is: what the mocked queries answer now is read anew
@@ -464,7 +464,7 @@ describe('the marketing room', () => {
         />
       </NextIntlClientProvider>
     );
-    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
     await user.click(within(guide).getByRole('button', { name: /マーケティング室.*集客と見込み客/ }));

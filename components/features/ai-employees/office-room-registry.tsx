@@ -6,6 +6,7 @@ import { OfficeRoomEngineering } from './office-room-engineering';
 import { OfficeRoomLeads } from './office-room-leads';
 import { OfficeRoomReception } from './office-room-reception';
 import { OfficeRoomSales } from './office-room-sales';
+import { OfficeRoomTraining } from './office-room-training';
 import type { OfficeRoom } from './office-rooms';
 
 /**
@@ -57,4 +58,6 @@ export const ROOM_VIEWS: Readonly<Record<OfficeRoom, ComponentType<OfficeRoomPro
         onFileOpenChange={onFileOpenChange}
       />
     ),
+  // Everyone's room: it is given no guide (#1191)
+  training: OfficeRoomTraining,
 };

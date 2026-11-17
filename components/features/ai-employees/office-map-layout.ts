@@ -113,6 +113,11 @@ export const TRAINING_DESKS: readonly { x: number; y: number; w: number; d: numb
   { x: 0.9, y: 14.7, w: 1.6, d: 0.8 },
 ];
 
+/** Where the camera looks in the training room (#1191): the middle desk of its front row */
+export const TRAINING_ROOM_SPOT: FloorSpot = seatOfDesk(
+  TRAINING_DESKS[1] ?? { x: 3.2, y: 12.6, w: 1.6 }
+);
+
 /** The charging pads, one per role */
 export const CHARGING_PADS: readonly { x: number; y: number; w: number; d: number }[] = [
   { x: 16.9, y: 10.4, w: 1.4, d: 1.2 },

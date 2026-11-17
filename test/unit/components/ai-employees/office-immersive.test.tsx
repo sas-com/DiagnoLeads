@@ -67,6 +67,11 @@ vi.mock('@/lib/trpc/client', () => ({
   },
 }));
 
+// The training room reads its own records: here only where it opens is tested (#1191)
+vi.mock('@/components/features/ai-employees/office-room-training', () => ({
+  OfficeRoomTraining: () => <p>研修室の中</p>,
+}));
+
 const messages = mergeMessageFiles(MESSAGE_FILES.ja);
 
 const sales = {
@@ -97,7 +102,7 @@ function renderOffice(
       />
     </NextIntlClientProvider>
   );
-  return { onExit, office: screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' }) };
+  return { onExit, office: screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' }) };
 }
 
 // WCAG 2 contrast ratio of two #rrggbb colors
@@ -181,11 +186,12 @@ describe('OfficeImmersive', () => {
     expect(
       Array.from(guide.querySelectorAll('a, button')).map((entry) => entry.textContent)
     ).toEqual([
-      '1社長のデスク今日の予定ページを開く',
+      '1社長のデスク今日の全体ページを開く',
       '2マーケティング室集客と見込み客',
       '3営業フロア商談',
       '4開発室現行調査',
       '5総務・受付総務の窓口',
+      '6研修室AI社員の育成',
     ]);
     expect(within(guide).getByRole('link', { name: /社長のデスク/ })).toHaveAttribute(
       'href',
@@ -198,6 +204,24 @@ describe('OfficeImmersive', () => {
     // A door leaves the full-screen office for its page
     await user.click(within(guide).getByRole('link', { name: /社長のデスク/ }));
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+
+  it('enters the training room with its key, its place in the floor guide and its name on the floor (#1191)', async () => {
+    const user = userEvent.setup();
+    const { office } = renderOffice();
+    await user.click(within(office).getByRole('button', { name: /^出社する/ }));
+    await user.keyboard('6');
+    expect(within(office).getByText('研修室の中')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(within(office).queryByText('研修室の中')).not.toBeInTheDocument();
+
+    const layer = office.querySelector('[data-office-labels]') as HTMLElement;
+    await user.click(within(layer).getByRole('button', { name: '研修室' }));
+    expect(within(office).getByText('研修室の中')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    const guide = within(office).getByRole('navigation', { name: 'フロア案内' });
+    await user.click(within(guide).getByRole('button', { name: /研修室/ }));
+    expect(within(office).getByText('研修室の中')).toBeInTheDocument();
   });
 
   it('opens a door with its key, like its button (#1162)', async () => {
@@ -237,10 +261,12 @@ describe('OfficeImmersive', () => {
 
     // One layer of DOM over the floor: it can step out from under the panels, the drawing cannot
     const layer = office.querySelector('[data-office-labels]') as HTMLElement;
-    expect(within(layer).getAllByRole('button')).toHaveLength(4);
+    // The four name tags, and the name of the training room, which is a door into it (#1191)
+    expect(within(layer).getAllByRole('button')).toHaveLength(5);
     const tag = within(layer).getByRole('button', { name: /AIセールス 研修中/ });
     expect(tag.style.visibility).toBe('visible');
-    const room = within(layer).getByText('研修室');
+    expect(within(layer).getByRole('button', { name: '研修室' })).toBeInTheDocument();
+    const room = within(layer).getByText('ラウンジ');
     expect(room).toHaveAttribute('aria-hidden', 'true');
     expect(room.closest('svg')).toBeNull();
     // The drawing itself carries no names any more
@@ -279,7 +305,7 @@ describe('OfficeImmersive', () => {
     // The chosen seat is vacant here: nobody to customize
     expect(groups).toEqual([
       ['話しかけるE'],
-      ['近づく+', '全体を見る-', '視点を戻す0', '3D（試験中）V'],
+      ['近づく+', '全体を見る-', '視点を戻す0', '3D 表示V'],
       ['通常の表示に戻る', '退社するEsc'],
     ]);
   });
@@ -461,7 +487,7 @@ describe('OfficeImmersive', () => {
         />
       </NextIntlClientProvider>
     );
-    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     await user.click(within(office).getByRole('button', { name: /AIセールス.*研修中.*商談にする/ }));
     await user.keyboard('e');

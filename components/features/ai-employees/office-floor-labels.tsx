@@ -106,6 +106,12 @@ export interface FloorLabelsProps {
   selected: AiEmployeeRole;
   onChoose: (role: AiEmployeeRole) => void;
   onTalk: (role: AiEmployeeRole) => void;
+  /**
+   * The rooms whose name on the floor is a door into them (the training room, #1191), and what
+   * entering one does. The other names are for the eye only
+   */
+  enterableAreas?: readonly OfficeArea[];
+  onEnterArea?: (area: OfficeArea) => void;
 }
 
 const boxOf = (rect: DOMRect, origin: { left: number; top: number }): LabelBox => ({
@@ -139,6 +145,8 @@ export const OfficeFloorLabels = forwardRef<
     selected,
     onChoose,
     onTalk,
+    enterableAreas = [],
+    onEnterArea,
     figureHeight = FIGURE_HEIGHT,
     onLayout,
     className,
@@ -148,7 +156,7 @@ export const OfficeFloorLabels = forwardRef<
   const tOffice = useTranslations('aiOffice');
   const layer = useRef<HTMLDivElement>(null);
   const tags = useRef<Partial<Record<AiEmployeeRole, HTMLButtonElement | null>>>({});
-  const labels = useRef<Partial<Record<OfficeArea, HTMLSpanElement | null>>>({});
+  const labels = useRef<Partial<Record<OfficeArea, HTMLElement | null>>>({});
   // What `place` needs and a frame must not measure: the sizes of the labels and the panels
   // (a role and a room may share a name: two lists)
   const tagSizes = useRef<Partial<Record<AiEmployeeRole, { w: number; h: number }>>>({});
@@ -284,19 +292,39 @@ export const OfficeFloorLabels = forwardRef<
       className={cn('pointer-events-none absolute inset-0 isolate overflow-hidden', className)}
     >
       {/* The room names repeat what each tag already reads out: they are for the eye only */}
-      {LABELLED_AREAS.map((area) => (
-        <span
-          key={area}
-          ref={(node) => {
-            labels.current[area] = node;
-          }}
-          aria-hidden="true"
-          style={{ visibility: 'hidden' }}
-          className="absolute top-0 left-0 rounded-full border border-[#e9cf9a]/35 bg-[rgba(10,14,24,0.72)] px-3 py-1 text-sm font-bold tracking-wider whitespace-nowrap text-[#f5f1e8]"
-        >
-          {tOffice(`rooms.${area}`)}
-        </span>
-      ))}
+      {LABELLED_AREAS.map((area) => {
+        const look =
+          'absolute top-0 left-0 rounded-full border border-[#e9cf9a]/35 bg-[rgba(10,14,24,0.72)] px-3 py-1 text-sm font-bold tracking-wider whitespace-nowrap text-[#f5f1e8]';
+        const keep = (node: HTMLElement | null) => {
+          labels.current[area] = node;
+        };
+        // A room entered from its name: a door the pointer and the keyboard reach (#1191)
+        return onEnterArea && enterableAreas.includes(area) ? (
+          <button
+            key={area}
+            ref={keep}
+            type="button"
+            onClick={() => onEnterArea(area)}
+            style={{ visibility: 'hidden' }}
+            className={cn(
+              look,
+              'pointer-events-auto border-[#e9cf9a] hover:bg-[rgba(36,44,64,0.95)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#e9cf9a]'
+            )}
+          >
+            {tOffice(`rooms.${area}`)}
+          </button>
+        ) : (
+          <span
+            key={area}
+            ref={keep}
+            aria-hidden="true"
+            style={{ visibility: 'hidden' }}
+            className={look}
+          >
+            {tOffice(`rooms.${area}`)}
+          </span>
+        );
+      })}
       {/* Who is chosen shows on the floor too, not only in the border of a name tag (#1183).
           For the eye only: the tag says it to a screen reader (aria-current) */}
       <span

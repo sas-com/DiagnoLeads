@@ -18,7 +18,10 @@ export type AiOperation =
   | 'predict-conversion'
   | 'lead-summary'
   | 'embed-search-query'
-  | 'embed-lead';
+  | 'embed-lead'
+  // A step of an AI employee's onboarding or review (#1188)
+  | 'ai-employee-onboarding'
+  | 'ai-employee-review';
 
 /** The organization a call is made for: the procedure's input.organizationId */
 export interface AiCallScope {
