@@ -295,6 +295,7 @@
             "all": "すべて"
           },
           "leadCount": "{count, number} 件",
+          "leadCountSpoken": "{count, number} 件",
           "period": "過去{days}日に登録された見込み客・{count} 件",
           "periodOnly": "過去{days}日に登録された見込み客",
           "loading": "読み込んでいます",
@@ -305,13 +306,13 @@
           "analyticsHint": "期間の切り替えと細かい内訳は、通常の表示の分析で見ます。",
           "sources": {
             "board": "流入元ボード",
-            "caption": "流入元ごとの見込み客・SQL・受注・獲得費用（過去{days}日に登録された見込み客）",
+            "caption": "流入元ごとの見込み客・SQL・成約・獲得費用（過去{days}日に登録された見込み客）",
             "columns": {
               "source": "流入元",
               "leads": "見込み客",
               "share": "割合",
               "sql": "SQL",
-              "won": "受注",
+              "won": "成約",
               "cost": "獲得費用",
               "wonAmount": "受注額",
               "roi": "ROI"
@@ -388,7 +389,7 @@
             "agencies": {
               "title": "代行会社",
               "empty": "過去{days}日に、代行会社名を記録した見込み客はいません。",
-              "caption": "代行会社ごとの見込み客・SQL・受注・獲得費用（過去{days}日に登録された見込み客）",
+              "caption": "代行会社ごとの見込み客・SQL・成約・獲得費用（過去{days}日に登録された見込み客）",
               "columns": {
                 "agency": "代行会社",
                 "sqlRate": "SQL 率"
