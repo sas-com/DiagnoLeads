@@ -44,6 +44,7 @@ import {
   dealActionOfKey,
   dealActionOpen,
   dueShortcuts,
+  missingHandoffFacts,
   stageAfter,
   stageBefore,
 } from './rooms/deals-board';
@@ -173,7 +174,10 @@ export function OfficeDealFile({
   const [missing, setMissing] = useState(false);
 
   // A move reads the deals, the leads and the activity again, as in the normal view
-  const { update } = useDealMutations({ toastErrors: false });
+  // Nothing the file saves is left waiting while the browser is offline (#1251): the ways out are
+  // closed while it saves, so a change that waits for the connection would shut the president in.
+  // It fails instead (after the one retry every change gets), and the file says so
+  const { update } = useDealMutations({ toastErrors: false, failOffline: true });
   // The next actions: the same queries the lead's card refreshes (lead-next-actions-card.tsx)
   // Waited for, like a move: the answer counts as saved once the board was read again, so the
   // next action that comes up is the one the president sees before a key marks it
@@ -183,8 +187,12 @@ export function OfficeDealFile({
       utils.leadFollowUp.dueTasks.invalidate({ organizationId }),
       utils.deals.board.invalidate({ organizationId }),
     ]);
-  const markTask = trpc.leadFollowUp.updateTask.useMutation({ onSuccess: () => refreshTasks() });
+  const markTask = trpc.leadFollowUp.updateTask.useMutation({
+    onSuccess: () => refreshTasks(),
+    networkMode: 'always',
+  });
   const addTask = trpc.leadFollowUp.createTask.useMutation({
+    networkMode: 'always',
     onSuccess: (_saved, input) => {
       setOutcome({ kind: 'added', title: input.title, dueOn: input.dueOn });
       // The next action just set is not marked by the next key
@@ -204,8 +212,14 @@ export function OfficeDealFile({
     void utils.leadActivity.myDay.invalidate({ organizationId });
     void utils.analytics.getDashboard.invalidate();
   };
-  const recordContact = trpc.leadFollowUp.recordContact.useMutation({ onSuccess: refreshContacts });
-  const removeContact = trpc.leadFollowUp.deleteContact.useMutation({ onSuccess: refreshContacts });
+  const recordContact = trpc.leadFollowUp.recordContact.useMutation({
+    onSuccess: refreshContacts,
+    networkMode: 'always',
+  });
+  const removeContact = trpc.leadFollowUp.deleteContact.useMutation({
+    onSuccess: refreshContacts,
+    networkMode: 'always',
+  });
   const [contactNote, setContactNote] = useState('');
 
   const busy =
@@ -497,6 +511,8 @@ export function OfficeDealFile({
     if (busy) event.preventDefault();
     else onLeaveOffice();
   };
+  // The facts of the deal that are still empty, by the names the deal's page gives them
+  const missingFacts = missingHandoffFacts(deal).map((fact) => tDeals(`fields.${fact}`));
   const dealHref = `/${locale}/deals/${deal.id}`;
   const none = t('notSet');
 
@@ -539,6 +555,13 @@ export function OfficeDealFile({
             )}
             {/* Said before the move, whichever question it is: what goes out is not taken back */}
             <p className="text-sm leading-relaxed">{t('handoff.warning')}</p>
+            {/* What the technical team will look for on the sheet and not find: told, not asked
+                for. The move goes on all the same */}
+            {missingFacts.length > 0 && (
+              <p className="text-sm leading-relaxed text-[#fcd34d]">
+                {t('handoff.missing', { fields: missingFacts.join('・') })}
+              </p>
+            )}
             <button
               type="button"
               onClick={leaveQualification}
