@@ -480,7 +480,7 @@
           "more": "There are {count} more. Please check them on Today in the normal view.",
           "done": "Marked as done. You can undo it if it was a mistake.",
           "undone": "It is no longer marked as done.",
-          "failed": "Sorry, that did not work. Please check that you are online and try again.",
+          "failed": "Sorry, that did not work. Please check your connection and try again.",
           "finished": "That is all. Marked as done: {done}. Left: {left}.",
           "readOnly": "You do not have permission to mark next actions as done.",
           "choices": {
@@ -506,7 +506,7 @@
           "allSeen": "You have seen them all.",
           "openLead": "Open the lead in the normal view",
           "openToday": "Open Today in the normal view",
-          "undoFailed": "It could not be undone and is still marked as done. Please check that you are online and try again.",
+          "undoFailed": "It could not be undone and is still marked as done. Please check your connection and try again.",
           "reportNext": "Here is number {index} of {total}."
         },
         "deals": {
@@ -714,7 +714,7 @@
               "back": "Give up and go back to the shelf",
               "done": "The invitation to {email} was revoked.",
               "gone": "That invitation was already revoked, or the person has joined. The list was read again.",
-              "failed": "Sorry, it could not be revoked. Please check that you are online and try again."
+              "failed": "Sorry, it could not be revoked. Please check your connection and try again."
             },
             "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles."
           },
