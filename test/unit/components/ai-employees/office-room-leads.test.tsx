@@ -582,17 +582,19 @@ describe('the marketing room', () => {
     const campaigns = within(office).getByRole('region', { name: '施策ボード' });
     expect(within(campaigns).getByRole('columnheader', { name: '成約' })).toBeInTheDocument();
     expect(within(campaigns).queryByRole('columnheader', { name: '受注' })).not.toBeInTheDocument();
-    // The last stage of the progress board keeps the funnel's name
+    // The last stage of the progress board counts prospects too: 成約, like the analytics funnel
+    // (decision 2026-11-16-office-terms, row 22)
     await user.keyboard('2');
     const progress = within(office).getByRole('region', { name: '進み具合ボード' });
-    expect(within(progress).getByRole('row', { name: /^受注/ })).toBeInTheDocument();
+    expect(within(progress).getByRole('row', { name: /^成約/ })).toBeInTheDocument();
+    expect(within(progress).queryByRole('row', { name: /^受注/ })).not.toBeInTheDocument();
   });
 
   it('says on the source board how its SQL differs from the progress board (#1246)', async () => {
     const { office } = await enterMarketing();
     expect(
       within(within(office).getByRole('region', { name: '流入元ボード' })).getByText(
-        'この表の SQL は、SQL と判定された見込み客の数です。進み具合ボードの SQL は、受注した見込み客も数えるので、数が合わないことがあります。'
+        'この表の SQL は、SQL と判定された見込み客の数です。進み具合ボードの SQL は、成約した見込み客も数えるので、数が合わないことがあります。'
       )
     ).toBeInTheDocument();
   });
