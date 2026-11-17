@@ -54,8 +54,13 @@
       "Edit(/.claude/hooks/**)",
       "Edit(/.claude/agents/**)",
       "Bash(gh pr merge *)",
+      "Bash(gh api *pulls/*/merge*)",
+      "Bash(gh api *mergePullRequest*)",
+      "Bash(gh api *enablePullRequestAutoMerge*)",
       "mcp__github__merge_pull_request",
-      "mcp__github__enable_pr_auto_merge"
+      "mcp__github__enable_pr_auto_merge",
+      "mcp__*__merge_pull_request",
+      "mcp__*__enable_pr_auto_merge"
     ],
     "deny": [
       "Read(./.env)",
