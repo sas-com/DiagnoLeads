@@ -15,7 +15,7 @@ import { useCurrentOrganization, useOrganization } from '@/hooks/use-organizatio
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 import { AreaChart, ChartLegend, DonutChart } from '@/components/charts';
 import { TeamReview, teamReviewDays } from '@/components/dashboard/team-review';
@@ -33,6 +33,7 @@ import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from '@/lib/features/leads/typ
 import { AgencyContractReportCard } from './_components/agency-contract-report-card';
 import { DeliveryReportCards } from './_components/delivery-report-cards';
 import { AcquisitionCostCard, AgencyPerformanceCard } from './_components/source-cost-cards';
+import { useAnalyticsPageQuery } from './_components/use-analytics-page-query';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -123,8 +124,18 @@ function isValidUUID(str: string): boolean {
 /**
  * Analytics Dashboard Page
  * Tailwind v4 compatible UI
+ * The tab and the period live in the URL (#1216). useSearchParams needs a Suspense boundary in
+ * the App Router.
  */
 export default function AnalyticsPage() {
+  return (
+    <Suspense fallback={<ChartSkeleton />}>
+      <AnalyticsPageContent />
+    </Suspense>
+  );
+}
+
+function AnalyticsPageContent() {
   const t = useTranslations('settings.analytics');
   const tStatus = useTranslations('status');
   const tCommon = useTranslations('common');
@@ -137,7 +148,7 @@ export default function AnalyticsPage() {
   // Only use organization ID if it's a valid UUID
   const hasValidOrgId = Boolean(contextOrgId && isValidUUID(contextOrgId));
   const organizationId = hasValidOrgId && contextOrgId ? contextOrgId : '';
-  const [dateRange, setDateRange] = useState<DateRange>('30d');
+  const { tab, range: dateRange, setTab, setRange: setDateRange } = useAnalyticsPageQuery();
   const [granularity, setGranularity] = useState<TrendGranularity>('daily');
 
   // Fetch analytics data
@@ -437,7 +448,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview">
+      <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full lg:w-auto">
           <TabsTrigger value="overview" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />

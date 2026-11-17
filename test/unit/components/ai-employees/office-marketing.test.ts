@@ -7,6 +7,7 @@ import {
   MARKETING_RANGE_DAYS,
   UNSET_SOURCE,
   LEAD_COUNT_VIEWS,
+  boardAnalyticsHref,
   figureState,
   isLeadBoardView,
   isLeadCountView,
@@ -26,6 +27,7 @@ import {
 } from '@/components/features/ai-employees/office-marketing';
 import { LEAD_BOARD_VIEWS } from '@/components/features/ai-employees/office-rooms';
 import { UNSET_INFLOW_SOURCE } from '@/lib/features/analytics/lead-sources';
+import { parseAnalyticsPageQuery } from '@/lib/features/analytics/page-query';
 import { analyticsPeriodStart } from '@/lib/features/analytics/period';
 import { jstDayStart } from '@/lib/features/leads/api/list-sql';
 import { INFLOW_SOURCES } from '@/lib/features/leads/types/pipeline';
@@ -378,6 +380,34 @@ describe('the totals on the choices of the lead board (#1246)', () => {
     expect(consultation.createdFromDay).toBeUndefined();
     for (const view of LEAD_COUNT_VIEWS) {
       expect(listLeadsSchema.safeParse(leadCountInput(view, ORG_ID, now)).success).toBe(true);
+    }
+  });
+});
+
+describe('the links of the boards to the analytics page (#1216)', () => {
+  const opened = (href: string) => {
+    const [path, search] = href.split('?');
+    return { path, ...parseAnalyticsPageQuery(new URLSearchParams(search)) };
+  };
+
+  it('opens the tab that shows the figures of the board, over the period of the room', () => {
+    expect(opened(boardAnalyticsHref('sources'))).toEqual({
+      path: '/analytics',
+      tab: 'sources',
+      range: MARKETING_RANGE,
+    });
+    expect(opened(boardAnalyticsHref('funnel'))).toEqual({
+      path: '/analytics',
+      tab: 'funnel',
+      range: MARKETING_RANGE,
+    });
+    // The agencies' table is on the sources tab
+    expect(opened(boardAnalyticsHref('campaigns')).tab).toBe('sources');
+  });
+
+  it('names the period in the address, so the link does not depend on where the page starts', () => {
+    for (const board of MARKETING_FIGURE_BOARDS) {
+      expect(boardAnalyticsHref(board)).toContain(`range=${MARKETING_RANGE}`);
     }
   });
 });

@@ -307,7 +307,13 @@ describe.skipIf(!url)('AI employees: the training room (PostgreSQL)', () => {
     const logged = await pg
       .select({ metadata: auditLogs.metadata })
       .from(auditLogs)
-      .where(and(eq(auditLogs.organizationId, orgA), eq(auditLogs.resourceId, marketer)));
+      .where(
+        and(
+          eq(auditLogs.organizationId, orgA),
+          eq(auditLogs.resource, 'ai_employee'),
+          eq(auditLogs.resourceId, marketer)
+        )
+      );
     expect(logged.map((row) => row.metadata?.event).sort()).toEqual([
       'onboarding_approved',
       'policy_changed',

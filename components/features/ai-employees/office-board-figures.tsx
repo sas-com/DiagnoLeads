@@ -16,8 +16,10 @@ import { FOCUS, KEY } from './office-hud';
 import {
   type FigureState,
   MARKETING_RANGE_DAYS,
+  type MarketingFigureBoard,
   type QrCampaignRow,
   UNSET_SOURCE,
+  boardAnalyticsHref,
   openableSource,
   progressRows,
   showsDealReturns,
@@ -142,14 +144,14 @@ function FigureBoard({
 }
 
 /** The summary of a board of the period: the period, and how many prospects once they are read */
-function usePeriodSummary(state: FigureState, count: number) {
+function usePeriodSummary(board: MarketingFigureBoard, state: FigureState, count: number) {
   const t = useTranslations('aiOffice.immersive.room.marketing');
   const days = MARKETING_RANGE_DAYS;
   return {
     summary: state === 'ready' ? t('period', { days, count }) : t('periodOnly', { days }),
     emptyText: state === 'ready' && count === 0 ? t('empty', { days }) : undefined,
     hint: t('analyticsHint'),
-    links: [{ href: '/analytics', label: t('openAnalytics') }],
+    links: [{ href: boardAnalyticsHref(board), label: t('openAnalytics') }],
   };
 }
 
@@ -228,7 +230,7 @@ export function OfficeBoardSources({
   const tSources = useTranslations('aiOffice.immersive.room.marketing.sources');
   const boardRef = useRef<HTMLElement | null>(null);
   const openHintId = useId();
-  const frame = usePeriodSummary(state, cost?.leadCount ?? 0);
+  const frame = usePeriodSummary('sources', state, cost?.leadCount ?? 0);
   const tInflow = useTranslations('pipeline.inflowSource');
   const format = useFormatter();
   const rows = cost ? sourceRows(cost) : [];
@@ -406,7 +408,7 @@ export function OfficeBoardProgress({
   onLeave: () => void;
 }) {
   const tFunnel = useTranslations('aiOffice.immersive.room.marketing.funnel');
-  const frame = usePeriodSummary(state, funnel?.totalLeads ?? 0);
+  const frame = usePeriodSummary('funnel', state, funnel?.totalLeads ?? 0);
   const format = useFormatter();
   const rows = funnel ? progressRows(funnel) : [];
   const percent = (value: number) => tFunnel('percent', { value });
@@ -620,7 +622,7 @@ export function OfficeBoardCampaigns({
       hint={tBoard('hint')}
       links={[
         { href: '/settings/qr-campaigns', label: tBoard('openQr') },
-        { href: '/analytics', label: t('openAnalytics') },
+        { href: boardAnalyticsHref('campaigns'), label: t('openAnalytics') },
       ]}
       onLeave={onLeave}
       notes={
