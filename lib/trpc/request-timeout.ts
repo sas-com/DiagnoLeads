@@ -54,12 +54,18 @@ export function fetchWithTimeout(
     const outer = init?.signal;
     if (outer?.aborted) controller.abort(outer.reason);
     else outer?.addEventListener('abort', () => controller.abort(outer.reason), { once: true });
-    const timer = setTimeout(() => controller.abort(new RequestTimeoutError(timeoutMs)), timeoutMs);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new RequestTimeoutError(timeoutMs));
+    }, timeoutMs);
     // A cancelled request has no use for the timer any more
     controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
     return fetchImpl(input, { ...init, signal: controller.signal }).catch((error: unknown) => {
       clearTimeout(timer);
-      throw error;
+      // Not every browser fails the request with the reason it was ended for (an older one
+      // fails with its own AbortError): the limit is named here, so it is always told apart
+      throw timedOut && !isRequestTimeout(error) ? new RequestTimeoutError(timeoutMs) : error;
     });
   };
 }

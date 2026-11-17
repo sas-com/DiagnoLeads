@@ -160,6 +160,27 @@ describe('fetchWithTimeout', () => {
       fetchWithTimeout(1000, fetchImpl)('http://example.invalid', { signal: outer.signal })
     ).rejects.toThrow('cancelled before');
   });
+
+  it('names the limit also where the request fails without the reason it was ended for', async () => {
+    // An older browser: the request fails with its own AbortError, whatever the reason given
+    const fetchImpl = (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('The operation was aborted.', 'AbortError'))
+        );
+      });
+    const error = await fetchWithTimeout(30, fetchImpl)('http://example.invalid').catch(
+      (caught: unknown) => caught
+    );
+    expect(error).toBeInstanceOf(RequestTimeoutError);
+    // ...and a caller's own cancel stays what it is
+    const outer = new AbortController();
+    const cancelled = fetchWithTimeout(60_000, fetchImpl)('http://example.invalid', {
+      signal: outer.signal,
+    }).catch((caught: unknown) => caught);
+    outer.abort();
+    expect(isRequestTimeout(await cancelled)).toBe(false);
+  });
 });
 
 describe('isRequestTimeout', () => {
