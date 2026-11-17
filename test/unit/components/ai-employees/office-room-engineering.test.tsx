@@ -54,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   server: undefined as unknown,
   fetches: [] as { input: unknown; options: unknown }[],
   failFetch: false,
+  cancels: 0,
   rereading: false,
   prepOptions: undefined as unknown,
   draftSource: null as unknown,
@@ -90,6 +91,10 @@ vi.mock('@/lib/trpc/client', () => ({
       leadPrep: {
         get: {
           invalidate: mocks.refreshed,
+          // A read under way is given up before the card is read for an answer
+          cancel: async () => {
+            mocks.cancels += 1;
+          },
           // Reads the card the server holds right now, and the screen's copy follows
           fetch: async (input: unknown, options: unknown) => {
             mocks.fetches.push({ input, options });
@@ -322,6 +327,7 @@ describe('the engineering room', () => {
     mocks.server = undefined;
     mocks.fetches.length = 0;
     mocks.failFetch = false;
+    mocks.cancels = 0;
     mocks.rereading = false;
     mocks.conflictWith = undefined;
     mocks.draftSource = null;
@@ -628,7 +634,7 @@ describe('the engineering room', () => {
 
     it('reads the card anew when the file opens, whatever the app keeps (#1221)', async () => {
       await openFile();
-      expect(mocks.prepOptions).toEqual({ staleTime: 0 });
+      expect(mocks.prepOptions).toEqual({ staleTime: 0, networkMode: 'always' });
     });
 
     it('does not undo over a card somebody changed after the draft, though the screen never read it again (#1221)', async () => {
@@ -842,8 +848,14 @@ describe('the engineering room', () => {
     });
 
     it('does not wait for the network to come back: a save while offline fails at once (#1232)', async () => {
-      await openFile();
+      const { user } = await openFile();
       expect(mocks.saveOptions.networkMode).toBe('always');
+      // The card behind the file is never left paused either, and a read under way is given
+      // up before an answer reads the card (the library's behaviour is in prep-card-read.test.ts)
+      expect(mocks.prepOptions).toEqual({ staleTime: 0, networkMode: 'always' });
+      await user.keyboard('3');
+      expect(mocks.cancels).toBe(1);
+      expect(mocks.fetches).toHaveLength(1);
     });
 
     it('starts one read and one save when the key arrives twice at once', async () => {

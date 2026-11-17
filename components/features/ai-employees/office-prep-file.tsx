@@ -106,7 +106,10 @@ export function OfficePrepFile({
   );
   // Always read when the file opens (the app's default keeps an answer for five minutes): the
   // card the file shows, and starts from, is not one somebody else has changed since (#1221)
-  const prep = trpc.leadPrep.get.useQuery(scope, { staleTime: 0 });
+  // networkMode: never left paused while the browser says it is offline (#1232). A paused read
+  // would not show as "fetching", so the answers stay open, and the read an answer then asks for
+  // would join the paused one and wait with it, however it is asked for
+  const prep = trpc.leadPrep.get.useQuery(scope, { staleTime: 0, networkMode: 'always' });
 
   const company = deal.company || tLeads('noCompany');
   const summary = hearing.data?.summary;
@@ -160,9 +163,14 @@ export function OfficePrepFile({
    * and the save is not written over either: the server refuses, and the file says so.
    */
   // Not tried again: while it runs, Esc and the way back are closed
-  // ...and not left waiting while offline either (networkMode, like the save)
-  const readNow = () =>
-    utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false, networkMode: 'always' });
+  // ...and not left waiting while offline either (networkMode, like the save). A read of the
+  // same card that is still under way is given up first: a new read joins one that is under way
+  // instead of starting, and then waits as long as that one does (the options given here would
+  // not even be looked at)
+  const readNow = async () => {
+    await utils.leadPrep.get.cancel(scope);
+    return utils.leadPrep.get.fetch(scope, { staleTime: 0, retry: false, networkMode: 'always' });
+  };
   // The file can be left while the card is read (a link at the foot): then nothing is saved
   const shown = useRef(true);
   useEffect(() => {
