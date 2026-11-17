@@ -15,9 +15,10 @@ paths: [".claude/hooks/lib/protect.ts", ".claude/hooks/lib/guard.ts", ".claude/h
 - **決定**（オーナーの指示「#1209 を進めてください」）:
   - 次の2つは、止めずに**毎回オーナーに確認を出す**（ask）。正しい手順（Issue に基づく設定の変更・オーナーが頼んだマージ）は、確認に答えれば進む
     - Claude の守りの変更：`.claude/settings.json`・`.claude/settings.local.json`・`.claude/hooks/**`・`.claude/agents/**`。このチェックアウト・兄弟の worktree・ホームのどこにあっても同じ
-    - PR のマージ：`gh pr merge`、`gh api` での PUT `pulls/N/merge` と GraphQL の `mergePullRequest`・`enablePullRequestAutoMerge`、GitHub MCP の `merge_pull_request`・`enable_pr_auto_merge`
+    - PR のマージ：`gh pr merge`、`gh api` での PUT `pulls/N/merge` と GraphQL の `mergePullRequest`・`enablePullRequestAutoMerge`・`enqueuePullRequest`、GitHub MCP の `merge_pull_request`・`enable_pr_auto_merge`
+    - auto-merge を有効にする REST の経路：PUT `pulls/N/ccr/auto_merge`（クラウドのセッションでは gh の GraphQL が使えず、代わりに案内される経路。#1293 のレビューで、フックにも規則にも当たらないと分かった）。無効にする DELETE は見ない
   - 2層で掛ける。フック（`.claude/hooks/lib/protect.ts`。`guard.ts` から呼ぶ）と、権限の `ask`（`.claude/settings.json`）。決定 `2026-10-24-claude-harness-guards` の「権限は、フックが動かないときの備えも兼ねる」と同じ考え方
-  - 権限の `ask` には、`gh api` 経由のマージ（`Bash(gh api *pulls/*/merge*)`・`*mergePullRequest*`・`*enablePullRequestAutoMerge*`）と、サーバー名によらない MCP のマージの道具（`mcp__*__merge_pull_request`・`mcp__*__enable_pr_auto_merge`）も入れる（#1293。#1233 のレビューで残した2点）。`gh api` の規則は、マージの状態を読むだけの GET `pulls/N/merge` にも当たる（フックは PUT だけを見る）
+  - 権限の `ask` には、`gh api` 経由のマージ（`Bash(gh api *pulls/*/merge*)`・`*pulls/*/auto_merge*`・`*mergePullRequest*`・`*enablePullRequestAutoMerge*`・`*enqueuePullRequest*`）と、サーバー名によらない MCP のマージの道具（`mcp__*__merge_pull_request`・`mcp__*__enable_pr_auto_merge`）も入れる（#1293。#1233 のレビューで残した2点）。`gh api` の規則は、マージの状態を読むだけの GET `pulls/N/merge` にも当たる（フックは PUT だけを見る）
   - **拒否は確認に勝つ**。確認になる呼び出しも最後まで調べ、秘密情報や `.env*` の読み取りがあれば拒否する（守りのファイルに秘密の値を書く、確認になるコマンドのあとに `cat .env.local` を続ける、など）。`evaluateToolCall` と `checkBashCommand` は、これまで最初の指摘を返して終わっていた（`2026-10-24-claude-harness-guards` からの変更点。node_modules の確認にも同じ順番が効く）
   - `bash -c '…'`（`-lc` の形、`timeout`・`env` のあとの形を含む）の中身は、1つのコマンドの行として調べ直す（`.env*` の規則にも効く）。入れ子が5段を超えたら、調べ切らずに確認にする
   - 確認の文は、答える利用者に宛てて書く（「自分が頼んだ覚えがなければ拒否してください」）。答える人がいないときは拒否になり、同じ文を Claude が読むので、「拒否されたら別の形で同じ操作をしない」も入れる。コマンドに書かれたパスは、1行に切り、括弧と改行を落として出す（`security-specialist` のレビュー）
@@ -35,13 +36,16 @@ paths: [".claude/hooks/lib/protect.ts", ".claude/hooks/lib/guard.ts", ".claude/h
   - https://code.claude.com/docs/en/hooks ：PreToolUse の `permissionDecision` は `allow`・`deny`・`ask`・`defer`。`ask` は利用者に確認を出す
   - https://code.claude.com/docs/en/permission-modes ：`.claude` は既定で守られたパスだが、`bypassPermissions` では書き込みが通り、`auto` では分類器が決める。明示した ask の規則は、どのモードでも自動では通らない（要約経由の引用。実測していない）
   - https://code.claude.com/docs/en/settings ：クラウドのセッションは、リポジトリ1つでプロジェクトのスレッドの外なら、コミットした `.claude/settings.json` を読む。`.claude/settings.local.json` は読まない
-- **確かめたこと**（#1293。2026-11-17、Claude Code 2.1.325。フックの無い空のプロジェクトに `ask` の規則だけを置き、`claude -p` で実行した。`-p` では、確認になる呼び出しは答える人がいないので拒まれる）:
+- **確かめたこと**（#1293。2026-11-17、Claude Code 2.1.325。フックの無い空のプロジェクトに `ask` の規則だけを置き、`claude -p` で実行した。権限モードは既定で、`--allowedTools` に `Bash(gh api *)` と試験用の MCP の道具を渡した。`-p` では、確認になる呼び出しは答える人がいないので拒まれる）:
   - `gh api repos/o/r/pulls/1/merge --help` と `gh api graphql --help -f query=mergePullRequest` は拒まれ、`gh api repos/o/r/pulls/1 --help` は実行できた（Bash の規則は `*` を途中に複数書けて、スラッシュをまたいで当たる）
+  - `gh api -X PUT repos/o/r/pulls/1/ccr/auto_merge --help`、`gh api graphql --help -f query=enablePullRequestAutoMerge`、同じく `enqueuePullRequest` は拒まれた。コメントを送る形（`gh api repos/o/r/issues/1/comments --help -f body=hello`）と、パイプの先に `merge` の文字がある形（`gh api repos/o/r/pulls/1/files --help | grep lib/merge`）は実行できた
   - 名前が `gittest` の試験用の MCP サーバーで、`merge_pull_request` と `enable_pr_auto_merge` は拒まれ、`get_thing` は実行できた（`ask` の規則は、サーバー名の位置に `*` を書ける）
   - 公式（https://code.claude.com/docs/en/permissions の Wildcard patterns と Tool name wildcards）：Bash の `*` は規則のどこにでも書ける。deny と ask の規則は、道具名の位置に glob を書ける（allow は、サーバー名を決めた `mcp__<server>__` のあとだけ）。サーバー名の位置に `*` を書く例は公式に無く、上の実測で確かめた。`_` か `*` を含む道具名は、起動時の書き間違いの警告が出ない
 - **既知の限界**:
   - 文字列の解析なので、意図して抜けようとする相手は防げない。ファイルに置いたスクリプトの実行（`bun scripts/x.ts` が守りのファイルを書く）、`cd .claude && rm hooks/x` のような相対の形、変数や `$( )` で組み立てたパスと `gh` の引数、`curl` で GitHub の API を直接呼ぶマージは見えない
   - ブランチの切り替えと取り込み（`git checkout <branch>`・`git pull`・`git merge`・`git stash pop`・`git reset --hard`・`git restore .`・`git apply`）は、守りのファイルを丸ごと入れ替えるが、見ない。普段の作業で毎回使うため
+  - リポジトリの設定は `allow_auto_merge: false`（2026-11-17）。auto-merge を有効にする要求は、今は GitHub の側で通らない見込み。true にするなら、その前にこの確認が効いていることを確かめる
+  - GraphQL のミューテーションをファイルに置く形（`gh api graphql -F query=@file.graphql`）は、フックにも規則にも見えない
   - `bash <<'EOF'` の本文に書いたマージ、パスを組み立てるスクリプト（`path.join('.claude', 'settings.json')`）は見えない
   - 確認は最初の1件の理由だけを出す（マージと守りの変更が1つのコマンドにあるとき）。権限の確認にはコマンドの全文が出る
   - フックの確認（`permissionDecision: ask`）が `bypassPermissions` で確認になるかは、公式に記載が無い。そのモードで確実なのは権限の `ask` の規則だけで、規則は兄弟の worktree と `sh -c`・`env` の形を覆わない
