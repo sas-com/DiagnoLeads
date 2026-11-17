@@ -281,7 +281,7 @@ async function enterRoom(deskStatus: 'vacant' | 'idle' | 'training' = 'vacant') 
       />
     </NextIntlClientProvider>
   );
-  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
   await user.click(within(office).getByRole('button', { name: /^出社する/ }));
   await user.keyboard('4');
   const board = within(office).getByRole('region', { name: '現行調査ボード' });

@@ -189,7 +189,7 @@ async function enterOffice(employees: (typeof sales)[] = [sales]) {
       />
     </NextIntlClientProvider>
   );
-  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+  const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
   await user.click(within(office).getByRole('button', { name: /^出社する/ }));
   const staff = within(office).getByRole('heading', { name: '社員名簿' }).parentElement as HTMLElement;
   await user.click(within(staff).getByRole('button', { name: /AIセールス/ }));
@@ -451,7 +451,7 @@ describe('the switch to the 3D floor', () => {
       </NextIntlClientProvider>
     );
     const view = render(office3d([sales]));
-    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（全画面）' });
+    const office = screen.getByRole('dialog', { name: 'AI社員オフィス（出社の画面）' });
     await user.click(within(office).getByRole('button', { name: /^出社する/ }));
     await user.keyboard('v');
     await screen.findByTestId('floor-3d');
