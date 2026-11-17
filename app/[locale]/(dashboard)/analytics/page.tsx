@@ -129,7 +129,6 @@ export default function AnalyticsPage() {
   const tStatus = useTranslations('status');
   const tCommon = useTranslations('common');
   const tInflowSource = useTranslations('pipeline.inflowSource');
-  const tLeads = useTranslations('leads');
   const tMqlLevel = useTranslations('leadList.mqlLevelOptions');
   const locale = useLocale();
   const format = useFormatter();
@@ -173,9 +172,10 @@ export default function AnalyticsPage() {
     dateRange
   );
 
-  // 流入元 values ('lp_organic', ...) shown with their labels; 'unset' as 未設定
+  // 流入元 values ('lp_organic', ...) shown with their labels; 'unset' as 流入元の記録なし, the
+  // same row as in the marketing room (decision 2026-11-16-office-terms)
   const sourceLabel = (source: string) => {
-    if (source === UNSET_INFLOW_SOURCE) return tLeads('notSet');
+    if (source === UNSET_INFLOW_SOURCE) return t('unsetSource');
     return tInflowSource.has(source) ? tInflowSource(source) : source;
   };
   const labeledSources = sourceBreakdown?.map((item) => ({

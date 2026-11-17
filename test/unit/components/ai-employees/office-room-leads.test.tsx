@@ -641,7 +641,7 @@ describe('the marketing room', () => {
     expect(cells('MQL（関心あり）')).toEqual(['8', '40%', '40%']);
     expect(cells('商談')).toEqual(['3', '15%', '38%']);
     expect(cells('SQL（適格）')).toEqual(['2', '10%', '67%']);
-    expect(cells('受注')).toEqual(['1', '5%', '50%']);
+    expect(cells('成約')).toEqual(['1', '5%', '50%']);
     expect(
       within(board).getByText('再育成（ナーチャリング）中の見込み客は 2 件です（段には数えません）。')
     ).toBeInTheDocument();
@@ -1001,7 +1001,7 @@ describe('the prospects of a source, opened from its row (#1202)', () => {
   it('goes back one step at a time with Esc: the source board, the focus on its row, then the floor', async () => {
     const { user, office } = await openSeminars();
     // While the prospects of a source are on the wall, Esc belongs to the room
-    expect(within(office).getByRole('button', { name: 'フロアへ戻る' })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: 'フロアに戻る' })).toBeInTheDocument();
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
     expect(
@@ -1229,7 +1229,7 @@ describe('the customer file in the room', () => {
     // The focus is on the report: Enter pressed once too often records nothing
     expect(document.activeElement?.textContent).toContain('まだ連絡の記録がありません');
     // Esc now closes the file, so only the file shows the key; the way to the floor is a button
-    expect(within(office).getByRole('button', { name: 'フロアへ戻る' })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: 'フロアに戻る' })).toBeInTheDocument();
     expect(within(office).getByRole('button', { name: /Esc.*ボードに戻る/ })).toBeInTheDocument();
   });
 
@@ -1333,7 +1333,7 @@ describe('the customer file in the room', () => {
       within(office).getByText('記録しています。終わるまでファイルは閉じません。')
     ).toBeInTheDocument();
     // The office's own way to the floor is closed too: leaving the room would hide the answer
-    const floor = within(office).getByRole('button', { name: 'フロアへ戻る' });
+    const floor = within(office).getByRole('button', { name: 'フロアに戻る' });
     expect(floor).toHaveAttribute('aria-disabled', 'true');
     await user.click(floor);
     expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
@@ -1347,7 +1347,7 @@ describe('the customer file in the room', () => {
   it('opens the ways out again once the record is saved (#1246)', async () => {
     mocks.saving = true;
     const { user, office, redraw } = await openFile();
-    expect(within(office).getByRole('button', { name: 'フロアへ戻る' })).toHaveAttribute(
+    expect(within(office).getByRole('button', { name: 'フロアに戻る' })).toHaveAttribute(
       'aria-disabled',
       'true'
     );
@@ -1357,7 +1357,7 @@ describe('the customer file in the room', () => {
     expect(
       within(office).queryByText('記録しています。終わるまでファイルは閉じません。')
     ).not.toBeInTheDocument();
-    const floor = within(office).getByRole('button', { name: 'フロアへ戻る' });
+    const floor = within(office).getByRole('button', { name: 'フロアに戻る' });
     expect(floor).not.toHaveAttribute('aria-disabled');
     expect(within(office).getByRole('button', { name: /ボードに戻る/ })).not.toHaveAttribute(
       'aria-disabled'

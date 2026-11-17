@@ -2665,6 +2665,7 @@
         "mqlLevels": "Leads by MQL level",
         "mqlLevelsDescription": "Leads of all time. A lead with an MQL date (also one set by hand) counts as interested. Click a level to open the list"
       },
+      "unsetSource": "No source recorded",
       "funnel": {
         "total": "Total",
         "conversionRate": "Conversion Rate",

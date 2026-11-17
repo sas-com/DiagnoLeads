@@ -333,7 +333,7 @@ describe('OfficeImmersive', () => {
     const choices = within(office).getByRole('heading', { name: '社長（あなた）' })
       .parentElement as HTMLElement;
     expect(within(choices).getAllByRole('button')).toHaveLength(1);
-    const back = within(choices).getByRole('button', { name: /オフィスに戻る/ });
+    const back = within(choices).getByRole('button', { name: /フロアに戻る/ });
     expect(back).toHaveFocus();
     await user.keyboard('1');
     expect(within(office).getByRole('heading', { name: '社員名簿' })).toBeInTheDocument();
@@ -398,7 +398,7 @@ describe('OfficeImmersive', () => {
     expect(within(office).getByText('承知しました、社長。AIセールスはしばらく休みます。')).toBeInTheDocument();
     // The first choice does not turn into the opposite order
     expect(within(office).queryByRole('button', { name: /戻ってきて/ })).not.toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /オフィスに戻る/ })).toHaveFocus();
+    expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toHaveFocus();
   });
 
   it('opens a staff matter with its number, and keeps the numbers out of it (#1170)', async () => {
@@ -454,7 +454,7 @@ describe('OfficeImmersive', () => {
     expect(said).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(within(office).getByText('AIセールスと会話中')).toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /オフィスに戻る/ })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toBeInTheDocument();
   });
 
   it('does not step back with Esc while a staff matter is being saved (#1170)', async () => {

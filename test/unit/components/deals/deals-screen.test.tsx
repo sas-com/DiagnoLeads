@@ -718,7 +718,7 @@ describe('DealsScreen', () => {
     await user.click(screen.getByRole('button', { name: '受注にする' }));
     await waitFor(() =>
       expect(
-        within(column('受注（直近30日）')).getByRole('button', {
+        within(column('受注（過去30日）')).getByRole('button', {
           name: '「AS/400 現行調査」のステージを移動（今：受注）',
         })
       ).toHaveFocus()
@@ -890,7 +890,7 @@ describe('DealsScreen', () => {
     };
     const card = screen.getByRole('link', { name: 'AS/400 現行調査' }).closest('li');
     fireEvent.dragStart(card as HTMLElement, { dataTransfer });
-    const won = column('受注（直近30日）');
+    const won = column('受注（過去30日）');
     fireEvent.dragOver(won, { dataTransfer });
     fireEvent.drop(won, { dataTransfer });
     expect(screen.getByRole('dialog', { name: '「AS/400 現行調査」を受注にする' })).toBeInTheDocument();
@@ -1085,7 +1085,7 @@ describe('DealsScreen', () => {
         'ascending'
       );
       expect(screen.getByRole('table', { name: '商談の一覧（受注予定日の早い順）' })).toBeInTheDocument();
-      expect(screen.getByText('受注・失注は直近30日の商談を表示しています')).toBeInTheDocument();
+      expect(screen.getByText('受注・失注は過去30日の商談を表示しています')).toBeInTheDocument();
     });
 
     it('sorts by amount from its header, largest first, and flips on the next click', async () => {

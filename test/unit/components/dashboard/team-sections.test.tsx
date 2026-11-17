@@ -246,7 +246,7 @@ describe('the team review on the analytics page', () => {
 
     expect(mocks.query).toHaveBeenCalledWith({ organizationId: ORG_ID, days: 30 });
     const insights = within(screen.getByTestId('insights'));
-    expect(insights.getByRole('heading', { name: '過去30日間のインサイト' })).toBeInTheDocument();
+    expect(insights.getByRole('heading', { name: '過去30日のインサイト' })).toBeInTheDocument();
     // New leads 6 vs 0: up, but no percent against nothing; the previous value is still named
     const leads = insights.getByText('新規リードが前の30日間より増えました').parentElement as HTMLElement;
     expect(within(leads).getByText('6件')).toBeInTheDocument();
@@ -324,7 +324,7 @@ describe('the team review on the analytics page', () => {
         { date: '10/16', 新規リード数: 3 },
       ],
     });
-    expect(panel.getByRole('img')).toHaveAccessibleName('直近30日の新規リード数は4件');
+    expect(panel.getByRole('img')).toHaveAccessibleName('過去30日の新規リード数は4件');
 
     await user.selectOptions(panel.getByRole('combobox', { name: '表示する数' }), 'consultations');
     expect(chartProps().data).toEqual([
@@ -349,7 +349,7 @@ describe('the team review on the analytics page', () => {
     renderReview(90);
 
     expect(chartProps().data.map((d) => d.date)).toEqual(['7/19〜', '7/20〜']);
-    expect(screen.getByText('直近90日・週ごと（日本時間）')).toBeInTheDocument();
+    expect(screen.getByText('過去90日・週ごと（日本時間）')).toBeInTheDocument();
   });
 
   it('dates the figures with the time they were fetched (DADS guidebook, #635)', () => {

@@ -782,7 +782,7 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.left).not.toHaveBeenCalled();
     expect(choice(office, /「提案」へ進める/)).toHaveAttribute('aria-disabled', 'true');
     expect(choice(office, /ボードに戻る/)).toHaveAttribute('aria-disabled', 'true');
-    const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+    const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
     expect(toFloor).toHaveAttribute('aria-disabled', 'true');
     await user.keyboard('{Escape}');
     await user.click(choice(office, /ボードに戻る/));
@@ -793,7 +793,7 @@ describe('a deal file on the sales floor', () => {
 
   it('opens the way back to the floor again once the file is closed', async () => {
     const { user, office } = await openFile('見本の商談2');
-    const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+    const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
     expect(toFloor).not.toHaveAttribute('aria-disabled');
     await user.click(toFloor);
     expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();

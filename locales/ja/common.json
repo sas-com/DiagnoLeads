@@ -999,7 +999,7 @@
         "descriptionWeekly": "週ごと（月曜はじまり・日本時間）",
         "others": "その他",
         "weekLabel": "{date}〜",
-        "summary": "直近{days}日の新規リードは{total}件（うち相談申込{consultations}件）。最も多かったのは{peak}の{max}件です"
+        "summary": "過去{days}日の新規リードは{total}件（うち相談申込{consultations}件）。最も多かったのは{peak}の{max}件です"
       },
       "statuses": {
         "title": "いまのパイプライン",
@@ -1030,7 +1030,7 @@
         "noCompany": "（会社名なし）"
       },
       "noOrganization": "組織を選ぶと、ここにリードの状況が表示されます",
-      "periodTag": "直近{days}日",
+      "periodTag": "過去{days}日",
       "periodRange": "{from}〜{to}（日本時間）",
       "allTimeTag": "全期間",
       "cardError": "読み込めませんでした",
@@ -1068,14 +1068,14 @@
           "leads": "新規リード数",
           "consultations": "相談申込数"
         },
-        "period": "直近{days}日・日ごと（日本時間）",
-        "periodWeekly": "直近{days}日・週ごと（日本時間）",
+        "period": "過去{days}日・日ごと（日本時間）",
+        "periodWeekly": "過去{days}日・週ごと（日本時間）",
         "updatedAt": "{time}時点",
-        "chartLabel": "直近{days}日の{metric}は{total}件",
+        "chartLabel": "過去{days}日の{metric}は{total}件",
         "platforms": "移行元システムごと"
       },
       "insights": {
-        "title": "過去{days}日間のインサイト",
+        "title": "過去{days}日のインサイト",
         "count": "{value}件",
         "changeLabel": "前の{days}日間と比べて",
         "fitOnly": "ほかに適合のみ {value}件",
@@ -1302,7 +1302,7 @@
       "weighted": "加重 {amount}",
       "empty": "商談はありません",
       "dropHere": "ここに移す",
-      "closedTitle": "{stage}（直近{days}日）"
+      "closedTitle": "{stage}（過去{days}日）"
     },
     "card": {
       "daysInStage": "このステージで{days}日",
@@ -1436,7 +1436,7 @@
     },
     "list": {
       "caption": "商談の一覧（{order}）",
-      "closedNote": "受注・失注は直近{days}日の商談を表示しています",
+      "closedNote": "受注・失注は過去{days}日の商談を表示しています",
       "lead": "会社・氏名",
       "marks": "注意",
       "nextAction": "次の行動",
@@ -2665,6 +2665,7 @@
         "mqlLevels": "MQL段階の内訳",
         "mqlLevelsDescription": "すべての期間のリード。MQL判定日のあるリード（手で MQL にしたものを含む）は関心ありに数えます。段階を押すと一覧で開きます"
       },
+      "unsetSource": "流入元の記録なし",
       "funnel": {
         "total": "総計",
         "conversionRate": "コンバージョン率",
@@ -2676,7 +2677,7 @@
           "mql": "MQL（関心あり）",
           "deal": "商談",
           "sql": "SQL（適格）",
-          "won": "受注"
+          "won": "成約"
         },
         "nurturingNow": "再育成（ナーチャリング）中のリード：{count, number}件（ファネルの段には数えない）",
         "reachedNote": "後の段に進んだリードは前の段にも数えます（代行のアポなど、MQL を経ずに商談に入ったリードも MQL に数えます）"
@@ -5109,7 +5110,7 @@
       "stageMql": "MQL（関心あり）",
       "stageDeal": "商談",
       "stageSql": "SQL（適格）",
-      "stageWon": "受注",
+      "stageWon": "成約",
       "nurturingNow": "再育成（ナーチャリング）中のリード: {count}件"
     },
     "diagnostic": {
@@ -5911,8 +5912,8 @@
     "title": "サイトの訪問",
     "description": "公開ページの訪問者数とページビュー（自前の計測。クッキーは使いません）",
     "periodLabel": "期間",
-    "period": "過去{days}日間",
-    "periodRange": "過去{days}日間",
+    "period": "過去{days}日",
+    "periodRange": "過去{days}日",
     "overview": "概要",
     "toAnalytics": "リードの分析",
     "metricLabel": "指標",
@@ -5926,7 +5927,7 @@
       "unchanged": "前の期間と同じ"
     },
     "updatedOn": "{day}まで記録",
-    "chartLabel": "{metric}の日ごとの推移（過去{days}日間、合計{total}）",
+    "chartLabel": "{metric}の日ごとの推移（過去{days}日、合計{total}）",
     "visitorsNote": "訪問者数は日ごとに数えています。同じ人が別の日に来ると、それぞれの日に数えます。",
     "pagesTitle": "ページごとの{metric}",
     "empty": "この期間の記録はありません",
