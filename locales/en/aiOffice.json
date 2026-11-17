@@ -469,7 +469,7 @@
           "undoing": "Taking the record back. The file stays open until it is done."
         },
         "due": {
-          "board": "Due today",
+          "board": "Due by today",
           "position": "{index} of {total}",
           "reading": "Checking what is due.",
           "error": "What is due could not be read. Please open the room again in a while.",
@@ -661,7 +661,7 @@
             "invitationsUnread": " The invitations could not be read."
           },
           "choices": {
-            "due": "Take what is due today",
+            "due": "Take what is due by today",
             "members": "See members and invitations",
             "settings": "Choose a settings page"
           },
@@ -813,6 +813,7 @@
           "disabled": "The AI employees cannot think and work with Claude yet (switched off until the legal and information systems departments have agreed). Onboarding and reviews cannot be started yet.",
           "staffList": "AI employees of the training room",
           "boards": {
+            "curriculum": "Training",
             "report": "Report (onboarding)",
             "notes": "Notes",
             "review": "Review",
@@ -914,7 +915,14 @@
             "keep": "Keep",
             "editPolicy": "Write or fix",
             "savePolicy": "Save",
-            "cancelPromote": "Do not raise"
+            "cancelPromote": "Do not raise",
+            "editTraining": "Edit this employee's training",
+            "editTemplate": "Edit the template",
+            "copyTemplate": "Copy the template again",
+            "confirmCopy": "Copy again (confirm)",
+            "cancelCopy": "Do not copy",
+            "saveTraining": "Save",
+            "saveTemplate": "Save the template"
           },
           "errors": {
             "not_found": "Not found. Please enter the room again.",
@@ -931,6 +939,19 @@
             "invalid_note": "This note cannot be saved (no contact details or key-like text).",
             "generic": "That did not work. Please wait a moment and try again.",
             "personal_data": "Contact details (e-mail addresses, telephone numbers) and key-like text cannot be written. Write about the role and the work only."
+          },
+          "curriculum": {
+            "about": "The training has two parts, the common training (the company and its services) and the role training (the purpose, the scope and the tasks of the role), and each AI employee has its own. The onboarding reads this employee's training.",
+            "forManagers": "Only those who manage the AI employees can read the training.",
+            "copied": "Copied from version {version} of the template.",
+            "copiedDefault": "Copied from the first contents (the catalog of roles and works).",
+            "notCopied": "Not copied yet. It is copied from the current template when the onboarding starts (shown below is the template).",
+            "newer": "The template has been updated (version {version}).",
+            "empty": "Not written",
+            "templateOf": "Template of the {title}",
+            "ownOf": "{name}'s {title}",
+            "confirmCopy": "{name}'s {title} will be replaced by the current template. What was changed for this employee only will be lost. Are you sure?",
+            "templateNote": "Saving a template raises its version and is used for the employees it is copied to from now on. For employees who already have a copy, use \"Copy the template again\"."
           }
         }
       },
@@ -1138,6 +1159,41 @@
       "member": "Lv.2 Full member",
       "lead": "Lv.3 Lead",
       "ace": "Lv.4 Ace"
+    },
+    "curriculum": {
+      "kinds": {
+        "common": "Common training",
+        "role": "Role training"
+      },
+      "sections": {
+        "company": "About the company",
+        "services": "Services",
+        "customers": "Customers",
+        "values": "What we value",
+        "donts": "What not to do",
+        "purpose": "Purpose",
+        "scope": "Scope",
+        "tasks": "Concrete tasks",
+        "handoffs": "Who hands work to whom",
+        "measures": "How results are measured"
+      },
+      "hints": {
+        "company": "What the company does and what kind of company it is",
+        "services": "The services or products it offers, and what makes them different",
+        "customers": "Which customers it works with, on which problems",
+        "values": "What matters in the work, how decisions are made",
+        "donts": "What must not be done, what to be careful about",
+        "purpose": "What this role is for",
+        "scope": "What the role covers, and what it does not",
+        "tasks": "The concrete work of each day or week",
+        "handoffs": "From whom it receives work, and to whom it hands it on",
+        "measures": "What counts as a result"
+      },
+      "defaults": {
+        "handoffs": "Receives work from: {from} / Hands work on to: {to}",
+        "none": "none",
+        "measures": "To be decided with the president."
+      }
     }
   }
 }

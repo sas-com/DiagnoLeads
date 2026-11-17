@@ -1088,6 +1088,73 @@ export const aiEmployeeReviews = pgTable(
 export type AiEmployeeReview = typeof aiEmployeeReviews.$inferSelect;
 
 /**
+ * AI Training Templates (#1280, Epic #1279)
+ * What an organization teaches its AI employees, in the fixed format of the training
+ * (lib/features/ai-employees/types/curriculum.ts): one common training (the company, its
+ * services...) and one per role (the purpose, the scope, the tasks...). Each AI employee gets a
+ * copy (ai_employee_trainings). The version goes up at each save, so an update can be brought to
+ * the employees (#1281).
+ */
+export const aiTrainingTemplates = pgTable(
+  'ai_training_templates',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** 'common', or the role (AI_EMPLOYEE_ROLES) of a role training */
+    scope: text('scope').notNull(),
+    /** The text of each section of the format, by section key */
+    sections: jsonb('sections').$type<Record<string, string>>().default({}).notNull(),
+    version: integer('version').default(1).notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('ai_training_templates_organization_scope_unique').on(
+      table.organizationId,
+      table.scope
+    ),
+    check('ai_training_templates_scope_check', sql`${table.scope} ~ '^[a-z_]{1,30}$'`),
+  ]
+);
+
+export type AiTrainingTemplate = typeof aiTrainingTemplates.$inferSelect;
+
+/**
+ * AI Employee Trainings (#1280)
+ * An AI employee's own training, copied from the organization's template and then kept for the
+ * employee: what it reads at its onboarding. templateVersion is the version it was copied from.
+ */
+export const aiEmployeeTrainings = pgTable(
+  'ai_employee_trainings',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    employeeId: uuid('employee_id')
+      .notNull()
+      .references(() => aiEmployees.id, { onDelete: 'cascade' }),
+    /** 'common' or 'role' */
+    kind: text('kind').notNull(),
+    sections: jsonb('sections').$type<Record<string, string>>().default({}).notNull(),
+    /** The version of the template it was copied from; 0 when it came from the built-in default */
+    templateVersion: integer('template_version').default(0).notNull(),
+    updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex('ai_employee_trainings_employee_kind_unique').on(table.employeeId, table.kind),
+    check('ai_employee_trainings_kind_check', sql`${table.kind} IN ('common', 'role')`),
+  ]
+);
+
+export type AiEmployeeTraining = typeof aiEmployeeTrainings.$inferSelect;
+
+/**
  * Lead Hearings
  * What sales heard in the initial AX migration meetings, several per lead (Refs #84). Field
  * keys are defined in lib/features/lead-hearings/catalog.ts; only values are stored here.

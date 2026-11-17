@@ -59,6 +59,7 @@ export function OfficeRoomReception({
   keysRef,
   onOpenNormal,
   onFileOpenChange,
+  onBusyChange,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -73,6 +74,8 @@ export function OfficeRoomReception({
   onOpenNormal: () => void;
   /** Told when a shelf opens or closes: while one is open, Esc closes it, not the room */
   onFileOpenChange: (open: boolean) => void;
+  /** Told while an answer given on a shelf is being saved: the office keeps the room open (#1236) */
+  onBusyChange: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tDesk = useTranslations('aiOffice.immersive.room.reception');
@@ -81,6 +84,13 @@ export function OfficeRoomReception({
   const rootRef = useRef<HTMLDivElement>(null);
   const shelfKeys = useRef<RoomKeys | null>(null);
   const [shelf, setShelf] = useState<ReceptionShelf | null>(null);
+  // An answer given on a shelf is being saved: no way back meanwhile, neither to the counter nor
+  // to the floor. Leaving would look like giving it up, and the request is already on its way.
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    onBusyChange(busy);
+    return () => onBusyChange(false);
+  }, [busy, onBusyChange]);
 
   // The same questions the shelves ask: what the counter reports is what the shelf then shows
   const due = trpc.leadFollowUp.dueTasks.useQuery({
@@ -117,7 +127,7 @@ export function OfficeRoomReception({
       if (shelfKeys.current?.(event)) return true;
       if (event.key !== 'Escape') return false;
       event.preventDefault();
-      setShelf(null);
+      if (!busy) setShelf(null);
       return true;
     }
     const opened = shelfOfKey(event.key);
@@ -168,6 +178,7 @@ export function OfficeRoomReception({
           keysRef={shelfKeys}
           onOpenNormal={onOpenNormal}
           onBack={back}
+          onBusyChange={setBusy}
         />
       ) : shelf === 'members' ? (
         <OfficeRoomMembers
@@ -176,6 +187,7 @@ export function OfficeRoomReception({
           keysRef={shelfKeys}
           onOpenNormal={onOpenNormal}
           onBack={back}
+          onBusyChange={setBusy}
         />
       ) : shelf === 'settings' ? (
         <OfficeRoomSettings
