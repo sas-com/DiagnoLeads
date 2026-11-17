@@ -58,6 +58,8 @@ const mocks = vi.hoisted(() => ({
   moves: [] as Record<string, unknown>[],
   marks: [] as { id: string; done: boolean }[],
   added: [] as Record<string, unknown>[],
+  contacts: [] as Record<string, unknown>[],
+  removed: [] as Record<string, unknown>[],
   left: vi.fn(),
 }));
 
@@ -98,8 +100,9 @@ vi.mock('@/lib/trpc/client', () => {
         aiEmployees: { office: invalidate() },
         deals: { ...invalidate(), board: invalidate() },
         leads: invalidate(),
-        leadActivity: invalidate(),
-        leadFollowUp: { tasks: invalidate(), dueTasks: invalidate() },
+        leadActivity: { ...invalidate(), list: invalidate(), forDeal: invalidate(), myDay: invalidate() },
+        analytics: { getDashboard: invalidate() },
+        leadFollowUp: { tasks: invalidate(), dueTasks: invalidate(), contacts: invalidate() },
       }),
       aiEmployees: {
         hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -182,6 +185,18 @@ vi.mock('@/lib/trpc/client', () => {
             return { id: 'new-task' };
           }),
         },
+        recordContact: {
+          useMutation: mutation((input: Record<string, unknown>) => {
+            mocks.contacts.push(input);
+            return { id: 'new-contact' };
+          }),
+        },
+        deleteContact: {
+          useMutation: mutation((input: Record<string, unknown>) => {
+            mocks.removed.push(input);
+            return {};
+          }),
+        },
       },
     },
   };
@@ -245,6 +260,8 @@ describe('the sales floor', () => {
     mocks.moves.length = 0;
     mocks.marks.length = 0;
     mocks.added.length = 0;
+    mocks.contacts.length = 0;
+    mocks.removed.length = 0;
     mocks.left.mockClear();
   });
 
@@ -390,6 +407,8 @@ describe('a deal file on the sales floor', () => {
     mocks.moves.length = 0;
     mocks.marks.length = 0;
     mocks.added.length = 0;
+    mocks.contacts.length = 0;
+    mocks.removed.length = 0;
     mocks.left.mockClear();
   });
 
@@ -520,7 +539,7 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.marks).toEqual([{ organizationId: ORG_ID, id: taskId, done: true }]);
     expect(
       within(office).getByText(
-        '次の行動「見本の次の行動2」を済みにしました。間違えたときは、取り消せます。'
+        '次の行動「見本の次の行動2」を済みにしました。間違えたときは、取り消せます。何をしたかは、5 で残せます。'
       )
     ).toBeInTheDocument();
     await user.keyboard('3');
@@ -568,6 +587,87 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.added).toHaveLength(0);
     await user.type(within(office).getByLabelText('次にすること（必須）'), '見積を送る{Enter}');
     expect(mocks.added[0]).toMatchObject({ title: '見積を送る', dueOn: '2026-11-16' });
+  });
+
+  it('records what was done with the lead: a place opened with its key, a kind chosen with its button', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    expect(choice(office, /連絡を記録する/)).toHaveTextContent('5');
+    await user.keyboard('5');
+    const place = within(office).getByRole('region', { name: '連絡を記録する' });
+    // The place holds the focus: no kind is under Enter, and no number key chooses one
+    expect(document.activeElement).toBe(place);
+    await user.keyboard('123{Enter}');
+    expect(mocks.contacts).toHaveLength(0);
+    expect(mocks.moves).toHaveLength(0);
+    expect(
+      within(place)
+        .getAllByRole('button')
+        .map((button) => button.textContent)
+    ).toEqual([
+      '電話した',
+      'メールした',
+      '訪問した',
+      'オンラインで商談した',
+      'つながらなかった',
+      'Escやめて選択肢に戻る',
+    ]);
+
+    await user.type(within(place).getByLabelText(/^メモ/), '来週、見積を見て返事をくれる');
+    await user.click(within(place).getByRole('button', { name: '電話した' }));
+    expect(mocks.contacts).toEqual([
+      {
+        organizationId: ORG_ID,
+        leadId: mocks.deals[1].leadId,
+        kind: 'call',
+        dealId: mocks.deals[1].id,
+        note: '来週、見積を見て返事をくれる',
+      },
+    ]);
+    expect(
+      within(office).getByText('「電話した」を記録しました。間違えたときは、取り消せます。')
+    ).toBeInTheDocument();
+    // Z takes the record back
+    await user.keyboard('z');
+    expect(mocks.removed).toEqual([{ organizationId: ORG_ID, id: 'new-contact' }]);
+    expect(within(office).getByText('取り消しました。')).toBeInTheDocument();
+  });
+
+  it('records a contact without a note, and after a next action was marked', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    await user.keyboard('3');
+    await user.keyboard('5');
+    await user.click(within(office).getByRole('button', { name: 'つながらなかった' }));
+    expect(mocks.contacts).toEqual([
+      {
+        organizationId: ORG_ID,
+        leadId: mocks.deals[1].leadId,
+        kind: 'no_answer',
+        dealId: mocks.deals[1].id,
+      },
+    ]);
+    // Marking stays closed, and the deal can still be moved on
+    await user.keyboard('3');
+    expect(mocks.marks).toHaveLength(1);
+    await user.keyboard('1');
+    expect(mocks.moves).toHaveLength(1);
+  });
+
+  it('leaves the place of a contact with Esc, recording nothing', async () => {
+    const { user, office, file } = await openFile('見本の商談2');
+    await user.keyboard('5{Escape}');
+    expect(within(office).queryByRole('region', { name: '連絡を記録する' })).not.toBeInTheDocument();
+    expect(file).toBeInTheDocument();
+    expect(mocks.contacts).toHaveLength(0);
+  });
+
+  it('says that the next action shown stays when another one is set', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    await user.keyboard('4');
+    expect(
+      within(office).getByText(
+        'いまの次の行動「見本の次の行動2」（期限 2026/11/10）は残ります。済んでいるなら、先に 3 で済みにしてください。'
+      )
+    ).toBeInTheDocument();
   });
 
   it('says what is missing when a next action is sent without it', async () => {
