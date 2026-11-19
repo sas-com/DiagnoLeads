@@ -244,6 +244,15 @@ export interface QrCampaignFigures {
   destination: { kind: string };
 }
 
+/**
+ * The filters of the lead board opened from a QR campaign's row (#1255): the prospects that
+ * answers carrying the campaign's code created, as they are now (no period: the campaign's
+ * figures are totals since it was made)
+ */
+export function campaignLeadFilters(campaignId: string): LeadListFilters {
+  return { ...EMPTY_LEAD_FILTERS, qrCampaign: campaignId };
+}
+
 /** A row of the QR campaigns on the campaign board */
 export interface QrCampaignRow {
   id: string;

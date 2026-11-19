@@ -33,6 +33,7 @@ interface ListInput {
   createdFromDay?: string;
   assignee?: string;
   inflowSource?: string[];
+  qrCampaignId?: string;
 }
 
 const lead = (n: number, status = 'new') => ({
@@ -106,6 +107,8 @@ function answer(input: ListInput) {
   if (input.assignee === 'me') rows = all.slice(1, 2);
   // The prospects of one source in the period (#1202): 10 of them, so two pages
   if (input.inflowSource) rows = all.slice(0, 10);
+  // The new prospects of a QR campaign that are still there (#1255): 9 of the 10 it counted
+  if (input.qrCampaignId) rows = all.slice(0, 9);
   return {
     items: rows.slice(input.offset, input.offset + input.limit),
     total: rows.length,
@@ -1295,6 +1298,123 @@ describe('the campaign board (#1201)', () => {
     qr.addEventListener('click', (event) => event.preventDefault());
     await user.click(qr);
     expect(onExit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the prospects of a QR campaign, opened from its row (#1255)', () => {
+  beforeEach(reset);
+
+  const FAIR = 'c0000000-0000-4000-8000-000000000001';
+
+  /** Enters the room, asks for the campaign board and opens the fair's row with the keys */
+  async function openFair() {
+    const room = await enterMarketing();
+    await room.user.keyboard('8');
+    await room.user.keyboard('{ArrowDown}');
+    expect(within(room.office).getByRole('button', { name: '秋の展示会' })).toHaveFocus();
+    mocks.inputs.length = 0;
+    mocks.reread.mockClear();
+    await room.user.keyboard('{Enter}');
+    const board = within(room.office).getByRole('region', { name: '見込み客ボード' });
+    return { ...room, board };
+  }
+
+  it('opens only the campaigns that have new prospects, and says so', async () => {
+    const { user, office } = await enterMarketing();
+    await user.keyboard('8');
+    const board = within(office).getByRole('region', { name: '施策ボード' });
+    // The fair has 10 new prospects; the seminar of the spring has none and is no button
+    const fair = within(board).getByRole('button', { name: '秋の展示会' });
+    expect(fair).toHaveAttribute('data-campaign', FAIR);
+    expect(fair).toHaveAccessibleDescription(
+      'このキャンペーンから登録された見込み客を見込み客ボードに出します'
+    );
+    const closed = within(board).getByRole('row', { name: /^春のセミナー/ });
+    expect(within(closed).queryByRole('button')).not.toBeInTheDocument();
+    expect(within(closed).getByRole('rowheader')).toHaveTextContent('（開けません）');
+    // What the opened board shows, and why it can hold fewer than the count of the row
+    expect(
+      within(board).getByText(
+        '新しい見込み客のいるキャンペーンの行を開くと、そのキャンペーンの回答から登録された見込み客が見込み客ボードに出ます。出るのは今ある見込み客なので、あとから消したものがあると、「新しい見込み客」の数より少なくなります。下線の無い行（新しい見込み客がいないキャンペーン）は開けません。'
+      )
+    ).toBeInTheDocument();
+    // The keys of the board are shown, and the arrows stay on the rows that open
+    expect(within(board).getByText(/見込み客を開く/)).toBeInTheDocument();
+    await user.keyboard('{ArrowDown}');
+    expect(fair).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(fair).toHaveFocus();
+    // The agencies' rows do not open
+    expect(within(board).getAllByRole('button')).toEqual([fair]);
+  });
+
+  it("puts the campaign's prospects on the lead board, read anew, for this organization", async () => {
+    const { office, board } = await openFair();
+    expect(
+      within(board).getByText(/QR キャンペーン「秋の展示会」から登録された、今ある見込み客・9 件/)
+    ).toBeInTheDocument();
+    // The list is asked by the campaign's id, without a period (the campaign's figures are totals)
+    const asked = mocks.inputs.filter(
+      (input) => (input as ListInput).qrCampaignId !== undefined
+    ) as ListInput[];
+    expect(asked.length).toBeGreaterThan(0);
+    for (const input of asked) {
+      expect(input).toMatchObject({ organizationId: ORG_ID, qrCampaignId: FAIR, offset: 0 });
+      expect(input.createdFromDay).toBeUndefined();
+      expect(input.inflowSource).toBeUndefined();
+    }
+    // What was read before is not kept: the leads are read again when the row is opened
+    expect(mocks.reread).toHaveBeenCalledTimes(1);
+    // The campaign board stays the choice, and the room says what is on the wall
+    expect(within(office).getByRole('button', { name: '8施策' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(
+      within(office).getByText(
+        '壁のボード：見込み客ボード（QR キャンペーン「秋の展示会」から登録された、今ある見込み客）'
+      )
+    ).toBeInTheDocument();
+    // The focus left the row for the report, not the page
+    expect(office.contains(document.activeElement)).toBe(true);
+  });
+
+  it('links to the same list of the normal view', async () => {
+    const { board } = await openFair();
+    const link = within(board).getByRole('link', { name: /通常の表示/ });
+    expect(link.getAttribute('href')).toBe(`/ja/leads?qr=${FAIR}`);
+  });
+
+  it('goes back one step at a time with Esc: the campaign board, the focus on its row, then the floor', async () => {
+    const { user, office } = await openFair();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('region', { name: '施策ボード' })).toBeInTheDocument();
+    expect(within(office).getByRole('button', { name: '秋の展示会' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
+  });
+
+  it('goes back with the button of the board too, and opens a customer file from it', async () => {
+    const { user, office, board } = await openFair();
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(within(office).getByRole('region', { name: '見本商事1のファイル' })).toBeInTheDocument();
+    // Esc: the file, then the prospects of the campaign
+    await user.keyboard('{Escape}');
+    const back = within(office).getByRole('region', { name: '見込み客ボード' });
+    expect(within(back).getByText(/QR キャンペーン「秋の展示会」/)).toBeInTheDocument();
+    await user.click(within(back).getByRole('button', { name: /施策ボードに戻る/ }));
+    expect(within(office).getByRole('region', { name: '施策ボード' })).toBeInTheDocument();
+    expect(board).not.toBeInTheDocument();
+  });
+
+  it('leaves the prospects of the campaign when another board is chosen', async () => {
+    const { user, office } = await openFair();
+    await user.keyboard('1');
+    expect(within(office).getByRole('region', { name: '流入元ボード' })).toBeInTheDocument();
+    // Back on the campaign board, nothing is open any more
+    await user.keyboard('8');
+    expect(within(office).getByRole('region', { name: '施策ボード' })).toBeInTheDocument();
+    expect(within(office).queryByRole('region', { name: '見込み客ボード' })).not.toBeInTheDocument();
   });
 });
 

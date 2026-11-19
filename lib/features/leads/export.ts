@@ -148,6 +148,7 @@ export const EXPORT_AUDIT_FILTER_KEYS = [
   'dealRating',
   'mqlLevel',
   'actTiming',
+  'qrCampaignId',
   'tagIds',
 ] as const satisfies readonly (keyof ListLeadsInput)[];
 

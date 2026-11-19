@@ -384,7 +384,12 @@
               "note": "The new-prospect rate is new prospects ÷ scans. Answers from visits that are not counted as scans are new prospects too, so it can exceed 100%.",
               "breakdownUnavailable": "The breakdown (interested, consultations, answers from existing prospects) could not be read.",
               "breakdownReading": "Reading the breakdown.",
-              "notRead": "Could not be read"
+              "notRead": "Could not be read",
+              "openHint": "Opening the row of a campaign with new prospects puts the prospects its answers created on the prospect board. The board shows the prospects as they are now, so it holds fewer than \"New prospects\" when some were deleted since.",
+              "openHintClosed": " Rows without an underline (campaigns without new prospects) cannot be opened.",
+              "openDescription": "Puts the prospects this campaign created on the prospect board",
+              "leadsOf": "Prospects created from the QR campaign \"{campaign}\", as they are now",
+              "back": "Back to the campaign board"
             },
             "agencies": {
               "title": "Sales agencies",

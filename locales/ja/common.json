@@ -4793,6 +4793,7 @@
     "mql": "MQL",
     "sqlQualified": "SQL（商談対象）",
     "missingDeal": "商談が未作成",
+    "qrCampaign": "QR キャンペーンの新しいリード",
     "selectedCount": "{count}件選択",
     "apply": "適用",
     "clear": "クリア",
