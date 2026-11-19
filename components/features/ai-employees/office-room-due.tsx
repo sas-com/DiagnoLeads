@@ -149,9 +149,10 @@ export function OfficeRoomDue({
 
   // Only when there is nothing to show: a reading again that failed (after a mark, offline) keeps
   // the queue in hand
-  const failure = queue ? null : queryFailure(due);
+  const failure = queryFailure(due);
+  // A refusal counts even with a queue in hand: who lost the permission no longer sees it
   const forbidden = failure === 'forbidden';
-  const readFailed = failure === 'error';
+  const readFailed = !queue && failure === 'error';
   const canEdit = loaded?.canEdit === true;
   const today = loaded?.today ?? '';
   const count = queue?.length ?? 0;

@@ -34,6 +34,7 @@ import {
   invitationFigures,
   membersLine,
   queryFailure,
+  queryStale,
   shelfOfKey,
 } from './rooms/reception';
 
@@ -223,6 +224,8 @@ export function OfficeRoomReception({
                       memberCount !== null &&
                         invited.state === 'error' &&
                         tDesk('members.invitationsUnread'),
+                      (queryStale(due) || queryStale(members) || queryStale(invitations)) &&
+                        tDesk('stale'),
                       tDesk('ask'),
                     ]
                       .filter(Boolean)

@@ -35,6 +35,7 @@ import {
   invitationFigures,
   invitationNamed,
   queryFailure,
+  queryStale,
 } from './rooms/reception';
 
 /** Members read for the shelf: the most `members.list` gives at once */
@@ -217,14 +218,16 @@ export function OfficeRoomMembers({
           ? tShelf('error')
           : !members.data
             ? tShelf('reading')
-            : invited.state === 'ready'
-              ? tShelf('reportWithInvitations', {
-                  count: members.data.total,
-                  waiting: invited.waiting,
-                })
-              : // Said, not only shown on the board: who listens does not see it
-                tShelf('report', { count: members.data.total }) +
-                (invited.state === 'error' ? tShelf('invitationsError') : '');
+            : (invited.state === 'ready'
+                ? tShelf('reportWithInvitations', {
+                    count: members.data.total,
+                    waiting: invited.waiting,
+                  })
+                : // Said, not only shown on the board: who listens does not see it
+                  tShelf('report', { count: members.data.total }) +
+                  (invited.state === 'error' ? tShelf('invitationsError') : '')) +
+              // Shown, but not as new: reading it again failed
+              (queryStale(members) || queryStale(invitations) ? tShelf('stale') : '');
   const more = members.data ? members.data.total - members.data.members.length : 0;
 
   return (

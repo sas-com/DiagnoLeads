@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
   networkModes: {} as Record<string, unknown>,
   // The options each reading of the reception was given (#1300)
   queryModes: {} as Record<string, unknown>,
+  // Invitations read before, then reading them again failed with this code
+  invitationsStale: null as null | { data: unknown[]; code: string },
   invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
   revoked: [] as { organizationId: string; invitationId: string }[],
   revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
@@ -126,9 +128,18 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
       listInvitations: {
-        useQuery: (_input: unknown, options?: { networkMode?: string }) =>
-          (mocks.queryModes.invitations = options?.networkMode) &&
-          Array.isArray(mocks.invitations)
+        useQuery: (_input: unknown, options?: { networkMode?: string }) => {
+          mocks.queryModes.invitations = options?.networkMode;
+          if (mocks.invitationsStale) {
+            // Read before, then reading again failed
+            return {
+              data: mocks.invitationsStale.data,
+              error: { data: { code: mocks.invitationsStale.code } },
+              isError: true,
+              isFetching: false,
+            };
+          }
+          return Array.isArray(mocks.invitations)
             ? { data: mocks.invitations, error: null, isError: false, isFetching: false }
             : {
                 data: undefined,
@@ -137,7 +148,8 @@ vi.mock('@/lib/trpc/client', () => ({
                 },
                 isError: true,
                 isFetching: false,
-              },
+              };
+        },
       },
     },
     leadFollowUp: {
@@ -282,6 +294,7 @@ describe('the reception', () => {
     mocks.updatePending = false;
     mocks.networkModes = {};
     mocks.queryModes = {};
+    mocks.invitationsStale = null;
     mocks.members = [member(1, 'owner'), member(2, 'member')];
     mocks.membersTotal = null;
     mocks.membersInputs.length = 0;
@@ -531,7 +544,9 @@ describe('the reception', () => {
     mocks.mode = 'error';
     const { board } = await enterReception();
     expect(
-      within(board).getByText('期限を読めませんでした。通信が切れていないかを確かめて、もう一度開いてください。')
+      within(board).getByText(
+        '期限を読めませんでした。通信が切れていないかを確かめて、もう一度開いてください。'
+      )
     ).toBeInTheDocument();
   });
 
@@ -558,6 +573,9 @@ describe('the reception', () => {
 
 describe('the counter of the reception (#1196)', () => {
   beforeEach(() => {
+    mocks.networkModes = {};
+    mocks.queryModes = {};
+    mocks.invitationsStale = null;
     mocks.inputs.length = 0;
     mocks.mode = 'ok';
     mocks.items = [task(1, { dueOn: '2026-11-10' }), task(2), task(3)];
@@ -790,7 +808,11 @@ describe('the counter of the reception (#1196)', () => {
 
   it('fails the readings at once when offline, so the room says it could not read (#1300)', async () => {
     const { user } = await enterCounter();
-    expect(mocks.queryModes).toEqual({ dueTasks: 'always', members: 'always', invitations: 'always' });
+    expect(mocks.queryModes).toEqual({
+      dueTasks: 'always',
+      members: 'always',
+      invitations: 'always',
+    });
     mocks.queryModes = {};
     await user.keyboard('1');
     expect(mocks.queryModes.dueTasks).toBe('always');
@@ -815,14 +837,38 @@ describe('the counter of the reception (#1196)', () => {
     mocks.revokePending = false;
   });
 
+  it('drops the invitations read before once the server refuses them, and closes revoking (#1300)', async () => {
+    mocks.invitationsStale = { data: [invitation(1)], code: 'FORBIDDEN' };
+    const { user, office } = await enterCounter();
+    expect(
+      within(office).getByText('招待は、管理者とオーナーだけが見られます。')
+    ).toBeInTheDocument();
+    await user.keyboard('2');
+    const shelf = within(office).getByRole('region', { name: 'メンバーと招待' });
+    expect(within(shelf).queryByText('invited1@example.com')).not.toBeInTheDocument();
+    expect(
+      within(office).queryByRole('button', { name: /招待を取り消す/ })
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps the invitations read before when reading them again fails offline, and says so (#1300)', async () => {
+    mocks.invitationsStale = { data: [invitation(1)], code: 'INTERNAL' };
+    const { user, office } = await enterCounter();
+    expect(
+      within(office).getByText(/最新の内容を読めなかったので、前に読んだ内容をお伝えしています。/)
+    ).toBeInTheDocument();
+    await user.keyboard('2');
+    const shelf = within(office).getByRole('region', { name: 'メンバーと招待' });
+    expect(within(shelf).getByText('invited1@example.com')).toBeInTheDocument();
+    expect(within(office).getByText(/前に読んだ内容をお伝えしています/)).toBeInTheDocument();
+  });
+
   it('keeps the queue in hand when reading it again fails (#1300)', async () => {
     const { user, office, refresh } = await enterCounter();
     await user.keyboard('1');
     mocks.mode = 'error';
     refresh();
-    expect(
-      within(office).getByRole('article', { name: '見本の次の行動1' })
-    ).toBeInTheDocument();
+    expect(within(office).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
     expect(within(office).queryByText(/期限を読めませんでした/)).not.toBeInTheDocument();
   });
 

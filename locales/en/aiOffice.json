@@ -718,7 +718,8 @@
               "failed": "Sorry, it could not be revoked. Please check your connection and try again.",
               "saving": "Revoking."
             },
-            "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles."
+            "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles.",
+            "stale": " The latest could not be read; this is what was read before."
           },
           "settingsShelf": {
             "board": "Settings shelf",
@@ -730,7 +731,8 @@
             "due": "What is due",
             "members": "Members and invitations",
             "settings": "Settings"
-          }
+          },
+          "stale": " The latest could not be read; this is what was read before."
         },
         "door": "opens a page",
         "engineering": {
