@@ -753,7 +753,8 @@ export function OfficeBoardCampaigns({
                       aria-describedby={openHintId}
                       onClick={() => onOpenCampaign({ id: row.id, name: row.name })}
                       className={cn(
-                        'text-left font-bold underline decoration-[#e9cf9a]/60 underline-offset-4 hover:text-white hover:decoration-[#e9cf9a] focus-visible:bg-[#e9cf9a]/15',
+                        // As high as its row without making it higher: the whole height opens
+                        '-my-3 inline-flex min-h-11 items-center text-left font-bold underline decoration-[#e9cf9a]/60 underline-offset-4 hover:text-white hover:decoration-[#e9cf9a] focus-visible:bg-[#e9cf9a]/15',
                         FOCUS
                       )}
                     >

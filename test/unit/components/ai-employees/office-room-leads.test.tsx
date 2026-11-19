@@ -1351,7 +1351,7 @@ describe('the prospects of a QR campaign, opened from its row (#1255)', () => {
   it("puts the campaign's prospects on the lead board, read anew, for this organization", async () => {
     const { office, board } = await openFair();
     expect(
-      within(board).getByText(/QR キャンペーン「秋の展示会」から登録された、今ある見込み客・9 件/)
+      within(board).getByText(/QR キャンペーン：秋の展示会・今ある見込み客・9 件/)
     ).toBeInTheDocument();
     // The list is asked by the campaign's id, without a period (the campaign's figures are totals)
     const asked = mocks.inputs.filter(
@@ -1372,7 +1372,7 @@ describe('the prospects of a QR campaign, opened from its row (#1255)', () => {
     );
     expect(
       within(office).getByText(
-        '壁のボード：見込み客ボード（QR キャンペーン「秋の展示会」から登録された、今ある見込み客）'
+        '壁のボード：見込み客ボード（QR キャンペーン：秋の展示会・今ある見込み客）'
       )
     ).toBeInTheDocument();
     // The focus left the row for the report, not the page
@@ -1401,7 +1401,7 @@ describe('the prospects of a QR campaign, opened from its row (#1255)', () => {
     // Esc: the file, then the prospects of the campaign
     await user.keyboard('{Escape}');
     const back = within(office).getByRole('region', { name: '見込み客ボード' });
-    expect(within(back).getByText(/QR キャンペーン「秋の展示会」/)).toBeInTheDocument();
+    expect(within(back).getByText(/QR キャンペーン：秋の展示会/)).toBeInTheDocument();
     await user.click(within(back).getByRole('button', { name: /施策ボードに戻る/ }));
     expect(within(office).getByRole('region', { name: '施策ボード' })).toBeInTheDocument();
     expect(board).not.toBeInTheDocument();
