@@ -84,9 +84,15 @@ export function OfficeRoomSales({
   const lastOpened = useRef<string | null>(null);
 
   // Everyone's deals carry the room's figures; the user's own are read once they are asked for
-  const everyone = trpc.deals.board.useQuery(dealBoardInput('all', organizationId));
+  // Read with `networkMode: 'always'`: an answer of the file counts as saved once the board was
+  // read again, so a read left waiting while the browser is offline would keep the file closed
+  // (#1251). It fails instead, and the board says that it could not be read
+  const everyone = trpc.deals.board.useQuery(dealBoardInput('all', organizationId), {
+    networkMode: 'always',
+  });
   const own = trpc.deals.board.useQuery(dealBoardInput('mine', organizationId), {
     enabled: view === 'mine',
+    networkMode: 'always',
   });
   const board = dealBoardOwner(view) === 'mine' ? own : everyone;
 
@@ -241,6 +247,7 @@ export function OfficeRoomSales({
                   : tDealsRoom(everyone.data?.truncated ? 'reportTruncated' : 'report', {
                       open: report.open,
                       amount: formatYen(report.amount, locale) ?? '',
+                      weighted: formatYen(report.weighted, locale) ?? '',
                       overdue: report.overdue,
                       soon: report.soon,
                       noNextAction: report.noNextAction,

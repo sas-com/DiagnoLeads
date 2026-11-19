@@ -149,6 +149,11 @@ export interface DealReport {
   open: number;
   /** Their amounts added up, in yen */
   amount: number;
+  /**
+   * Their amounts weighted by each deal's probability, in yen: what is likely to come in. Said
+   * beside the sum, which counts a deal in 見極め (10%) in full
+   */
+  weighted: number;
   /** Past the day they had to move by */
   overdue: number;
   /** To move within a week, not counting what is already late */
@@ -162,6 +167,7 @@ export function dealReport(columns: readonly DealBoardColumn[], today: string): 
   return {
     open: stages.reduce((sum, stage) => sum + stage.count, 0),
     amount: stages.reduce((sum, stage) => sum + stage.amount, 0),
+    weighted: stages.reduce((sum, stage) => sum + stage.weighted, 0),
     overdue: deals.filter((deal) => isOverdue(deal, today)).length,
     soon: deals.filter((deal) => movesSoon(deal, today) && !isOverdue(deal, today)).length,
     noNextAction: deals.filter((deal) => !deal.hasOpenTask).length,
@@ -171,10 +177,15 @@ export function dealReport(columns: readonly DealBoardColumn[], today: string): 
 /** Each open stage with how many deals it holds and their amounts, in sales order */
 export function stageTotals(
   columns: readonly DealBoardColumn[]
-): { stage: OpenDealStage; count: number; amount: number }[] {
+): { stage: OpenDealStage; count: number; amount: number; weighted: number }[] {
   return OPEN_DEAL_STAGES.map((stage) => {
     const column = columns.find((entry) => entry.stage === stage);
-    return { stage, count: column?.count ?? 0, amount: column?.amount ?? 0 };
+    return {
+      stage,
+      count: column?.count ?? 0,
+      amount: column?.amount ?? 0,
+      weighted: column?.weightedAmount ?? 0,
+    };
   });
 }
 
@@ -202,9 +213,10 @@ export function stageBefore(stage: DealStage): OpenDealStage | null {
 
 /**
  * What a key of an open deal file does: move the deal on or back by one open stage, mark its next
- * action as done, open the field that sets a next action, or take the last answer back
+ * action as done, open the field that sets a next action, open the place where a contact is
+ * recorded, or take the last answer back
  */
-export type DealFileAction = 'advance' | 'back' | 'done' | 'add' | 'undo';
+export type DealFileAction = 'advance' | 'back' | 'done' | 'add' | 'contact' | 'undo';
 
 /** The answers of a deal file that are listed as choices, in the order of their keys */
 export const DEAL_FILE_CHOICES = [
@@ -212,6 +224,7 @@ export const DEAL_FILE_CHOICES = [
   'back',
   'done',
   'add',
+  'contact',
 ] as const satisfies readonly DealFileAction[];
 
 /**
@@ -223,6 +236,7 @@ export const DEAL_KEYS: Readonly<Record<DealFileAction, string>> = {
   back: '2',
   done: '3',
   add: '4',
+  contact: '5',
   undo: 'Z',
 };
 
@@ -243,7 +257,8 @@ export type DealAnswerKind = 'moved' | 'done';
  * set and the deal moved on in one sitting. Undoing an answer opens its kind again. The undo
  * takes back the last answer only, while there is something to take back (a move that handed the
  * lead off is not: the handoff sheet went out; a next action that was typed is changed, not
- * undone), and never over a deal that is closed by now.
+ * undone), and never over a deal that is closed by now. Opening the field of a next action or the
+ * place of a contact carries nothing out, so both stay open.
  */
 export function dealActionOpen(
   action: DealFileAction,
@@ -278,4 +293,18 @@ export function dueShortcuts(today: string): { key: DueShortcut; day: string }[]
     { key: 'in3Days', day: addDays(today, 3) },
     { key: 'nextMonday', day: addDays(endOfWeek(today), 1) },
   ];
+}
+
+/** The facts of a deal the handoff sheet carries to the technical team */
+export const HANDOFF_FACTS = ['targetSystem', 'amount', 'expectedCloseOn'] as const;
+export type HandoffFact = (typeof HANDOFF_FACTS)[number];
+
+/**
+ * The facts that are still empty when a deal is about to leave 見極め (#1237): told before the
+ * move, not asked for. The move is never stopped for them, as it is not in the normal view.
+ */
+export function missingHandoffFacts(
+  deal: Pick<BoardDeal, 'targetSystem' | 'amount' | 'expectedCloseOn'>
+): HandoffFact[] {
+  return HANDOFF_FACTS.filter((fact) => deal[fact] === null || deal[fact] === undefined);
 }

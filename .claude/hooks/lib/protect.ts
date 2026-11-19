@@ -142,7 +142,9 @@ export function inlineScriptNamesConfig(command: string, commands: string[][]): 
   });
 }
 
-const MERGE_ENDPOINT = /\/pulls\/\d+\/merge(?![\w-])/;
+// `pulls/N/merge`, and turning auto-merge on: `pulls/N/ccr/auto_merge` (the route cloud sessions
+// are given in place of the GraphQL mutation) or `pulls/N/auto_merge`
+const MERGE_ENDPOINT = /\/pulls\/\d+\/(ccr\/)?(auto_)?merge(?![\w-])/;
 const MERGE_MUTATION = /mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest/;
 const PUT_METHOD = /^(PUT|-XPUT|--method=PUT)$/i;
 

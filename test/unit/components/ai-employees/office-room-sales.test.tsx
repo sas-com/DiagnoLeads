@@ -58,6 +58,11 @@ const mocks = vi.hoisted(() => ({
   moves: [] as Record<string, unknown>[],
   marks: [] as { id: string; done: boolean }[],
   added: [] as Record<string, unknown>[],
+  contacts: [] as Record<string, unknown>[],
+  // How the file's changes and the board's reads behave while the browser is offline
+  modes: new Set<string>(),
+  boardModes: new Set<string>(),
+  removed: [] as Record<string, unknown>[],
   left: vi.fn(),
 }));
 
@@ -67,7 +72,13 @@ type Callbacks = {
 };
 /** A mutation whose hook-level and call-level callbacks both hear the answer, as tRPC's do */
 function mutation<Input>(run: (input: Input) => unknown) {
-  return (options: Callbacks = {}) => ({
+  return (options: Callbacks & { networkMode?: string } = {}) => {
+    mocks.modes.add(options.networkMode ?? 'online');
+    return mutationResult(run, options);
+  };
+}
+function mutationResult<Input>(run: (input: Input) => unknown, options: Callbacks) {
+  return {
     isPending: mocks.pending,
     isError: false,
     mutate: (input: Input, own: Callbacks = {}) => {
@@ -81,7 +92,7 @@ function mutation<Input>(run: (input: Input) => unknown) {
       options.onSuccess?.(saved as never, input as never);
       own.onSuccess?.(saved as never, input as never);
     },
-  });
+  };
 }
 
 vi.mock('next/navigation', () => ({
@@ -98,8 +109,9 @@ vi.mock('@/lib/trpc/client', () => {
         aiEmployees: { office: invalidate() },
         deals: { ...invalidate(), board: invalidate() },
         leads: invalidate(),
-        leadActivity: invalidate(),
-        leadFollowUp: { tasks: invalidate(), dueTasks: invalidate() },
+        leadActivity: { ...invalidate(), list: invalidate(), forDeal: invalidate(), myDay: invalidate() },
+        analytics: { getDashboard: invalidate() },
+        leadFollowUp: { tasks: invalidate(), dueTasks: invalidate(), contacts: invalidate() },
       }),
       aiEmployees: {
         hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -109,8 +121,9 @@ vi.mock('@/lib/trpc/client', () => {
         board: {
           useQuery: (
             input: { owner: string; organizationId: string },
-            options?: { enabled?: boolean }
+            options?: { enabled?: boolean; networkMode?: string }
           ) => {
+            mocks.boardModes.add(options?.networkMode ?? 'online');
             if (options?.enabled === false) {
               return { data: undefined, error: null, isError: false, isFetching: false };
             }
@@ -136,7 +149,7 @@ vi.mock('@/lib/trpc/client', () => {
                     stage,
                     count: held.length,
                     amount: held.length * 1_000_000,
-                    weightedAmount: 0,
+                    weightedAmount: held.length * 250_000,
                     deals: held,
                   };
                 }),
@@ -180,6 +193,18 @@ vi.mock('@/lib/trpc/client', () => {
           useMutation: mutation((input: Record<string, unknown>) => {
             mocks.added.push(input);
             return { id: 'new-task' };
+          }),
+        },
+        recordContact: {
+          useMutation: mutation((input: Record<string, unknown>) => {
+            mocks.contacts.push(input);
+            return { id: 'new-contact' };
+          }),
+        },
+        deleteContact: {
+          useMutation: mutation((input: Record<string, unknown>) => {
+            mocks.removed.push(input);
+            return {};
           }),
         },
       },
@@ -245,6 +270,8 @@ describe('the sales floor', () => {
     mocks.moves.length = 0;
     mocks.marks.length = 0;
     mocks.added.length = 0;
+    mocks.contacts.length = 0;
+    mocks.removed.length = 0;
     mocks.left.mockClear();
   });
 
@@ -261,7 +288,7 @@ describe('the sales floor', () => {
     const { office, board } = await enterSalesFloor();
     const report = within(office).getByText(/開いている商談は 4 件/);
     expect(report).toHaveTextContent(
-      '開いている商談は 4 件、金額の合計は ￥4,000,000 です。期限を過ぎたものは 1 件、1週間以内に動かすものは 2 件、次の行動が決まっていないものは 2 件あります。'
+      '開いている商談は 4 件、金額の合計は ￥4,000,000、確度を掛けた見込みは ￥1,000,000 です。期限を過ぎたものは 1 件、1週間以内に動かすものは 2 件、次の行動が決まっていないものは 2 件あります。'
     );
     expect(
       within(office).getByText('セールスは空席です。数字は記録から読み上げています。')
@@ -390,6 +417,8 @@ describe('a deal file on the sales floor', () => {
     mocks.moves.length = 0;
     mocks.marks.length = 0;
     mocks.added.length = 0;
+    mocks.contacts.length = 0;
+    mocks.removed.length = 0;
     mocks.left.mockClear();
   });
 
@@ -520,7 +549,7 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.marks).toEqual([{ organizationId: ORG_ID, id: taskId, done: true }]);
     expect(
       within(office).getByText(
-        '次の行動「見本の次の行動2」を済みにしました。間違えたときは、取り消せます。'
+        '次の行動「見本の次の行動2」を済みにしました。間違えたときは、取り消せます。何をしたかは、5 で残せます。'
       )
     ).toBeInTheDocument();
     await user.keyboard('3');
@@ -570,6 +599,87 @@ describe('a deal file on the sales floor', () => {
     expect(mocks.added[0]).toMatchObject({ title: '見積を送る', dueOn: '2026-11-16' });
   });
 
+  it('records what was done with the lead: a place opened with its key, a kind chosen with its button', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    expect(choice(office, /連絡を記録する/)).toHaveTextContent('5');
+    await user.keyboard('5');
+    const place = within(office).getByRole('region', { name: '連絡を記録する' });
+    // The place holds the focus: no kind is under Enter, and no number key chooses one
+    expect(document.activeElement).toBe(place);
+    await user.keyboard('123{Enter}');
+    expect(mocks.contacts).toHaveLength(0);
+    expect(mocks.moves).toHaveLength(0);
+    expect(
+      within(place)
+        .getAllByRole('button')
+        .map((button) => button.textContent)
+    ).toEqual([
+      '電話した',
+      'メールした',
+      '訪問した',
+      'オンラインで商談した',
+      'つながらなかった',
+      'Escやめて選択肢に戻る',
+    ]);
+
+    await user.type(within(place).getByLabelText(/^メモ/), '来週、見積を見て返事をくれる');
+    await user.click(within(place).getByRole('button', { name: '電話した' }));
+    expect(mocks.contacts).toEqual([
+      {
+        organizationId: ORG_ID,
+        leadId: mocks.deals[1].leadId,
+        kind: 'call',
+        dealId: mocks.deals[1].id,
+        note: '来週、見積を見て返事をくれる',
+      },
+    ]);
+    expect(
+      within(office).getByText('「電話した」を記録しました。間違えたときは、取り消せます。')
+    ).toBeInTheDocument();
+    // Z takes the record back
+    await user.keyboard('z');
+    expect(mocks.removed).toEqual([{ organizationId: ORG_ID, id: 'new-contact' }]);
+    expect(within(office).getByText('取り消しました。')).toBeInTheDocument();
+  });
+
+  it('records a contact without a note, and after a next action was marked', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    await user.keyboard('3');
+    await user.keyboard('5');
+    await user.click(within(office).getByRole('button', { name: 'つながらなかった' }));
+    expect(mocks.contacts).toEqual([
+      {
+        organizationId: ORG_ID,
+        leadId: mocks.deals[1].leadId,
+        kind: 'no_answer',
+        dealId: mocks.deals[1].id,
+      },
+    ]);
+    // Marking stays closed, and the deal can still be moved on
+    await user.keyboard('3');
+    expect(mocks.marks).toHaveLength(1);
+    await user.keyboard('1');
+    expect(mocks.moves).toHaveLength(1);
+  });
+
+  it('leaves the place of a contact with Esc, recording nothing', async () => {
+    const { user, office, file } = await openFile('見本の商談2');
+    await user.keyboard('5{Escape}');
+    expect(within(office).queryByRole('region', { name: '連絡を記録する' })).not.toBeInTheDocument();
+    expect(file).toBeInTheDocument();
+    expect(mocks.contacts).toHaveLength(0);
+  });
+
+  it('says that the next action shown stays when another one is set', async () => {
+    const { user, office } = await openFile('見本の商談2');
+    await user.keyboard('4');
+    expect(
+      within(office).getByText(
+        'いまの次の行動「見本の次の行動2」（期限 2026/11/10）は残ります。済んでいるなら、先に 3 で済みにしてください。'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('says what is missing when a next action is sent without it', async () => {
     const { user, office } = await openFile('見本の商談3');
     await user.keyboard('4');
@@ -613,7 +723,7 @@ describe('a deal file on the sales floor', () => {
     await user.keyboard('3');
     expect(
       within(office).getByText(
-        'すみません、いまの答えはうまくいきませんでした。その前の答えは、そのまま残っています。'
+        'すみません、いまの答えはうまくいきませんでした。その前の答えは、そのまま残っています。通信が切れていないかを確かめて、もう一度お願いします。'
       )
     ).toBeInTheDocument();
     mocks.fail = false;
@@ -799,13 +909,46 @@ describe('a deal file on the sales floor', () => {
     expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
   });
 
+  it('never leaves a change or the board waiting for the connection: the ways out are closed while it saves (#1251)', async () => {
+    mocks.modes.clear();
+    mocks.boardModes.clear();
+    await openFile('見本の商談2');
+    // The move, the mark, the new next action, the contact and its undo, and the board itself.
+    // Creating and deleting a deal are not the file's (their mocks do not count)
+    expect([...mocks.modes]).toEqual(['always']);
+    expect([...mocks.boardModes]).toEqual(['always']);
+  });
+
+  it('names the facts of the handoff sheet that are still empty, without stopping the move', async () => {
+    const { user, office } = await openFile('見本の商談1');
+    await user.keyboard('1');
+    const question = within(office).getByRole('region', { name: 'SQL判定' });
+    expect(question).toHaveTextContent(
+      '引き継ぎ書に載る項目のうち、まだ入っていないもの：対象システム・受注予定日。このまま進めることもできます。'
+    );
+    await user.click(within(question).getByRole('button', { name: /適格/ }));
+    expect(mocks.moves).toHaveLength(1);
+  });
+
+  it('says nothing about empty facts when the sheet has them all', async () => {
+    Object.assign(mocks.deals[0], {
+      targetSystem: 'access',
+      expectedCloseOn: '2026-12-20',
+      leadSqlDecision: 'qualified',
+    });
+    const { user, office } = await openFile('見本の商談1');
+    await user.keyboard('1');
+    const question = within(office).getByRole('region', { name: '進める前の確認' });
+    expect(question).not.toHaveTextContent('まだ入っていないもの');
+  });
+
   it('says so when a move did not go through, and leaves the deal where it was', async () => {
     mocks.fail = true;
     const { user, office } = await openFile('見本の商談2');
     await user.keyboard('1');
     expect(
       within(office).getByText(
-        'すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。'
+        'すみません、うまくいきませんでした。通信が切れていないかを確かめて、もう一度お願いします。'
       )
     ).toBeInTheDocument();
     expect(choice(office, /「提案」へ進める/)).not.toHaveAttribute('aria-disabled');

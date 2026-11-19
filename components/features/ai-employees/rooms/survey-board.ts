@@ -36,8 +36,12 @@ export type SurveyBoardView = (typeof SURVEY_BOARD_VIEWS)[number];
 /** The view the board opens on */
 export const SURVEY_BOARD_FIRST_VIEW: SurveyBoardView = 'open';
 
-/** Rows of the board per page: what fits on the wall without scrolling */
-export const SURVEY_BOARD_PAGE_SIZE = 8;
+/**
+ * Rows of the board per page: what fits on the wall without scrolling. Measured in a browser
+ * with made-up deals (#1232): a row is 56px, and 8 of them did not fit at 1024x768 and 1280x720,
+ * where the board's head or foot wraps to two lines. 7 fit there, and at 1366x768 and above.
+ */
+export const SURVEY_BOARD_PAGE_SIZE = 7;
 
 /**
  * Input of `deals.board` for the room: everyone's open surveys. Won and lost ones are left out

@@ -59,6 +59,7 @@ export function OfficeRoomEngineering({
   keysRef,
   onOpenNormal,
   onFileOpenChange,
+  onBusyChange,
 }: {
   organizationId: string;
   role: AiEmployeeRole;
@@ -73,6 +74,8 @@ export function OfficeRoomEngineering({
   onOpenNormal: () => void;
   /** Told when a file opens or closes: while one is open, Esc closes it, not the room */
   onFileOpenChange: (open: boolean) => void;
+  /** Told while an answer given in the file is being saved: the office keeps the room open */
+  onBusyChange: (busy: boolean) => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room');
   const tRoom = useTranslations('aiOffice.immersive.room.engineering');
@@ -200,6 +203,7 @@ export function OfficeRoomEngineering({
         keysRef={fileKeys}
         onClose={() => setOpen(null)}
         onOpenNormal={onOpenNormal}
+        onBusyChange={onBusyChange}
       />
     );
   }
