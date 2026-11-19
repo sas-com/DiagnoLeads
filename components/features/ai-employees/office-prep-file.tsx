@@ -36,7 +36,9 @@ type Outcome =
   // The server refused the draft: the card was saved in the moment after it was read.
   // fillable: whether the card as it is now still has a field a draft could fill
   | { kind: 'refused'; fillable: boolean }
-  | { kind: 'failed' };
+  | { kind: 'failed' }
+  // The server no longer takes what this screen sends: the page is older than the app
+  | { kind: 'outdated' };
 
 /** A calendar day ('YYYY-MM-DD') as it is written on the board */
 const dayText = (day: string) => day.replaceAll('-', '/');
@@ -243,7 +245,7 @@ export function OfficePrepFile({
             },
             onError: (error) => {
               if (error.data?.code === 'CONFLICT') void afterRefusal('draft');
-              else setOutcome({ kind: 'failed' });
+              else setOutcome({ kind: outdatedOrFailed(error) });
             },
           }
         );
@@ -257,6 +259,11 @@ export function OfficePrepFile({
             onError: (error) => {
               if (error.data?.code === 'CONFLICT') {
                 void afterRefusal('undo');
+                return;
+              }
+              // Asking again would be refused the same way: the page has to be loaded again
+              if (outdatedOrFailed(error) === 'outdated') {
+                setOutcome({ kind: 'outdated' });
                 return;
               }
               // The draft is still there: keep it in hand, so the undo can be asked for again
@@ -355,7 +362,9 @@ export function OfficePrepFile({
                     ? outcome.fillable
                       ? t('refused')
                       : t('refusedNothing')
-                    : t('failed')}
+                    : outcome.kind === 'outdated'
+                      ? t('outdated')
+                      : t('failed')}
             </p>
           )}
           {/* Why the draft is closed, to those who could ask for it */}
@@ -587,4 +596,9 @@ export function OfficePrepFile({
       </section>
     </div>
   );
+}
+
+/** A save the server refused as input: the page was opened before a change of the input */
+function outdatedOrFailed(error: { data?: { code?: string } | null }): 'outdated' | 'failed' {
+  return error.data?.code === 'BAD_REQUEST' ? 'outdated' : 'failed';
 }

@@ -72,6 +72,7 @@ const mocks = vi.hoisted(() => ({
   saveOptions: {} as { networkMode?: string },
   saving: false,
   failSave: false,
+  saveErrorCode: 'INTERNAL_SERVER_ERROR',
   refreshed: vi.fn(),
 }));
 
@@ -241,7 +242,7 @@ vi.mock('@/lib/trpc/client', () => ({
           ) => {
             mocks.saves.push(input);
             if (mocks.failSave) {
-              const error = { data: { code: 'INTERNAL_SERVER_ERROR' } };
+              const error = { data: { code: mocks.saveErrorCode } };
               hook.onError?.(error);
               options.onError?.(error);
               return;
@@ -343,6 +344,7 @@ describe('the engineering room', () => {
     mocks.saves.length = 0;
     mocks.saving = false;
     mocks.failSave = false;
+    mocks.saveErrorCode = 'INTERNAL_SERVER_ERROR';
     mocks.refreshed.mockClear();
     mocks.card = {
       estimatedSystem: '見本のシステム',
@@ -913,6 +915,28 @@ describe('the engineering room', () => {
           'すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。'
         )
       ).toBeInTheDocument();
+    });
+
+    it('says the page is out of date when the server no longer takes what it sends (#1240)', async () => {
+      mocks.failSave = true;
+      mocks.saveErrorCode = 'BAD_REQUEST';
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      expect(
+        await within(office).findByText(
+          '保存できませんでした。画面が古くなっています。ページを読み込み直してから、もう一度お願いします。'
+        )
+      ).toBeInTheDocument();
+    });
+
+    it('does not offer an undo that would be refused the same way (#1240)', async () => {
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      mocks.failSave = true;
+      mocks.saveErrorCode = 'BAD_REQUEST';
+      await user.keyboard('z');
+      expect(await within(office).findByText(/画面が古くなっています/)).toBeInTheDocument();
+      expect(within(office).queryByRole('button', { name: /いまの下書きを取り消す/ })).toBeNull();
     });
 
     it('keeps the undo open when it did not go through', async () => {

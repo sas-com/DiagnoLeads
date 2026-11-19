@@ -5,8 +5,8 @@ category: API
 title: "事前調査カードの保存は、読んだときの更新日時が今も同じときだけ受ける（ほかの人が先に保存していたら断る）。空のカードは「無い」と同じに出す（#1222・#1225）"
 status: active
 superseded_by: []
-issues: [1222, 1225, 1221, 1212]
-paths: ["lib/features/lead-prep/service.ts", "lib/features/lead-prep/types/schemas.ts", "lib/features/lead-prep/api/router.ts", "components/features/lead-prep/lead-prep-card.tsx", "components/features/ai-employees/office-prep-file.tsx"]
+issues: [1222, 1225, 1240, 1221, 1212]
+paths: ["lib/utils/expected-updated-at.ts", "lib/features/lead-prep/service.ts", "lib/features/lead-prep/types/schemas.ts", "lib/features/lead-prep/api/router.ts", "components/features/lead-prep/lead-prep-card.tsx", "components/features/ai-employees/office-prep-file.tsx"]
 ---
 
 ### [API] 事前調査カードの保存は、読んだときの更新日時が今も同じときだけ受ける（ほかの人が先に保存していたら断る）。空のカードは「無い」と同じに出す（#1222・#1225）
@@ -33,7 +33,11 @@ paths: ["lib/features/lead-prep/service.ts", "lib/features/lead-prep/types/schem
   - 項目を任意にすると、前提条件なしで置き換える経路が残り続ける。必須にして、古い画面（デプロイの直後に開いたままのタブ）の保存は BAD_REQUEST にする（入力は消えない。ヒアリング・診断ビルダーと同じ扱い）
   - 行を消す API は、新しい手続きになる（組織の分離の実 DB テストが要る。決定 `2026-11-14-engineering-room` の「API は足さない」にも触れる）。見え方を直すだけなら、画面の判定で足りる
 - **レビュー**（2026-11-15、オーナーの指示で専門エージェント3つに読み取り専用で依頼）: `security-specialist` は blocker なし、`architecture-specialist` はマージしてよい、`ui-ux-specialist` は「直してからマージ」（リードの画面で断られたことに気づけない・古いカードから編集を始められる）。上の「画面」は、その指摘を直した形
-- **残したもの**: 自分の入力を残したまま、保存されている内容と見比べる表示は無い（別の Issue）。前提条件を送らない古い画面の保存（BAD_REQUEST）は、「もう一度お試しください」と出る
+- **レビューの残り**（#1240、2026-11-19）:
+  - 断られたときの知らせの中に「いま保存されている内容を見る」を置き、開くと、保存されている内容を表示モードと同じ形で読み取り専用で出す。入力はフォームに残したまま見比べられる。API は足さない（断られたあとの読み直しで、最新のカードはもう画面の側にある）
+  - 保存が BAD_REQUEST で断られたら「画面が古くなっています。ページを読み込み直してから」と出す（リードの画面はトースト、開発室は報告の文。開発室の取り消しは、同じ理由で断られ続けるので閉じる）。これは、この版から先の入力の変更にだけ効く。この版より前に開いたままのタブは、前の版の文を出す
+  - `expectedUpdatedAt` の上限（西暦9999年まで）を、共通の `lib/utils/expected-updated-at.ts` にし、ヒアリングと診断ビルダーの保存にもそろえた。上限が無いと、JavaScript の最後の日時を送られたとき、サービスの中で「次の1ミリ秒」が作れずに 500 になり、当番に通知が飛んでいた
+- **残したもの**: 本番 DB に、`updated_at` がマイクロ秒で書かれた行が無いことの確認（オーナーの作業。#1240 に SQL）
 - **範囲外**: 営業の手引きなど、ほかの「丸ごと置き換える」保存は、今のまま（決定 `2026-10-15-sales-playbook-in-db` の既知の限界）。そろえるなら別の Issue
 - **ルール**:
   - 事前調査カードを保存する画面・仕事を足すときは、読んだときの `updatedAt` を必ず付ける。付ける値は、保存の直前ではなく「元にしたカードを読んだとき」のもの

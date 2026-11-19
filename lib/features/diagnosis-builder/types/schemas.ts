@@ -1,6 +1,7 @@
 /**
  * Input schemas of the diagnoses router (Refs #114)
  */
+import { expectedUpdatedAtSchema } from '@/lib/utils/expected-updated-at';
 import { z } from 'zod';
 import { diagnosisDefinitionSchema } from '../definition';
 
@@ -28,7 +29,7 @@ export const saveDiagnosisDraftSchema = z
     /** Replaces the whole draft; may still have errors (shown by validate) */
     definition: diagnosisDefinitionSchema,
     /** updatedAt the client last read; a newer row means someone else saved meanwhile */
-    expectedUpdatedAt: z.date(),
+    expectedUpdatedAt: expectedUpdatedAtSchema,
   })
   .strict();
 
@@ -37,7 +38,7 @@ export const publishDiagnosisSchema = z
     organizationId,
     id,
     /** The draft the person reviewed; publishing fails with CONFLICT when it changed since */
-    expectedUpdatedAt: z.date(),
+    expectedUpdatedAt: expectedUpdatedAtSchema,
     note: z.string().trim().max(500).optional(),
   })
   .strict();
