@@ -29,7 +29,13 @@ import {
 } from './office-room-parts';
 import { roomGuide } from './office-rooms';
 import { FIELD } from './office-talk-staff';
-import { REVOKE_KEY, invitationFigures, invitationNamed } from './rooms/reception';
+import {
+  READ_OFFLINE_FAILS,
+  REVOKE_KEY,
+  invitationFigures,
+  invitationNamed,
+  queryFailure,
+} from './rooms/reception';
 
 /** Members read for the shelf: the most `members.list` gives at once */
 export const MEMBERS_SHELF_MAX = 100;
@@ -84,20 +90,14 @@ export function OfficeRoomMembers({
   const format = useFormatter();
   const roleTitle = tOffice(`roles.${role}.title`);
 
-  const members = trpc.members.list.useQuery({
-    organizationId,
-    limit: MEMBERS_SHELF_MAX,
-    offset: 0,
-  });
-  const invitations = trpc.members.listInvitations.useQuery({ organizationId });
-  const invited = invitationFigures(
-    invitations.data,
-    invitations.isError
-      ? invitations.error?.data?.code === 'FORBIDDEN'
-        ? 'forbidden'
-        : 'error'
-      : null
+  const members = trpc.members.list.useQuery(
+    { organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 },
+    READ_OFFLINE_FAILS
   );
+  const invitations = trpc.members.listInvitations.useQuery({ organizationId }, READ_OFFLINE_FAILS);
+  const invited = invitationFigures(invitations.data, queryFailure(invitations));
+  // Only when there is nothing to show: a reading again that failed keeps the members read before
+  const membersFailed = queryFailure(members) !== null;
   const roleLabel = (value: string) =>
     value in ROLE_LABELS ? tMembers(ROLE_LABELS[value as keyof typeof ROLE_LABELS]) : value;
   const day = (value: Date | string) =>
@@ -207,12 +207,13 @@ export function OfficeRoomMembers({
     };
   }, [keysRef]);
 
-  const report =
-    outcome?.kind === 'done'
+  const report = busy
+    ? tShelf('revoke.saving')
+    : outcome?.kind === 'done'
       ? tShelf('revoke.done', { email: outcome.email })
       : outcome
         ? tShelf(`revoke.${outcome.kind}`)
-        : members.isError
+        : membersFailed
           ? tShelf('error')
           : !members.data
             ? tShelf('reading')
@@ -334,7 +335,7 @@ export function OfficeRoomMembers({
           <h2 className="text-xl font-bold">{tShelf('board')}</h2>
         </header>
 
-        {members.isError ? (
+        {membersFailed ? (
           <p className={BOARD_MESSAGE}>{tShelf('error')}</p>
         ) : !members.data ? (
           <output className="m-auto flex items-center gap-3 text-sm text-[#d8d2c4]">

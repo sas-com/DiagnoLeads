@@ -25,6 +25,7 @@ import {
 import { OfficeRoomSettings } from './office-room-settings';
 import { roomGuide } from './office-rooms';
 import {
+  READ_OFFLINE_FAILS,
   RECEPTION_SHELVES,
   type ReceptionShelf,
   SHELF_KEYS,
@@ -32,13 +33,9 @@ import {
   dueLine,
   invitationFigures,
   membersLine,
+  queryFailure,
   shelfOfKey,
 } from './rooms/reception';
-
-const failureOf = (query: {
-  isError: boolean;
-  error: { data?: { code?: string } | null } | null;
-}) => (!query.isError ? null : query.error?.data?.code === 'FORBIDDEN' ? 'forbidden' : 'error');
 
 /**
  * The reception of the full-screen office, the back office's room (#1196, Epic #1195). At the
@@ -93,17 +90,15 @@ export function OfficeRoomReception({
   }, [busy, onBusyChange]);
 
   // The same questions the shelves ask: what the counter reports is what the shelf then shows
-  const due = trpc.leadFollowUp.dueTasks.useQuery({
-    organizationId,
-    scope: 'mine',
-    limit: DUE_TASKS_MAX,
-  });
-  const members = trpc.members.list.useQuery({
-    organizationId,
-    limit: MEMBERS_SHELF_MAX,
-    offset: 0,
-  });
-  const invitations = trpc.members.listInvitations.useQuery({ organizationId });
+  const due = trpc.leadFollowUp.dueTasks.useQuery(
+    { organizationId, scope: 'mine', limit: DUE_TASKS_MAX },
+    READ_OFFLINE_FAILS
+  );
+  const members = trpc.members.list.useQuery(
+    { organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 },
+    READ_OFFLINE_FAILS
+  );
+  const invitations = trpc.members.listInvitations.useQuery({ organizationId }, READ_OFFLINE_FAILS);
 
   const shelfOpen = shelf !== null;
   useEffect(() => {
@@ -148,8 +143,8 @@ export function OfficeRoomReception({
   const back = () => setShelf(null);
   const guideProps = { role, status, employeeName, look };
 
-  const dueKnown = dueFigures(due.data, failureOf(due));
-  const invited = invitationFigures(invitations.data, failureOf(invitations));
+  const dueKnown = dueFigures(due.data, queryFailure(due));
+  const invited = invitationFigures(invitations.data, queryFailure(invitations));
   const memberCount = members.data?.total ?? null;
   const aboutDue = dueLine(dueKnown);
   const aboutMembers = membersLine(memberCount, invited);

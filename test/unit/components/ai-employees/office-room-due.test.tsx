@@ -49,6 +49,8 @@ const mocks = vi.hoisted(() => ({
   updatePending: false,
   // The networkMode each save of the shelves was given (#1251)
   networkModes: {} as Record<string, unknown>,
+  // The options each reading of the reception was given (#1300)
+  queryModes: {} as Record<string, unknown>,
   invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
   revoked: [] as { organizationId: string; invitationId: string }[],
   revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
@@ -82,8 +84,9 @@ vi.mock('@/lib/trpc/client', () => ({
     },
     members: {
       list: {
-        useQuery: (input: unknown) => {
+        useQuery: (input: unknown, options?: { networkMode?: string }) => {
           mocks.membersInputs.push(input);
+          mocks.queryModes.members = options?.networkMode;
           if (mocks.membersFail) {
             return {
               data: undefined,
@@ -123,7 +126,8 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
       listInvitations: {
-        useQuery: () =>
+        useQuery: (_input: unknown, options?: { networkMode?: string }) =>
+          (mocks.queryModes.invitations = options?.networkMode) &&
           Array.isArray(mocks.invitations)
             ? { data: mocks.invitations, error: null, isError: false, isFetching: false }
             : {
@@ -138,8 +142,9 @@ vi.mock('@/lib/trpc/client', () => ({
     },
     leadFollowUp: {
       dueTasks: {
-        useQuery: (input: unknown) => {
+        useQuery: (input: unknown, options?: { networkMode?: string }) => {
           mocks.inputs.push(input);
+          mocks.queryModes.dueTasks = options?.networkMode;
           if (mocks.mode === 'loading') {
             return { data: undefined, error: null, isError: false, isFetching: true };
           }
@@ -276,6 +281,7 @@ describe('the reception', () => {
     mocks.armMs = 0;
     mocks.updatePending = false;
     mocks.networkModes = {};
+    mocks.queryModes = {};
     mocks.members = [member(1, 'owner'), member(2, 'member')];
     mocks.membersTotal = null;
     mocks.membersInputs.length = 0;
@@ -525,7 +531,7 @@ describe('the reception', () => {
     mocks.mode = 'error';
     const { board } = await enterReception();
     expect(
-      within(board).getByText('期限を読めませんでした。時間をおいて、もう一度開いてください。')
+      within(board).getByText('期限を読めませんでした。通信が切れていないかを確かめて、もう一度開いてください。')
     ).toBeInTheDocument();
   });
 
@@ -780,6 +786,44 @@ describe('the counter of the reception (#1196)', () => {
     await user.click(within(office).getByRole('button', { name: /やめて棚に戻る/ }));
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
+  });
+
+  it('fails the readings at once when offline, so the room says it could not read (#1300)', async () => {
+    const { user } = await enterCounter();
+    expect(mocks.queryModes).toEqual({ dueTasks: 'always', members: 'always', invitations: 'always' });
+    mocks.queryModes = {};
+    await user.keyboard('1');
+    expect(mocks.queryModes.dueTasks).toBe('always');
+    await user.keyboard('{Escape}2');
+    expect(mocks.queryModes).toMatchObject({ members: 'always', invitations: 'always' });
+  });
+
+  it('says that a mark or a revoking is being saved (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('1');
+    mocks.updatePending = true;
+    refresh();
+    expect(await within(office).findByText('保存しています。')).toBeInTheDocument();
+    mocks.updatePending = false;
+    refresh();
+    await user.keyboard('{Escape}');
+    await user.keyboard('2');
+    await user.keyboard('1');
+    mocks.revokePending = true;
+    refresh();
+    expect(await within(office).findByText('取り消しています。')).toBeInTheDocument();
+    mocks.revokePending = false;
+  });
+
+  it('keeps the queue in hand when reading it again fails (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('1');
+    mocks.mode = 'error';
+    refresh();
+    expect(
+      within(office).getByRole('article', { name: '見本の次の行動1' })
+    ).toBeInTheDocument();
+    expect(within(office).queryByText(/期限を読めませんでした/)).not.toBeInTheDocument();
   });
 
   it('fails the saves of the shelves at once when offline, not waiting for the network (#1251)', async () => {

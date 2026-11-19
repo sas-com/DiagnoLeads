@@ -134,3 +134,23 @@ export function invitationNamed<Invitation extends { email: string }>(
  * mark the first one before it was seen.
  */
 export const DUE_ARM_MS = 400;
+
+/**
+ * The reading of the reception's queries (#1300): offline, a query fails at once instead of waiting
+ * for the network, so the room says it could not read instead of "reading" without end. The same
+ * as the saves (#1251).
+ */
+export const READ_OFFLINE_FAILS = { networkMode: 'always' } as const;
+
+/**
+ * Why a query of the reception has nothing to show, if it failed: a reading again that failed
+ * keeps what was read before, and that is still shown
+ */
+export function queryFailure(query: {
+  isError: boolean;
+  data: unknown;
+  error: { data?: { code?: string } | null } | null;
+}): 'forbidden' | 'error' | null {
+  if (!query.isError || query.data !== undefined) return null;
+  return query.error?.data?.code === 'FORBIDDEN' ? 'forbidden' : 'error';
+}

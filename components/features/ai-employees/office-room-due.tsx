@@ -30,7 +30,7 @@ import {
   dueState,
   roomGuide,
 } from './office-rooms';
-import { DUE_ARM_MS } from './rooms/reception';
+import { DUE_ARM_MS, READ_OFFLINE_FAILS, queryFailure } from './rooms/reception';
 
 type Outcome = 'done' | 'undone' | 'failed' | 'undoFailed';
 
@@ -96,11 +96,10 @@ export function OfficeRoomDue({
   const [armed, setArmed] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
-  const due = trpc.leadFollowUp.dueTasks.useQuery({
-    organizationId,
-    scope: 'mine',
-    limit: DUE_TASKS_MAX,
-  });
+  const due = trpc.leadFollowUp.dueTasks.useQuery(
+    { organizationId, scope: 'mine', limit: DUE_TASKS_MAX },
+    READ_OFFLINE_FAILS
+  );
   const loaded = due.data;
   useEffect(() => {
     if (loaded) setQueue((current) => current ?? loaded.items);
@@ -148,7 +147,11 @@ export function OfficeRoomDue({
     return () => onBusyChange(false);
   }, [saving, onBusyChange]);
 
-  const forbidden = due.error?.data?.code === 'FORBIDDEN';
+  // Only when there is nothing to show: a reading again that failed (after a mark, offline) keeps
+  // the queue in hand
+  const failure = queue ? null : queryFailure(due);
+  const forbidden = failure === 'forbidden';
+  const readFailed = failure === 'error';
   const canEdit = loaded?.canEdit === true;
   const today = loaded?.today ?? '';
   const count = queue?.length ?? 0;
@@ -204,25 +207,27 @@ export function OfficeRoomDue({
 
   const report = forbidden
     ? tDue('forbidden')
-    : due.isError
-      ? tDue('error')
-      : !queue
-        ? tDue('reading')
-        : outcome === 'failed'
-          ? tDue('failed')
-          : outcome === 'undoFailed'
-            ? tDue('undoFailed')
-            : outcome === 'done'
-              ? tDue('done')
-              : outcome === 'undone'
-                ? tDue('undone')
-                : count === 0
-                  ? tDue('empty')
-                  : finished
-                    ? tDue('finished', { done: doneIds.size, left: count - doneIds.size })
-                    : index === 0
-                      ? tDue('report', { total: count, index: 1 })
-                      : tDue('reportNext', { total: count, index: index + 1 });
+    : update.isPending
+      ? tDue('saving')
+      : readFailed
+        ? tDue('error')
+        : !queue
+          ? tDue('reading')
+          : outcome === 'failed'
+            ? tDue('failed')
+            : outcome === 'undoFailed'
+              ? tDue('undoFailed')
+              : outcome === 'done'
+                ? tDue('done')
+                : outcome === 'undone'
+                  ? tDue('undone')
+                  : count === 0
+                    ? tDue('empty')
+                    : finished
+                      ? tDue('finished', { done: doneIds.size, left: count - doneIds.size })
+                      : index === 0
+                        ? tDue('report', { total: count, index: 1 })
+                        : tDue('reportNext', { total: count, index: index + 1 });
   const more = loaded ? loaded.total - loaded.items.length : 0;
   // The answer the room expects next: filled
   const mainAction: DueAction | null = dueActionOpen('done', { ...state, busy: false })
@@ -319,7 +324,7 @@ export function OfficeRoomDue({
           <p className="m-auto max-w-md px-6 text-center text-base leading-relaxed">
             {tDue('forbidden')}
           </p>
-        ) : due.isError ? (
+        ) : readFailed ? (
           <p className="m-auto max-w-md px-6 text-center text-base leading-relaxed">
             {tDue('error')}
           </p>
