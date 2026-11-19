@@ -136,6 +136,10 @@ export function OfficeRoomDue({
     },
     // A mark that could not be taken back is still there, and can be taken back again
     onError: (_error, input) => setOutcome(input.done === false ? 'undoFailed' : 'failed'),
+    // Fails at once when offline instead of waiting for the network: the way back is closed
+    // while a mark is being saved, and a save that waits would keep it closed (#1251, owner's
+    // decision (a), as in the sales floor and the engineering room)
+    networkMode: 'always',
   });
 
   const saving = update.isPending;
