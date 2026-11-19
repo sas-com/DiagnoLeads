@@ -20,8 +20,8 @@ import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from './types/schemas';
  *   'interest'; NULL without a diagnosis summary)
  * - leadIsInterested: that level is 関心あり (MQL)
  * - leadRequestedConsultation: the list's 相談申込 filter
- * - qrCampaignAnswer: which answers count for a QR campaign, over the aliases `s`
- *   (diagnostic_submissions) and `c` (qr_campaigns): the campaigns' breakdown and the list's
+ * - qrCampaignAnswer: which answers count for a QR campaign, over the aliases `qra`
+ *   (diagnostic_submissions) and `qrc` (qr_campaigns): the campaigns' breakdown and the list's
  *   filter by a campaign (#1255) join the two with it
  */
 export { leadIsInterested, leadRequestedConsultation, listMqlLevel, qrCampaignAnswer };

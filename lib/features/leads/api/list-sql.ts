@@ -115,20 +115,22 @@ export const leadHasDeals = sql<boolean>`exists (select 1 from deals d where d.l
  *
  * The one rule of the campaigns' breakdown (analytics, qrCampaignBreakdown) and of the lead
  * list's filter (leadFromQrCampaign, #1255), so the two count the same answers. Plain SQL over
- * the fixed aliases `s` (diagnostic_submissions) and `c` (qr_campaigns): inside a relational
+ * the fixed aliases `qra` (diagnostic_submissions) and `qrc` (qr_campaigns): inside a relational
  * query Drizzle renders every column object with the root table's alias (see leadLastActivityAt),
- * so whoever uses it names the two tables `s` and `c`.
+ * so whoever uses it names the two tables `qra` and `qrc`. The names are their own, so they do
+ * not meet the short aliases other expressions use inside (leadMqlLevel has an `s` of its own).
  */
-export const qrCampaignAnswer = sql`s.tracking ->> 'qr' = c.short_code and s.is_test = false and s.created_at >= c.created_at and s.organization_id = c.organization_id`;
+export const qrCampaignAnswer = sql`qra.tracking ->> 'qr' = qrc.short_code and qra.is_test = false and qra.created_at >= qrc.created_at and qra.organization_id = qrc.organization_id`;
 
 /**
  * The lead was created by an answer counted for this QR campaign (#1255): the campaign's new
  * leads, as they are now. The answers are matched on the lead's organization, and the campaign
- * on the answers', so a campaign of another organization matches no lead; the caller adds the
+ * on the answers', so a campaign of another organization matches no lead (as an id no campaign
+ * has: nothing is listed, and nothing says whether the campaign exists); the caller adds the
  * organization condition of the leads
  */
 export const leadFromQrCampaign = (campaignId: string) =>
-  sql<boolean>`exists (select 1 from diagnostic_submissions s join qr_campaigns c on ${qrCampaignAnswer} where s.lead_id = ${leads.id} and s.organization_id = ${leads.organizationId} and s.lead_created and c.id = ${campaignId})`;
+  sql<boolean>`exists (select 1 from diagnostic_submissions qra join qr_campaigns qrc on ${qrCampaignAnswer} where qra.lead_id = ${leads.id} and qra.organization_id = ${leads.organizationId} and qra.lead_created and qrc.id = ${campaignId})`;
 
 /** Statuses that say a deal is open or won (#854). 失注 is closed and ナーチャリング nurtured */
 const DEAL_STATUSES = ['negotiating', 'won'] as const satisfies readonly LeadStatus[];

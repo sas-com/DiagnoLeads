@@ -36,8 +36,8 @@ export async function qrCampaignBreakdown(
   organizationId: string
 ): Promise<QrCampaignBreakdown[]> {
   // The aliases qrCampaignAnswer is written over (leads' public surface)
-  const campaigns = alias(qrCampaigns, 'c');
-  const answers = alias(diagnosticSubmissions, 's');
+  const campaigns = alias(qrCampaigns, 'qrc');
+  const answers = alias(diagnosticSubmissions, 'qra');
   const newLead = answers.leadCreated;
   // The lead list's own rules over the joined lead (leads' public surface)
   const interested = sql`${newLead} and ${leadIsInterested}`;
