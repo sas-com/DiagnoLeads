@@ -128,6 +128,9 @@ export function OfficeRoomMembers({
     // Read again whatever came of it, and even when the shelf was left meanwhile: the counter
     // reads the same list, and its figure follows
     onSettled: () => void utils.members.listInvitations.invalidate({ organizationId }),
+    // Fails at once when offline instead of waiting for the network: the way back is closed
+    // while the revoking is being saved (#1251, owner's decision (a))
+    networkMode: 'always',
   });
   const pending = invitations.data ?? [];
   // Revoking is offered only to who may see the invitations, and open while there is one

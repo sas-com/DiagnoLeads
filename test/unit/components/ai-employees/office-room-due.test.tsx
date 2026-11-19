@@ -47,6 +47,8 @@ const mocks = vi.hoisted(() => ({
   membersInputs: [] as unknown[],
   membersFail: false,
   updatePending: false,
+  // The networkMode each save of the shelves was given (#1251)
+  networkModes: {} as Record<string, unknown>,
   invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
   revoked: [] as { organizationId: string; invitationId: string }[],
   revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
@@ -99,23 +101,26 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
       revokeInvitation: {
-        useMutation: (shared: { onSettled?: () => void } = {}) => ({
-          isPending: mocks.revokePending,
-          mutate: (
-            input: { organizationId: string; invitationId: string },
-            options: {
-              onSuccess?: () => void;
-              onError?: (error: { data: { code: string } }) => void;
-              onSettled?: () => void;
-            } = {}
-          ) => {
-            mocks.revoked.push(input);
-            if (mocks.revokeFails) options.onError?.({ data: { code: mocks.revokeFails } });
-            else options.onSuccess?.();
-            options.onSettled?.();
-            shared.onSettled?.();
-          },
-        }),
+        useMutation: (shared: { onSettled?: () => void; networkMode?: string } = {}) => {
+          mocks.networkModes.revokeInvitation = shared.networkMode;
+          return {
+            isPending: mocks.revokePending,
+            mutate: (
+              input: { organizationId: string; invitationId: string },
+              options: {
+                onSuccess?: () => void;
+                onError?: (error: { data: { code: string } }) => void;
+                onSettled?: () => void;
+              } = {}
+            ) => {
+              mocks.revoked.push(input);
+              if (mocks.revokeFails) options.onError?.({ data: { code: mocks.revokeFails } });
+              else options.onSuccess?.();
+              options.onSettled?.();
+              shared.onSettled?.();
+            },
+          };
+        },
       },
       listInvitations: {
         useQuery: () =>
@@ -166,22 +171,26 @@ vi.mock('@/lib/trpc/client', () => ({
           options: {
             onSuccess?: (saved: unknown, input: { id: string; done?: boolean }) => void;
             onError?: (error: unknown, input: { id: string; done?: boolean }) => void;
+            networkMode?: string;
           } = {}
-        ) => ({
-          isPending: mocks.updatePending,
-          mutate: (input: { organizationId: string; id: string; done: boolean }) => {
-            if (mocks.fail) {
-              options.onError?.(new Error('failed'), input);
-              return;
-            }
-            mocks.updates.push(input);
-            // The server's list no longer holds what was done: the room must keep its own queue
-            mocks.items = mocks.items.filter(
-              (entry) => !(input.done && (entry as { id: string }).id === input.id)
-            );
-            options.onSuccess?.({}, input);
-          },
-        }),
+        ) => {
+          mocks.networkModes.updateTask = options.networkMode;
+          return {
+            isPending: mocks.updatePending,
+            mutate: (input: { organizationId: string; id: string; done: boolean }) => {
+              if (mocks.fail) {
+                options.onError?.(new Error('failed'), input);
+                return;
+              }
+              mocks.updates.push(input);
+              // The server's list no longer holds what was done: the room must keep its own queue
+              mocks.items = mocks.items.filter(
+                (entry) => !(input.done && (entry as { id: string }).id === input.id)
+              );
+              options.onSuccess?.({}, input);
+            },
+          };
+        },
       },
     },
   },
@@ -266,6 +275,7 @@ describe('the reception', () => {
     mocks.refreshed.mockClear();
     mocks.armMs = 0;
     mocks.updatePending = false;
+    mocks.networkModes = {};
     mocks.members = [member(1, 'owner'), member(2, 'member')];
     mocks.membersTotal = null;
     mocks.membersInputs.length = 0;
@@ -385,7 +395,9 @@ describe('the reception', () => {
     mocks.fail = true;
     await user.click(within(office).getByRole('button', { name: /いまのを取り消す/ }));
     expect(
-      within(office).getByText('取り消せませんでした。済みのままです。もう一度お願いします。')
+      within(office).getByText(
+        '取り消せませんでした。済みのままです。通信が切れていないかを確かめて、もう一度お願いします。'
+      )
     ).toBeInTheDocument();
     expect(within(office).getByRole('button', { name: /済みにする/ })).toHaveAttribute(
       'aria-disabled',
@@ -465,9 +477,7 @@ describe('the reception', () => {
     mocks.total = 210;
     const { board } = await enterReception();
     expect(
-      within(board).getByText(
-        'このほかに 207 件あります。通常の表示の「今日」で確かめてください。'
-      )
+      within(board).getByText('このほかに 207 件あります。通常の表示の「今日」で確かめてください。')
     ).toBeInTheDocument();
   });
 
@@ -489,7 +499,7 @@ describe('the reception', () => {
     await user.keyboard('1');
     expect(
       within(office).getByText(
-        'すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。'
+        'すみません、うまくいきませんでした。通信が切れていないかを確かめて、もう一度お願いします。'
       )
     ).toBeInTheDocument();
     expect(within(office).getByRole('button', { name: /済みにする/ })).toBeInTheDocument();
@@ -568,7 +578,9 @@ describe('the counter of the reception (#1196)', () => {
     const counter = within(office).getByRole('region', { name: '総務の窓口' });
     expect(within(counter).getByText('3 件')).toBeInTheDocument();
     expect(within(counter).getByText('2 人')).toBeInTheDocument();
-    expect(within(counter).getByText('ほかに、有効期限が切れた招待が 1 件あります')).toBeInTheDocument();
+    expect(
+      within(counter).getByText('ほかに、有効期限が切れた招待が 1 件あります')
+    ).toBeInTheDocument();
     // The focus is on the report: Enter pressed once too often opens nothing
     expect(document.activeElement?.textContent).toContain('どの棚を開きますか');
     await user.keyboard('{Enter}');
@@ -616,7 +628,9 @@ describe('the counter of the reception (#1196)', () => {
   it('says what could not be read instead of leaving it out (#1236)', async () => {
     mocks.invitations = 'error';
     const { user, office } = await enterCounter();
-    expect(within(office).getByText(/メンバーは 2 人です。招待の件数を読めませんでした。/)).toBeInTheDocument();
+    expect(
+      within(office).getByText(/メンバーは 2 人です。招待の件数を読めませんでした。/)
+    ).toBeInTheDocument();
     // The shelf says so too, not only its board
     await user.keyboard('2');
     expect(
@@ -627,7 +641,9 @@ describe('the counter of the reception (#1196)', () => {
   it('says that the members could not be read only when there is no figure at all', async () => {
     mocks.membersFail = true;
     const { office } = await enterCounter();
-    expect(within(office).getByText(/メンバーの人数を読めませんでした。どの棚を開きますか。/)).toBeInTheDocument();
+    expect(
+      within(office).getByText(/メンバーの人数を読めませんでした。どの棚を開きますか。/)
+    ).toBeInTheDocument();
     expect(within(office).queryByText(/招待の件数を読めませんでした/)).not.toBeInTheDocument();
     mocks.membersFail = false;
   });
@@ -668,9 +684,7 @@ describe('the counter of the reception (#1196)', () => {
   it('leaves the overdue count out when not every due one was read', async () => {
     mocks.total = 250;
     const { office } = await enterCounter();
-    expect(
-      within(office).getByText(/あなたの次の行動は 250 件です。/)
-    ).toBeInTheDocument();
+    expect(within(office).getByText(/あなたの次の行動は 250 件です。/)).toBeInTheDocument();
     expect(within(office).queryByText(/期限を過ぎています/)).not.toBeInTheDocument();
   });
 
@@ -709,7 +723,9 @@ describe('the counter of the reception (#1196)', () => {
     ).toBeInTheDocument();
     expect(within(office).getByText('メンバーは 2 人です。')).toBeInTheDocument();
     // Revoking is not offered either, and its key does nothing
-    expect(within(office).queryByRole('button', { name: /招待を取り消す/ })).not.toBeInTheDocument();
+    expect(
+      within(office).queryByRole('button', { name: /招待を取り消す/ })
+    ).not.toBeInTheDocument();
     await user.keyboard('1');
     expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
   });
@@ -764,6 +780,14 @@ describe('the counter of the reception (#1196)', () => {
     await user.click(within(office).getByRole('button', { name: /やめて棚に戻る/ }));
     await user.keyboard('{Escape}');
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
+  });
+
+  it('fails the saves of the shelves at once when offline, not waiting for the network (#1251)', async () => {
+    const { user } = await enterCounter();
+    await user.keyboard('1');
+    expect(mocks.networkModes.updateTask).toBe('always');
+    await user.keyboard('{Escape}2');
+    expect(mocks.networkModes.revokeInvitation).toBe('always');
   });
 
   it('puts the focus on what was answered, not on the whole report (#1236)', async () => {
@@ -838,7 +862,7 @@ describe('the counter of the reception (#1196)', () => {
     await user.keyboard('invited2@example.com{Enter}');
     expect(
       within(office).getByText(
-        'すみません、取り消せませんでした。時間をおいて、もう一度お願いします。'
+        'すみません、取り消せませんでした。通信が切れていないかを確かめて、もう一度お願いします。'
       )
     ).toBeInTheDocument();
   });

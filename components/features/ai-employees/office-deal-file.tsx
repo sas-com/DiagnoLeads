@@ -11,7 +11,12 @@ import {
   skipsSqlDecision,
 } from '@/lib/features/deals/types/pipeline';
 import { addDays } from '@/lib/features/lead-follow-up/due';
-import { TASK_TITLE_MAX } from '@/lib/features/lead-follow-up/types/schemas';
+import {
+  CONTACT_KINDS,
+  CONTACT_NOTE_MAX,
+  type ContactKind,
+  TASK_TITLE_MAX,
+} from '@/lib/features/lead-follow-up/types/schemas';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { AlertTriangle, ArrowUpRight, Loader2 } from 'lucide-react';
@@ -39,6 +44,7 @@ import {
   dealActionOfKey,
   dealActionOpen,
   dueShortcuts,
+  missingHandoffFacts,
   stageAfter,
   stageBefore,
 } from './rooms/deals-board';
@@ -65,13 +71,14 @@ type Outcome =
     }
   | { kind: 'done'; taskId: string; title: string; undoFailed?: boolean }
   | { kind: 'added'; title: string; dueOn: string }
+  | { kind: 'contacted'; contact: ContactKind; id: string; undoFailed?: boolean }
   | { kind: 'undone' };
 
 /**
  * What is open in place of the choices: the SQL decision of the lead or, when that is made, the
- * word about the handoff, before the deal leaves 見極め; or a new next action
+ * word about the handoff, before the deal leaves 見極め; a new next action; or a contact to record
  */
-type Matter = 'sql' | 'handoff' | 'add';
+type Matter = 'sql' | 'handoff' | 'add' | 'contact';
 
 // The field of the office: the same by day and by night (the office follows the clock, not the
 // theme), like the fields of the conversation (office-talk-staff.tsx)
@@ -145,6 +152,7 @@ export function OfficeDealFile({
   const tImmersive = useTranslations('aiOffice.immersive');
   const tDeals = useTranslations('deals');
   const tTasks = useTranslations('leadFollowUp.tasks');
+  const tKinds = useTranslations('leadFollowUp.contact.kinds');
   const locale = useLocale();
   const utils = trpc.useUtils();
   const reportRef = useRef<HTMLDivElement>(null);
@@ -152,6 +160,8 @@ export function OfficeDealFile({
   const titleId = useId();
   const dueId = useId();
   const sqlTitleId = useId();
+  const contactTitleId = useId();
+  const contactNoteId = useId();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   // The kinds answered since the file was opened and not undone: closed until then
   const [closedKinds, setClosedKinds] = useState<ReadonlySet<DealAnswerKind>>(new Set());
@@ -164,7 +174,10 @@ export function OfficeDealFile({
   const [missing, setMissing] = useState(false);
 
   // A move reads the deals, the leads and the activity again, as in the normal view
-  const { update } = useDealMutations({ toastErrors: false });
+  // Nothing the file saves is left waiting while the browser is offline (#1251): the ways out are
+  // closed while it saves, so a change that waits for the connection would shut the president in.
+  // It fails instead (after the one retry every change gets), and the file says so
+  const { update } = useDealMutations({ toastErrors: false, failOffline: true });
   // The next actions: the same queries the lead's card refreshes (lead-next-actions-card.tsx)
   // Waited for, like a move: the answer counts as saved once the board was read again, so the
   // next action that comes up is the one the president sees before a key marks it
@@ -174,8 +187,12 @@ export function OfficeDealFile({
       utils.leadFollowUp.dueTasks.invalidate({ organizationId }),
       utils.deals.board.invalidate({ organizationId }),
     ]);
-  const markTask = trpc.leadFollowUp.updateTask.useMutation({ onSuccess: () => refreshTasks() });
+  const markTask = trpc.leadFollowUp.updateTask.useMutation({
+    onSuccess: () => refreshTasks(),
+    networkMode: 'always',
+  });
   const addTask = trpc.leadFollowUp.createTask.useMutation({
+    networkMode: 'always',
     onSuccess: (_saved, input) => {
       setOutcome({ kind: 'added', title: input.title, dueOn: input.dueOn });
       // The next action just set is not marked by the next key
@@ -186,14 +203,44 @@ export function OfficeDealFile({
     },
   });
 
-  const busy = update.isPending || markTask.isPending || addTask.isPending;
+  // A contact with the lead of the deal (#1237): what was done, beside the next action that was
+  // marked. The same queries as the lead's own buttons read again (use-record-contact.tsx)
+  const refreshContacts = () => {
+    void utils.leadFollowUp.contacts.invalidate({ organizationId, leadId: deal.leadId });
+    void utils.leadActivity.list.invalidate();
+    void utils.leadActivity.forDeal.invalidate();
+    void utils.leadActivity.myDay.invalidate({ organizationId });
+    void utils.analytics.getDashboard.invalidate();
+  };
+  const recordContact = trpc.leadFollowUp.recordContact.useMutation({
+    onSuccess: refreshContacts,
+    networkMode: 'always',
+  });
+  const removeContact = trpc.leadFollowUp.deleteContact.useMutation({
+    onSuccess: refreshContacts,
+    networkMode: 'always',
+  });
+  const [contactNote, setContactNote] = useState('');
+
+  const busy =
+    update.isPending ||
+    markTask.isPending ||
+    addTask.isPending ||
+    recordContact.isPending ||
+    removeContact.isPending;
   useEffect(() => {
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
   }, [busy, onBusyChange]);
-  const acted = outcome?.kind === 'moved' || outcome?.kind === 'done' || outcome?.kind === 'added';
+  const acted =
+    outcome?.kind === 'moved' ||
+    outcome?.kind === 'done' ||
+    outcome?.kind === 'added' ||
+    outcome?.kind === 'contacted';
   const undoable =
-    outcome?.kind === 'done' || (outcome?.kind === 'moved' && moveIsUndoable(outcome));
+    outcome?.kind === 'done' ||
+    outcome?.kind === 'contacted' ||
+    (outcome?.kind === 'moved' && moveIsUndoable(outcome));
   const state = {
     canEdit,
     busy,
@@ -240,7 +287,7 @@ export function OfficeDealFile({
   // The answer still stands when its undo fails: it is kept in hand, to be undone again
   const undoFailed = () =>
     setOutcome((current) =>
-      current?.kind === 'moved' || current?.kind === 'done'
+      current?.kind === 'moved' || current?.kind === 'done' || current?.kind === 'contacted'
         ? { ...current, undoFailed: true }
         : current
     );
@@ -274,9 +321,14 @@ export function OfficeDealFile({
           onError: failed,
         }
       );
-    } else if (action === 'add') {
-      setMatter('add');
+    } else if (action === 'add' || action === 'contact') {
+      setMatter(action);
       return;
+    } else if (action === 'undo' && outcome?.kind === 'contacted') {
+      removeContact.mutate(
+        { organizationId, id: outcome.id },
+        { onSuccess: () => setOutcome({ kind: 'undone' }), onError: undoFailed }
+      );
     } else if (action === 'undo' && outcome?.kind === 'moved') {
       // The stage and the probability the move reset; the SQL decision stays (the hearing's)
       update.mutate(
@@ -298,6 +350,30 @@ export function OfficeDealFile({
     reportRef.current?.focus();
   };
 
+  // A contact is recorded with one press of its kind, with the note typed before it (if any)
+  const contact = (kind: ContactKind) => {
+    if (busy) return;
+    const note = contactNote.trim();
+    setMatter(null);
+    setFailedNow(false);
+    recordContact.mutate(
+      {
+        organizationId,
+        leadId: deal.leadId,
+        kind,
+        dealId: deal.id,
+        ...(note ? { note } : {}),
+      },
+      {
+        onSuccess: (saved) => {
+          setOutcome({ kind: 'contacted', contact: kind, id: saved.id });
+          setContactNote('');
+        },
+        onError: failed,
+      }
+    );
+    reportRef.current?.focus();
+  };
   const closeMatter = () => {
     setMatter(null);
     reportRef.current?.focus();
@@ -364,7 +440,9 @@ export function OfficeDealFile({
   // A question takes the focus on its words, not on an answer; the field of a next action is
   // focused by itself (autoFocus)
   useEffect(() => {
-    if (matter === 'sql' || matter === 'handoff') matterRef.current?.focus();
+    if (matter === 'sql' || matter === 'handoff' || matter === 'contact') {
+      matterRef.current?.focus();
+    }
   }, [matter]);
   // A next action that was set is told in the report: the focus goes there, off the field that
   // is gone now
@@ -389,20 +467,24 @@ export function OfficeDealFile({
               stage: stageName(outcome.to),
               probability: outcome.probability,
             })
-        : outcome?.kind === 'done'
+        : outcome?.kind === 'contacted'
           ? outcome.undoFailed
             ? t('undoFailed')
-            : t('done', { title: outcome.title })
-          : outcome?.kind === 'added'
-            ? t('added', { title: outcome.title, date: formatDealDate(outcome.dueOn) })
-            : outcome?.kind === 'undone'
-              ? t('undone')
-              : deal.nextTask && taskTitle
-                ? `${standing}${t('next', {
-                    date: formatDealDate(deal.nextTask.dueOn),
-                    title: taskTitle,
-                  })}`
-                : `${standing}${t('noNext')}`;
+            : t('contacted', { kind: tKinds(outcome.contact) })
+          : outcome?.kind === 'done'
+            ? outcome.undoFailed
+              ? t('undoFailed')
+              : t('done', { title: outcome.title })
+            : outcome?.kind === 'added'
+              ? t('added', { title: outcome.title, date: formatDealDate(outcome.dueOn) })
+              : outcome?.kind === 'undone'
+                ? t('undone')
+                : deal.nextTask && taskTitle
+                  ? `${standing}${t('next', {
+                      date: formatDealDate(deal.nextTask.dueOn),
+                      title: taskTitle,
+                    })}`
+                  : `${standing}${t('noNext')}`;
   const choiceLabel = (choice: (typeof DEAL_FILE_CHOICES)[number]) =>
     choice === 'advance'
       ? next
@@ -429,6 +511,8 @@ export function OfficeDealFile({
     if (busy) event.preventDefault();
     else onLeaveOffice();
   };
+  // The facts of the deal that are still empty, by the names the deal's page gives them
+  const missingFacts = missingHandoffFacts(deal).map((fact) => tDeals(`fields.${fact}`));
   const dealHref = `/${locale}/deals/${deal.id}`;
   const none = t('notSet');
 
@@ -471,6 +555,13 @@ export function OfficeDealFile({
             )}
             {/* Said before the move, whichever question it is: what goes out is not taken back */}
             <p className="text-sm leading-relaxed">{t('handoff.warning')}</p>
+            {/* What the technical team will look for on the sheet and not find: told, not asked
+                for. The move goes on all the same */}
+            {missingFacts.length > 0 && (
+              <p className="text-sm leading-relaxed text-[#fcd34d]">
+                {t('handoff.missing', { fields: missingFacts.join('・') })}
+              </p>
+            )}
             <button
               type="button"
               onClick={leaveQualification}
@@ -494,9 +585,58 @@ export function OfficeDealFile({
           </section>
         )}
 
+        {canEdit && matter === 'contact' && (
+          // The place takes the focus as a whole: no kind is under Enter, and it is read out from
+          // its title. A kind is recorded with its button, never with a number key
+          <section
+            ref={matterRef}
+            aria-labelledby={contactTitleId}
+            tabIndex={-1}
+            className="flex flex-col gap-2 outline-none"
+          >
+            <h3 id={contactTitleId} className={CAP}>
+              {t('contact.title')}
+            </h3>
+            <label htmlFor={contactNoteId} className="text-sm text-[#d8d2c4]">
+              {t('contact.note')}
+            </label>
+            <Input
+              id={contactNoteId}
+              value={contactNote}
+              maxLength={CONTACT_NOTE_MAX}
+              autoComplete="off"
+              onChange={(event) => setContactNote(event.target.value)}
+              className={FIELD}
+            />
+            <p className="text-sm text-[#d8d2c4]">{t('contact.pick')}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {CONTACT_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => contact(kind)}
+                  className={cn('min-h-11 border px-3 text-sm font-bold', ACTION_PLAIN, FOCUS)}
+                >
+                  {tKinds(kind)}
+                </button>
+              ))}
+            </div>
+            <MatterBack onBack={closeMatter}>{t('contact.back')}</MatterBack>
+          </section>
+        )}
+
         {canEdit && matter === 'add' && (
           <form onSubmit={saveTask} className="flex flex-col gap-2">
             <h3 className={CAP}>{t('add.title')}</h3>
+            {/* Setting a next action adds one: the one the file shows stays until it is marked */}
+            {deal.nextTask && taskTitle && (
+              <p className="text-sm leading-relaxed text-[#d8d2c4]">
+                {t('add.keeps', {
+                  title: taskTitle,
+                  date: formatDealDate(deal.nextTask.dueOn),
+                })}
+              </p>
+            )}
             <label htmlFor={titleId} className="text-sm text-[#d8d2c4]">
               {t('add.what')}
             </label>

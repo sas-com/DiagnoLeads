@@ -480,7 +480,7 @@
           "more": "There are {count} more. Please check them on Today in the normal view.",
           "done": "Marked as done. You can undo it if it was a mistake.",
           "undone": "It is no longer marked as done.",
-          "failed": "Sorry, that did not work. Please try again in a while.",
+          "failed": "Sorry, that did not work. Please check your connection and try again.",
           "finished": "That is all. Marked as done: {done}. Left: {left}.",
           "readOnly": "You do not have permission to mark next actions as done.",
           "choices": {
@@ -506,12 +506,12 @@
           "allSeen": "You have seen them all.",
           "openLead": "Open the lead in the normal view",
           "openToday": "Open Today in the normal view",
-          "undoFailed": "It could not be undone and is still marked as done. Please try again.",
+          "undoFailed": "It could not be undone and is still marked as done. Please check your connection and try again.",
           "reportNext": "Here is number {index} of {total}."
         },
         "deals": {
           "board": "Deal board",
-          "report": "There are {open} open deals, {amount} in total. {overdue} are past their day, {soon} have to move within a week, and {noNextAction} have no next action.",
+          "report": "There are {open} open deals, {amount} in total and {weighted} weighted by probability. {overdue} are past their day, {soon} have to move within a week, and {noNextAction} have no next action.",
           "reportNone": "There are no open deals.",
           "reportLoading": "Reading the figures of the board.",
           "reportUnavailable": "The figures of the board could not be read.",
@@ -569,7 +569,7 @@
             "forecast": "Open the sales forecast",
             "prospects": "Open the customer search"
           },
-          "reportTruncated": "There are {open} open deals, {amount} in total. There are too many to list them all on the board, so please check in the deals of the normal view how many are late, how many have to move within a week and how many have no next action.",
+          "reportTruncated": "There are {open} open deals, {amount} in total and {weighted} weighted by probability. There are too many to list them all on the board, so please check in the deals of the normal view how many are late, how many have to move within a week and how many have no next action.",
           "closesOn": "Expected close {date}",
           "closeLate": "Close date passed"
         },
@@ -581,11 +581,11 @@
           "noNext": "It has no next action.",
           "moved": "Moved to \"{stage}\" (probability {probability}%). You can undo this if it was a mistake.",
           "movedHandedOff": "Moved to \"{stage}\" (probability {probability}%). The handoff sheet was sent to the technical team, so this move cannot be undone.",
-          "done": "Marked the next action \"{title}\" as done. You can undo this if it was a mistake.",
+          "done": "Marked the next action \"{title}\" as done. You can undo this if it was a mistake. Record what you did with 5.",
           "added": "Set the next action \"{title}\", due {date}. To change it, use the deal in the normal view.",
           "undone": "Undone.",
           "undoFailed": "The undo did not go through. The change still stands. Please try again.",
-          "failed": "Sorry, that did not work. Please try again later.",
+          "failed": "Sorry, that did not work. Please check your connection and try again.",
           "readOnly": "You do not have permission to change deals.",
           "choices": {
             "advance": "Move on to \"{stage}\"",
@@ -598,7 +598,8 @@
             "close": "Back to the board",
             "advanceSql": "Move on to \"{stage}\" (SQL decision first)",
             "advanceAsk": "Move on to \"{stage}\" (a word first)",
-            "doneNamed": "Mark \"{title}\" as done"
+            "doneNamed": "Mark \"{title}\" as done",
+            "contact": "Record a contact"
           },
           "sql": {
             "title": "SQL decision",
@@ -616,7 +617,8 @@
               "tomorrow": "Tomorrow",
               "in3Days": "In 3 days",
               "nextMonday": "Next Monday"
-            }
+            },
+            "keeps": "The next action \"{title}\" (due {date}) stays. If it is done, mark it with 3 first."
           },
           "stages": "Stages of the deal",
           "here": "Here now",
@@ -635,12 +637,20 @@
           "noAmount": "No amount yet",
           "gone": "This deal is no longer on the board (it was deleted, or closed as won or lost). It is shown as it was when opened.",
           "saving": "Saving. This file stays open until it is done.",
-          "failedKept": "Sorry, that answer did not go through. The one before it still stands.",
+          "failedKept": "Sorry, that answer did not go through. The one before it still stands. Please check your connection and try again.",
           "handoff": {
             "title": "Before moving on",
             "warning": "The first time this prospect moves on from qualification, the handoff sheet is sent to the technical team. A move that sent it cannot be undone.",
-            "go": "Move on to \"{stage}\""
-          }
+            "go": "Move on to \"{stage}\"",
+            "missing": "Still empty among what the handoff sheet carries: {fields}. You can move on all the same."
+          },
+          "contact": {
+            "title": "Record a contact",
+            "note": "Note (optional: what they answered, for instance)",
+            "pick": "Choose what you did, and it is recorded.",
+            "back": "Leave it and go back to the choices"
+          },
+          "contacted": "Recorded \"{kind}\". You can undo this if it was a mistake."
         },
         "reception": {
           "board": "General affairs counter",
@@ -704,7 +714,7 @@
               "back": "Give up and go back to the shelf",
               "done": "The invitation to {email} was revoked.",
               "gone": "That invitation was already revoked, or the person has joined. The list was read again.",
-              "failed": "Sorry, it could not be revoked. Please try again in a while."
+              "failed": "Sorry, it could not be revoked. Please check your connection and try again."
             },
             "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles."
           },

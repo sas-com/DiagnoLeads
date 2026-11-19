@@ -22,6 +22,7 @@ import {
   dealReport,
   dealsOfView,
   dueShortcuts,
+  missingHandoffFacts,
   endOfWeek,
   isOverdue,
   moveHorizon,
@@ -55,7 +56,7 @@ const column = (stage: string, deals: BoardDeal[], count = deals.length) =>
     stage,
     count,
     amount: count * 1_000_000,
-    weightedAmount: 0,
+    weightedAmount: count * 250_000,
     deals,
   }) as unknown as DealBoardColumn;
 
@@ -184,6 +185,8 @@ describe('the views of the deal board', () => {
     expect(dealReport(COLUMNS, TODAY)).toEqual({
       open: 4,
       amount: 4_000_000,
+      // What each stage weighted by its deals' probabilities: less than the sum
+      weighted: 1_000_000,
       overdue: 1,
       soon: 2,
       noNextAction: 2,
@@ -194,6 +197,7 @@ describe('the views of the deal board', () => {
     expect(dealReport([], TODAY)).toEqual({
       open: 0,
       amount: 0,
+      weighted: 0,
       overdue: 0,
       soon: 0,
       noNextAction: 0,
@@ -208,10 +212,10 @@ describe('the views of the deal board', () => {
       'negotiation',
     ]);
     expect(stageTotals([])).toEqual([
-      { stage: 'qualification', count: 0, amount: 0 },
-      { stage: 'discovery', count: 0, amount: 0 },
-      { stage: 'proposal', count: 0, amount: 0 },
-      { stage: 'negotiation', count: 0, amount: 0 },
+      { stage: 'qualification', count: 0, amount: 0, weighted: 0 },
+      { stage: 'discovery', count: 0, amount: 0, weighted: 0 },
+      { stage: 'proposal', count: 0, amount: 0, weighted: 0 },
+      { stage: 'negotiation', count: 0, amount: 0, weighted: 0 },
     ]);
   });
 
@@ -244,12 +248,13 @@ describe('the keys of a deal file', () => {
   });
 
   it('are fixed: a number carries out, Z takes back, as over a customer file', () => {
-    expect(DEAL_FILE_CHOICES.map((choice) => DEAL_KEYS[choice])).toEqual(['1', '2', '3', '4']);
+    expect(DEAL_FILE_CHOICES.map((choice) => DEAL_KEYS[choice])).toEqual(['1', '2', '3', '4', '5']);
     expect(DEAL_KEYS.undo).toBe(FILE_KEYS.undo);
     expect(dealActionOfKey('1')).toBe('advance');
+    expect(dealActionOfKey('5')).toBe('contact');
     expect(dealActionOfKey('z')).toBe('undo');
     expect(dealActionOfKey('Z')).toBe('undo');
-    for (const key of ['5', 'Enter', 'Escape', 'ArrowDown']) expect(dealActionOfKey(key)).toBeNull();
+    for (const key of ['6', 'Enter', 'Escape', 'ArrowDown']) expect(dealActionOfKey(key)).toBeNull();
   });
 
   it('are closed at the ends of the open stages and without a next action to mark', () => {
@@ -276,8 +281,10 @@ describe('the keys of a deal file', () => {
     for (const choice of ['advance', 'back', 'done'] as const) {
       expect(dealActionOpen(choice, both)).toBe(false);
     }
-    // Setting a next action stays open: it is typed, never a key pressed once too often
+    // Setting a next action and recording a contact stay open: their keys only open a place,
+    // and what is carried out there is typed or chosen with a button
     expect(dealActionOpen('add', both)).toBe(true);
+    expect(dealActionOpen('contact', both)).toBe(true);
   });
 
   it('open a kind again once its answer was undone', () => {
@@ -333,5 +340,19 @@ describe('the due days offered beside the date of a next action', () => {
   it('never give today as next Monday', () => {
     expect(dueShortcuts('2026-11-16').at(-1)).toEqual({ key: 'nextMonday', day: '2026-11-23' });
     expect(dueShortcuts('2026-11-15').at(-1)).toEqual({ key: 'nextMonday', day: '2026-11-16' });
+  });
+});
+
+describe('the facts of the handoff sheet that are still empty', () => {
+  it('are named in the order of the sheet, and none when all are filled', () => {
+    const filled = { targetSystem: 'access', amount: 0, expectedCloseOn: '2026-12-01' };
+    expect(missingHandoffFacts(filled as never)).toEqual([]);
+    expect(
+      missingHandoffFacts({ targetSystem: null, amount: null, expectedCloseOn: null } as never)
+    ).toEqual(['targetSystem', 'amount', 'expectedCloseOn']);
+    // An amount of zero is an amount
+    expect(missingHandoffFacts({ ...filled, expectedCloseOn: null } as never)).toEqual([
+      'expectedCloseOn',
+    ]);
   });
 });
