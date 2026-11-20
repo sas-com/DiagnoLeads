@@ -944,7 +944,7 @@ describe('the engineering room', () => {
       // The draft is still on the card: the file says so, and where to change it
       expect(
         await within(office).findByText(
-          '取り消せませんでした。下書きは保存されたままです。画面が古くなっているため、ここではもう取り消せません。直すときは、ページを読み込み直してから、リードの画面で開いてください。'
+          '取り消せませんでした。下書きは保存されたままです。画面が古くなっているため、ここではもう取り消せません。直すときは、ページを読み込み直してから、リードの画面で事前調査カードを開いてください。'
         )
       ).toBeInTheDocument();
       expect(within(office).queryByRole('button', { name: /いまの下書きを取り消す/ })).toBeNull();
