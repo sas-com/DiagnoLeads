@@ -838,7 +838,7 @@ describe('the engineering room', () => {
     it('keeps the room open while the card is being saved: the way back to the floor is closed (#1232)', async () => {
       mocks.saving = true;
       const { user, office } = await openFile();
-      const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+      const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
       expect(toFloor).toHaveAttribute('aria-disabled', 'true');
       await user.click(toFloor);
       // Still in the room, with the file open
@@ -850,7 +850,7 @@ describe('the engineering room', () => {
 
     it('leaves the way back to the floor open when nothing is being saved (#1232)', async () => {
       const { user, office } = await openFile();
-      const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+      const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
       expect(toFloor).not.toHaveAttribute('aria-disabled');
       await user.click(toFloor);
       expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
@@ -878,7 +878,7 @@ describe('the engineering room', () => {
       fireEvent.keyDown(office, { key: '3' });
       // The read is under way: nothing is saved yet, and the way back to the floor is closed
       await waitFor(() =>
-        expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveAttribute(
+        expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toHaveAttribute(
           'aria-disabled',
           'true'
         )
@@ -887,7 +887,7 @@ describe('the engineering room', () => {
       release();
       await within(office).findByText(/下書きを入れて保存しました/);
       await waitFor(() =>
-        expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).not.toHaveAttribute(
+        expect(within(office).getByRole('button', { name: /フロアに戻る/ })).not.toHaveAttribute(
           'aria-disabled'
         )
       );

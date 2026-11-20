@@ -812,8 +812,8 @@ describe('the counter of the reception (#1196)', () => {
     // The shelf is rendered again with a mark on its way
     mocks.updatePending = true;
     refresh();
-    const toCounter = within(office).getByRole('button', { name: /窓口へ戻る/ });
-    const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+    const toCounter = within(office).getByRole('button', { name: /窓口に戻る/ });
+    const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
     await waitFor(() => expect(toFloor).toHaveAttribute('aria-disabled', 'true'));
     expect(toCounter).toHaveAttribute('aria-disabled', 'true');
     await user.keyboard('{Escape}');
@@ -834,7 +834,7 @@ describe('the counter of the reception (#1196)', () => {
       'true'
     );
     await waitFor(() =>
-      expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveAttribute(
+      expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toHaveAttribute(
         'aria-disabled',
         'true'
       )
@@ -914,15 +914,15 @@ describe('the counter of the reception (#1196)', () => {
     fireEvent.keyDown(office, { key: '1', isComposing: true });
     fireEvent.keyDown(office, { key: '2', keyCode: 229 });
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveTextContent('Esc');
+    expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toHaveTextContent('Esc');
     await user.keyboard('3');
-    expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).not.toHaveTextContent(
+    expect(within(office).getByRole('button', { name: /フロアに戻る/ })).not.toHaveTextContent(
       'Esc'
     );
-    expect(within(office).getByRole('button', { name: /窓口へ戻る/ })).toHaveTextContent('Esc');
+    expect(within(office).getByRole('button', { name: /窓口に戻る/ })).toHaveTextContent('Esc');
     fireEvent.keyDown(office, { key: 'Escape', isComposing: true });
     expect(within(office).getByRole('region', { name: '設定の棚' })).toBeInTheDocument();
-    await user.click(within(office).getByRole('button', { name: /窓口へ戻る/ }));
+    await user.click(within(office).getByRole('button', { name: /窓口に戻る/ }));
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
   });
 });

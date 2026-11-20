@@ -302,7 +302,7 @@ describe('the studio', () => {
   it('warns the same way when the back button would throw unsaved changes away', async () => {
     const { user, office, board } = await openStudio();
     await user.click(within(board).getByRole('button', { name: 'ドーム' }));
-    await user.click(within(board).getByRole('button', { name: /^Esc\s*戻る$/ }));
+    await user.click(within(board).getByRole('button', { name: /^Esc\s*フロアに戻る$/ }));
     expect(
       within(office).getByText(
         '保存していない変更があります。もう一度 Esc を押すと、変更を捨てて戻ります。'
@@ -310,7 +310,7 @@ describe('the studio', () => {
     ).toBeInTheDocument();
     expect(within(office).getByRole('region', { name: /のカスタマイズ/ })).toBeInTheDocument();
     // The button now says what it will do
-    await user.click(within(board).getByRole('button', { name: /^Esc\s*変更を捨てて戻る$/ }));
+    await user.click(within(board).getByRole('button', { name: /^Esc\s*変更を捨ててフロアに戻る$/ }));
     expect(within(office).queryByRole('region', { name: /のカスタマイズ/ })).not.toBeInTheDocument();
     expect(mocks.updates).toHaveLength(0);
   });
