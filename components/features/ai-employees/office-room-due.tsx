@@ -186,6 +186,8 @@ export function OfficeRoomDue({
   };
 
   const answer = (action: DueAction) => {
+    // Refused: nothing is answered, even in the moment before the queue in hand is dropped
+    if (forbidden) return;
     if (!queue || !dueActionOpen(action, state)) return;
     if (action === 'done' && !armed) return;
     if (action === 'next') {
@@ -275,12 +277,12 @@ export function OfficeRoomDue({
           >
             {reportShown}
           </p>
-          {queue && count > 0 && !canEdit && (
+          {!forbidden && queue && count > 0 && !canEdit && (
             <p className="text-sm text-[#d8d2c4]">{tDue('readOnly')}</p>
           )}
         </div>
         {/* Once all were seen there is nothing left to answer: the way back is the room's (Esc) */}
-        {queue && count > 0 && !finished && (
+        {!forbidden && queue && count > 0 && !finished && (
           <>
             <h3 className={CAP}>{tImmersive('talk.you')}</h3>
             <ul className="space-y-2">
@@ -332,7 +334,7 @@ export function OfficeRoomDue({
       <section aria-label={tDue('board')} aria-busy={due.isFetching} className={ROOM_BOARD}>
         <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-[#f5f1e8]/15 px-5 pt-4 pb-3">
           <h2 className="text-xl font-bold">{tDue('board')}</h2>
-          {task && (
+          {!forbidden && task && (
             <p className="text-sm text-[#d8d2c4] tabular-nums">
               {tDue('position', { total: count, index: index + 1 })}
             </p>
