@@ -508,7 +508,8 @@
           "openToday": "Open Today in the normal view",
           "undoFailed": "It could not be undone and is still marked as done. Please check your connection and try again.",
           "reportNext": "Here is number {index} of {total}.",
-          "saving": "Saving."
+          "saving": "Saving.",
+          "stale": " The latest could not be read; this is what was read before."
         },
         "deals": {
           "board": "Deal board",

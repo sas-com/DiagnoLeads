@@ -37,6 +37,7 @@ import {
   queryFailure,
   queryStale,
 } from './rooms/reception';
+import { useDropRefused } from './use-drop-refused';
 
 /** Members read for the shelf: the most `members.list` gives at once */
 export const MEMBERS_SHELF_MAX = 100;
@@ -133,7 +134,12 @@ export function OfficeRoomMembers({
     // while the revoking is being saved (#1251, owner's decision (a))
     networkMode: 'always',
   });
-  const pending = invitations.data ?? [];
+  useDropRefused(members, () =>
+    utils.members.list.reset({ organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 })
+  );
+  useDropRefused(invitations, () => utils.members.listInvitations.reset({ organizationId }));
+  // Only what may be revoked: none once the invitations are hidden
+  const pending = invited.state === 'ready' ? (invitations.data ?? []) : [];
   // Revoking is offered only to who may see the invitations, and open while there is one
   const mayRevoke = invited.state === 'ready';
   const canOpen = mayRevoke && pending.length > 0;
@@ -149,6 +155,10 @@ export function OfficeRoomMembers({
     setTyped('');
     setRefused(false);
   };
+  // The field closes once revoking is no longer offered (the invitations became hidden meanwhile)
+  useEffect(() => {
+    if (revoking && !mayRevoke && !busy) close();
+  });
   const open = () => {
     if (!canOpen) return;
     setOutcome(null);

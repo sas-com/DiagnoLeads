@@ -35,7 +35,7 @@ const task = (n: number, over: Partial<Record<string, unknown>> = {}) => ({
 
 const mocks = vi.hoisted(() => ({
   inputs: [] as unknown[],
-  mode: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
+  mode: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading' | 'staleForbidden' | 'staleError',
   items: [] as unknown[],
   total: null as number | null,
   canEdit: true,
@@ -53,6 +53,8 @@ const mocks = vi.hoisted(() => ({
   queryModes: {} as Record<string, unknown>,
   // Invitations read before, then reading them again failed with this code
   invitationsStale: null as null | { data: unknown[]; code: string },
+  // The cached data dropped once the server refused it (#1300)
+  dropped: { dueTasks: vi.fn(), members: vi.fn(), invitations: vi.fn() },
   invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
   revoked: [] as { organizationId: string; invitationId: string }[],
   revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
@@ -75,10 +77,16 @@ vi.mock('@/lib/trpc/client', () => ({
       aiEmployees: { office: { invalidate: vi.fn() } },
       leadFollowUp: {
         tasks: { invalidate: vi.fn() },
-        dueTasks: { invalidate: mocks.refreshed },
+        dueTasks: { invalidate: mocks.refreshed, reset: mocks.dropped.dueTasks },
       },
       deals: { board: { invalidate: vi.fn() } },
-      members: { listInvitations: { invalidate: mocks.invitationsRefreshed } },
+      members: {
+        list: { reset: mocks.dropped.members },
+        listInvitations: {
+          invalidate: mocks.invitationsRefreshed,
+          reset: mocks.dropped.invitations,
+        },
+      },
     }),
     aiEmployees: {
       hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -159,6 +167,23 @@ vi.mock('@/lib/trpc/client', () => ({
           mocks.queryModes.dueTasks = options?.networkMode;
           if (mocks.mode === 'loading') {
             return { data: undefined, error: null, isError: false, isFetching: true };
+          }
+          const read = {
+            items: mocks.items,
+            total: mocks.total ?? mocks.items.length,
+            counts: { mine: mocks.items.length, all: mocks.items.length },
+            scope: 'mine',
+            today: TODAY,
+            canEdit: mocks.canEdit,
+          };
+          if (mocks.mode === 'staleForbidden' || mocks.mode === 'staleError') {
+            // Read before, then reading again failed
+            return {
+              data: read,
+              error: { data: { code: mocks.mode === 'staleForbidden' ? 'FORBIDDEN' : 'INTERNAL' } },
+              isError: true,
+              isFetching: false,
+            };
           }
           if (mocks.mode !== 'ok') {
             return {
@@ -295,6 +320,7 @@ describe('the reception', () => {
     mocks.networkModes = {};
     mocks.queryModes = {};
     mocks.invitationsStale = null;
+    for (const drop of Object.values(mocks.dropped)) drop.mockClear();
     mocks.members = [member(1, 'owner'), member(2, 'member')];
     mocks.membersTotal = null;
     mocks.membersInputs.length = 0;
@@ -576,6 +602,7 @@ describe('the counter of the reception (#1196)', () => {
     mocks.networkModes = {};
     mocks.queryModes = {};
     mocks.invitationsStale = null;
+    for (const drop of Object.values(mocks.dropped)) drop.mockClear();
     mocks.inputs.length = 0;
     mocks.mode = 'ok';
     mocks.items = [task(1, { dueOn: '2026-11-10' }), task(2), task(3)];
@@ -848,6 +875,37 @@ describe('the counter of the reception (#1196)', () => {
     expect(within(shelf).queryByText('invited1@example.com')).not.toBeInTheDocument();
     expect(
       within(office).queryByRole('button', { name: /招待を取り消す/ })
+    ).not.toBeInTheDocument();
+    // The cache is dropped, so a later reading that fails offline cannot bring them back
+    expect(mocks.dropped.invitations).toHaveBeenCalledWith({ organizationId: ORG_ID });
+  });
+
+  it('drops the queue in hand once the server refuses it, and does not bring it back when offline (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('1');
+    expect(within(office).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
+    mocks.mode = 'staleForbidden';
+    refresh();
+    await waitFor(() =>
+      expect(
+        within(office).queryByRole('article', { name: '見本の次の行動1' })
+      ).not.toBeInTheDocument()
+    );
+    expect(
+      within(office).getAllByText('次の行動を見る権限がありません。管理者に確かめてください。')
+        .length
+    ).toBeGreaterThan(0);
+    expect(mocks.dropped.dueTasks).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      scope: 'mine',
+      limit: 200,
+    });
+    expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
+    // A reading that then fails offline still has data in this mock: the queue in hand stays gone
+    mocks.mode = 'staleError';
+    refresh();
+    expect(
+      within(office).queryByRole('article', { name: '見本の次の行動1' })
     ).not.toBeInTheDocument();
   });
 

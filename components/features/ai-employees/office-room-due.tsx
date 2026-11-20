@@ -30,7 +30,8 @@ import {
   dueState,
   roomGuide,
 } from './office-rooms';
-import { DUE_ARM_MS, READ_OFFLINE_FAILS, queryFailure } from './rooms/reception';
+import { DUE_ARM_MS, READ_OFFLINE_FAILS, queryFailure, queryStale } from './rooms/reception';
+import { useDropRefused } from './use-drop-refused';
 
 type Outcome = 'done' | 'undone' | 'failed' | 'undoFailed';
 
@@ -101,9 +102,17 @@ export function OfficeRoomDue({
     READ_OFFLINE_FAILS
   );
   const loaded = due.data;
+  // The server refused reading what is due while the shelf is open: nothing read before is taken
+  // in hand again until a reading succeeds (the cache is dropped too, `useDropRefused`)
+  const denied = queryFailure(due) === 'forbidden';
+  const refusedRef = useRef(false);
+  if (denied) refusedRef.current = true;
+  else if (loaded && !due.isError) refusedRef.current = false;
+  const takeable = loaded !== undefined && !denied && !refusedRef.current;
   useEffect(() => {
-    if (loaded) setQueue((current) => current ?? loaded.items);
-  }, [loaded]);
+    // What a reading that failed offline keeps is taken too (and said to be what was read before)
+    if (takeable && loaded) setQueue((current) => current ?? loaded.items);
+  }, [loaded, takeable]);
   // Marking is closed for a moment after the first one is shown: the key that opened the shelf at
   // the counter is the key that marks here, and pressed twice it would mark the first one unseen
   // (#1226). Counted from when the queue is there, not from when the shelf opened: a queue that
@@ -153,6 +162,13 @@ export function OfficeRoomDue({
   // A refusal counts even with a queue in hand: who lost the permission no longer sees it
   const forbidden = failure === 'forbidden';
   const readFailed = !queue && failure === 'error';
+  // Once refused, what was in hand goes too: neither the queue nor the cache shows it again
+  useDropRefused(due, () =>
+    utils.leadFollowUp.dueTasks.reset({ organizationId, scope: 'mine', limit: DUE_TASKS_MAX })
+  );
+  useEffect(() => {
+    if (forbidden) setQueue(null);
+  }, [forbidden]);
   const canEdit = loaded?.canEdit === true;
   const today = loaded?.today ?? '';
   const count = queue?.length ?? 0;
@@ -229,6 +245,8 @@ export function OfficeRoomDue({
                       : index === 0
                         ? tDue('report', { total: count, index: 1 })
                         : tDue('reportNext', { total: count, index: index + 1 });
+  // Shown, but not as new: reading it again failed for want of the network
+  const reportShown = queue && queryStale(due) ? report + tDue('stale') : report;
   const more = loaded ? loaded.total - loaded.items.length : 0;
   // The answer the room expects next: filled
   const mainAction: DueAction | null = dueActionOpen('done', { ...state, busy: false })
@@ -255,7 +273,7 @@ export function OfficeRoomDue({
             className="text-base leading-relaxed font-medium outline-none"
             aria-live="polite"
           >
-            {report}
+            {reportShown}
           </p>
           {queue && count > 0 && !canEdit && (
             <p className="text-sm text-[#d8d2c4]">{tDue('readOnly')}</p>

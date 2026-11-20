@@ -142,7 +142,7 @@ export const DUE_ARM_MS = 400;
  */
 export const READ_OFFLINE_FAILS = { networkMode: 'always' } as const;
 
-type ReadQuery = {
+export type ReadQuery = {
   isError: boolean;
   data: unknown;
   error: { data?: { code?: string } | null } | null;

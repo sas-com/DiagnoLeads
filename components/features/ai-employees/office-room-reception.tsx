@@ -37,6 +37,7 @@ import {
   queryStale,
   shelfOfKey,
 } from './rooms/reception';
+import { useDropRefused } from './use-drop-refused';
 
 /**
  * The reception of the full-screen office, the back office's room (#1196, Epic #1195). At the
@@ -100,6 +101,14 @@ export function OfficeRoomReception({
     READ_OFFLINE_FAILS
   );
   const invitations = trpc.members.listInvitations.useQuery({ organizationId }, READ_OFFLINE_FAILS);
+  const utils = trpc.useUtils();
+  useDropRefused(due, () =>
+    utils.leadFollowUp.dueTasks.reset({ organizationId, scope: 'mine', limit: DUE_TASKS_MAX })
+  );
+  useDropRefused(members, () =>
+    utils.members.list.reset({ organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 })
+  );
+  useDropRefused(invitations, () => utils.members.listInvitations.reset({ organizationId }));
 
   const shelfOpen = shelf !== null;
   useEffect(() => {
@@ -146,7 +155,8 @@ export function OfficeRoomReception({
 
   const dueKnown = dueFigures(due.data, queryFailure(due));
   const invited = invitationFigures(invitations.data, queryFailure(invitations));
-  const memberCount = members.data?.total ?? null;
+  // Nothing once the server refused: who left the organization no longer hears its figures
+  const memberCount = queryFailure(members) ? null : (members.data?.total ?? null);
   const aboutDue = dueLine(dueKnown);
   const aboutMembers = membersLine(memberCount, invited);
   // Said once, when all three are known: a sentence that grows as each arrives is read out anew
