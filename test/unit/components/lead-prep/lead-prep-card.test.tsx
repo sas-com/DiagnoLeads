@@ -206,9 +206,11 @@ describe('LeadPrepCard', () => {
       isError: false,
     };
     act(() => mocks.hook.onError?.({ data: { code: 'CONFLICT' } }));
-    const notice = screen.getByRole('alert');
-    fireEvent.click(within(notice).getByText('いま保存されている内容を見る'));
-    expect(within(notice).getByText('同僚が書いた動き')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('いま保存されている内容を見る'));
+    const saved = screen.getByRole('region', { name: 'いま保存されている内容' });
+    expect(within(saved).getByText('同僚が書いた動き')).toBeInTheDocument();
+    // Outside the notice: opening it does not read the whole notice out again
+    expect(within(screen.getByRole('alert')).queryByText('同僚が書いた動き')).toBeNull();
     // What was typed is still in the form, beside it
     expect(screen.getByLabelText('最近の動き')).toHaveValue('自分が書いた動き');
   });
@@ -232,9 +234,7 @@ describe('LeadPrepCard', () => {
       isError: false,
     };
     act(() => mocks.hook.onError?.({ data: { code: 'CONFLICT' } }));
-    expect(
-      within(screen.getByRole('alert')).getByText('いま保存されているカードは、中身が空です。')
-    ).toBeInTheDocument();
+    expect(screen.getByText('いま保存されているカードは、中身が空です。')).toBeInTheDocument();
   });
 
   it('says the page is out of date when the server no longer takes what it sends (#1240)', async () => {
@@ -243,7 +243,11 @@ describe('LeadPrepCard', () => {
     await press('編集');
     fireEvent.click(screen.getByRole('button', { name: '保存' }));
     act(() => mocks.hook.onError?.({ data: { code: 'BAD_REQUEST' } }));
-    expect(toast.error).toHaveBeenLastCalledWith(expect.stringContaining('画面が古くなっています'));
+    // Kept until closed: it says that a reload clears what was typed
+    expect(toast.error).toHaveBeenLastCalledWith(
+      expect.stringContaining('ページを読み込み直すと、入力中の内容は消えます'),
+      { duration: Number.POSITIVE_INFINITY }
+    );
     // Not the notice of a colleague's save
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });

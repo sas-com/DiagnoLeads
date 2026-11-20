@@ -99,7 +99,8 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
       } else if (error.data?.code === 'BAD_REQUEST') {
         // The input this screen sends is no longer what the server takes: the page was opened
         // before a change was deployed, and trying again would fail the same way
-        toast.error(t('outdated'));
+        // Kept until closed: it says what a reload costs, which must be read before reloading
+        toast.error(t('outdated'), { duration: Number.POSITIVE_INFINITY });
       } else toast.error(t('saveError'));
     },
   });
@@ -224,37 +225,47 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
                     })}
                   </p>
                 )}
-                {/* What is saved now, next to what was typed: read before choosing to load it */}
-                {stored && stored.updatedAt.getTime() !== base?.getTime() && (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer font-medium">
-                      {t('conflictShowSaved')}
-                    </summary>
-                    <div className="mt-2 rounded-md border bg-background p-3">
-                      {prepCardFilled(stored) ? (
-                        <PrepCardSummary card={stored} />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">{t('conflictSavedEmpty')}</p>
-                      )}
-                    </div>
-                  </details>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  disabled={reading === 'reload'}
-                  onClick={() => void reload()}
-                >
-                  {reading === 'reload' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {t('reload')}
-                </Button>
               </Callout>
+            </div>
+          )}
+          {conflict && (
+            // Outside the notice (role alert): opening the saved card or loading it must not read
+            // the whole notice out again
+            <div className="space-y-2 rounded-md border p-3">
+              {/* What is saved now, next to what was typed: read before choosing to load it */}
+              {stored && stored.updatedAt.getTime() !== base?.getTime() && (
+                <details>
+                  <summary className="cursor-pointer py-1 text-sm font-medium">
+                    {t('conflictShowSaved')}
+                  </summary>
+                  <section
+                    aria-label={t('conflictSavedLabel')}
+                    // biome-ignore lint/a11y/noNoninteractiveTabindex: a box that scrolls takes the keys that scroll it
+                    tabIndex={0}
+                    className="mt-2 max-h-80 overflow-y-auto rounded-md border bg-background p-3"
+                  >
+                    {prepCardFilled(stored) ? (
+                      <PrepCardSummary card={stored} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t('conflictSavedEmpty')}</p>
+                    )}
+                  </section>
+                </details>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={reading === 'reload'}
+                onClick={() => void reload()}
+              >
+                {reading === 'reload' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                )}
+                {t('reload')}
+              </Button>
             </div>
           )}
           {data.draftSource && hasDraftMaterial(data.draftSource) && (

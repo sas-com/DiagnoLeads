@@ -282,5 +282,11 @@ describe.skipIf(!url)('lead prep cards (PostgreSQL)', () => {
         expectedUpdatedAt: new Date(8.64e15),
       })
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // ...nor one before year 1, which SQL could not read either (#1240)
+    for (const expectedUpdatedAt of [new Date(-8.64e15), new Date('0000-01-01T00:00:00Z')]) {
+      await expect(
+        callers.rep.leadPrep.save({ organizationId: org, leadId: await createLead(), card, expectedUpdatedAt })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    }
   });
 });

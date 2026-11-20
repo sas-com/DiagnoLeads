@@ -927,6 +927,12 @@ describe('the engineering room', () => {
           '保存できませんでした。画面が古くなっています。ページを読み込み直してから、もう一度お願いします。'
         )
       ).toBeInTheDocument();
+      // Every save would be refused the same way: the draft is not offered again
+      expect(
+        within(office).getByRole('button', { name: /事前調査カードの下書きを用意して/ })
+      ).toHaveAttribute('aria-disabled', 'true');
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(1);
     });
 
     it('does not offer an undo that would be refused the same way (#1240)', async () => {
@@ -935,7 +941,12 @@ describe('the engineering room', () => {
       mocks.failSave = true;
       mocks.saveErrorCode = 'BAD_REQUEST';
       await user.keyboard('z');
-      expect(await within(office).findByText(/画面が古くなっています/)).toBeInTheDocument();
+      // The draft is still on the card: the file says so, and where to change it
+      expect(
+        await within(office).findByText(
+          '取り消せませんでした。下書きは保存されたままです。画面が古くなっているため、ここではもう取り消せません。直すときは、ページを読み込み直してから、リードの画面で開いてください。'
+        )
+      ).toBeInTheDocument();
       expect(within(office).queryByRole('button', { name: /いまの下書きを取り消す/ })).toBeNull();
     });
 

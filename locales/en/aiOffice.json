@@ -811,7 +811,8 @@
             "noMaterial": "There is nothing to draft from for this customer (no Web diagnosis answers, no sales playbook).",
             "nothingToFill": "The prep card has no empty field a draft could fill.",
             "refusedNothing": "The prep card was saved from another screen just before this save. The draft was not saved. The latest card has no empty field a draft could fill.",
-            "checking": "Checking the prep card."
+            "checking": "Checking the prep card.",
+            "outdatedUndo": "Not undone. The draft is still saved. This page is out of date, so it cannot be undone here. To change it, reload the page and open the lead's page."
           }
         },
         "training": {
