@@ -20,7 +20,7 @@ import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const LIMIT = 150;
-type Behaviour = 'silent' | 'answers' | 'stalls-in-body';
+type Behaviour = 'silent' | 'answers' | 'stalls-in-body' | 'slow-but-arrives';
 
 describe('the time limit on tRPC requests', () => {
   let server: Server;
@@ -32,11 +32,21 @@ describe('the time limit on tRPC requests', () => {
     server = createServer((_request, response) => {
       requests += 1;
       if (behaviour === 'silent') return; // The connection stays open and says nothing
-      response.writeHead(200, { 'content-type': 'application/json' });
       // One answer of a batch of one
       const body = JSON.stringify([{ result: { data: { saved: true } } }]);
+      const head = () => response.writeHead(200, { 'content-type': 'application/json' });
+      if (behaviour !== 'slow-but-arrives') head();
       if (behaviour === 'answers') response.end(body);
-      else response.write(body.slice(0, 5)); // ...and never the rest
+      else if (behaviour === 'slow-but-arrives') {
+        // The answer starts late and its body takes long too: each within the limit, together
+        // longer than it
+        setTimeout(() => {
+          head();
+          response.write(body.slice(0, 5));
+          setTimeout(() => response.end(body.slice(5)), LIMIT * 0.7);
+        }, LIMIT * 0.7);
+        return;
+      } else response.write(body.slice(0, 5)); // ...and never the rest
     });
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/trpc`;
@@ -113,10 +123,21 @@ describe('the time limit on tRPC requests', () => {
     expect(requests).toBe(1);
   });
 
-  it('covers the whole answer: one that starts and then stops fails at the limit', async () => {
+  it('covers the body too: an answer that starts and then stops fails at the limit', async () => {
     behaviour = 'stalls-in-body';
     const error = await failure(client().mutation('leadFollowUp.recordContact', { kind: 'call' }));
     expect(isRequestTimeout(error)).toBe(true);
+    expect(retryUnlessDenied(1)(0, error)).toBe(false);
+  });
+
+  it('gives the body its own time: a slow answer that arrives in full is not cut for the time the server took', async () => {
+    behaviour = 'slow-but-arrives';
+    const started = Date.now();
+    await expect(client().mutation('leadFollowUp.recordContact', { kind: 'call' })).resolves.toEqual(
+      { saved: true }
+    );
+    // Longer than one limit in all, and still an answer
+    expect(Date.now() - started).toBeGreaterThan(LIMIT);
   });
 
   it('leaves other failures as they are: they are still sent again', async () => {
@@ -180,6 +201,51 @@ describe('fetchWithTimeout', () => {
     }).catch((caught: unknown) => caught);
     outer.abort();
     expect(isRequestTimeout(await cancelled)).toBe(false);
+  });
+});
+
+describe('fetchWithTimeout while the body is read', () => {
+  /** An answer whose body never ends, and fails the way the given browser fails an ended request */
+  const endless = (failWith: (signal: AbortSignal) => unknown) => {
+    return async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = new ReadableStream<Uint8Array>({
+        start(stream) {
+          stream.enqueue(new TextEncoder().encode('[{"result":'));
+          init?.signal?.addEventListener('abort', () =>
+            stream.error(failWith(init.signal as AbortSignal))
+          );
+        },
+      });
+      return new Response(body, { headers: { 'content-type': 'application/json' } });
+    };
+  };
+
+  it('names the limit when the body stops, also where the reason is not passed on', async () => {
+    const older = endless(() => new DOMException('The operation was aborted.', 'AbortError'));
+    const response = await fetchWithTimeout(40, older)('http://example.invalid');
+    await expect(response.json()).rejects.toBeInstanceOf(RequestTimeoutError);
+    const newer = endless((signal) => signal.reason);
+    const again = await fetchWithTimeout(40, newer)('http://example.invalid');
+    await expect(again.text()).rejects.toBeInstanceOf(RequestTimeoutError);
+  });
+
+  it("leaves a caller's cancel during the body what it is", async () => {
+    const outer = new AbortController();
+    const fetchImpl = endless(() => new DOMException('The operation was aborted.', 'AbortError'));
+    const response = await fetchWithTimeout(60_000, fetchImpl)('http://example.invalid', {
+      signal: outer.signal,
+    });
+    const read = response.json().catch((caught: unknown) => caught);
+    outer.abort();
+    const error = await read;
+    expect(isRequestTimeout(error)).toBe(false);
+    expect((error as Error).name).toBe('AbortError');
+  });
+
+  it('reads a body that arrives as before', async () => {
+    const fetchImpl = async () => new Response('{"ok":true}');
+    const response = await fetchWithTimeout(1000, fetchImpl)('http://example.invalid');
+    await expect(response.json()).resolves.toEqual({ ok: true });
   });
 });
 

@@ -36,7 +36,15 @@ export const LEAD_STATUS_COLORS: Record<string, string> = {
 
 type Outcome =
   // undoFailed: the undo did not go through, so the record is still there and can be undone again
-  | { kind: 'recorded'; contact: FileContactChoice; id: string; undoFailed?: boolean }
+  // undoUnanswered: no answer came to the undo within the time limit (#1254); the record is kept
+  // in hand until the records, read again, show whether it is still there
+  | {
+      kind: 'recorded';
+      contact: FileContactChoice;
+      id: string;
+      undoFailed?: boolean;
+      undoUnanswered?: boolean;
+    }
   | { kind: 'undone' }
   | { kind: 'failed' }
   // No answer came within the time limit (#1254): whether it was saved is not known
@@ -105,10 +113,15 @@ export function OfficeLeadFile({
       refresh();
     },
     // Without an answer the server may still have saved the record: it is not offered as
-    // "try again", and the records are read again so the file shows what is there (#1254)
+    // "try again", and what shows contacts is read again so the record shows where it is (#1254)
     onError: (error) => {
-      setOutcome({ kind: isRequestTimeout(error) ? 'unanswered' : 'failed' });
-      rereadContacts();
+      if (isRequestTimeout(error)) {
+        setOutcome({ kind: 'unanswered' });
+        refresh();
+      } else {
+        setOutcome({ kind: 'failed' });
+        rereadContacts();
+      }
     },
   });
   const remove = trpc.leadFollowUp.deleteContact.useMutation({
@@ -117,14 +130,17 @@ export function OfficeLeadFile({
       refresh();
     },
     // The record is still there: keep it in hand, so the undo can be asked for again. Without an
-    // answer it may be gone already: the records are read again (#1254)
+    // answer it may be gone already: it stays in hand too, and the records are read again; once
+    // they show it gone, the undo is done (below), and while it is there it can be undone again
     onError: (error) => {
-      if (isRequestTimeout(error)) setOutcome({ kind: 'unanswered' });
-      else
-        setOutcome((current) =>
-          current?.kind === 'recorded' ? { ...current, undoFailed: true } : { kind: 'failed' }
-        );
-      rereadContacts();
+      const unanswered = isRequestTimeout(error);
+      setOutcome((current) =>
+        current?.kind === 'recorded'
+          ? { ...current, undoFailed: !unanswered, undoUnanswered: unanswered }
+          : { kind: 'failed' }
+      );
+      if (unanswered) refresh();
+      else rereadContacts();
     },
   });
   const busy = record.isPending || remove.isPending;
@@ -133,6 +149,17 @@ export function OfficeLeadFile({
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
   }, [busy, onBusyChange]);
+  // An undo that got no answer was carried out after all: the records, read again, no longer
+  // hold the record
+  const undoneUnanswered =
+    outcome?.kind === 'recorded' &&
+    outcome.undoUnanswered === true &&
+    contacts.data !== undefined &&
+    !contacts.isFetching &&
+    !contacts.data.recent.some((contact) => contact.id === outcome.id);
+  useEffect(() => {
+    if (undoneUnanswered) setOutcome({ kind: 'undone' });
+  }, [undoneUnanswered]);
   const canEdit = contacts.data?.canEdit === true;
   const recorded = outcome?.kind === 'recorded';
   const state = { canEdit, recorded, busy };
@@ -190,9 +217,11 @@ export function OfficeLeadFile({
   const latest = contacts.data?.recent[0];
   const settled =
     outcome?.kind === 'recorded'
-      ? outcome.undoFailed
-        ? t('undoFailed')
-        : t('recorded', { kind: tKinds(outcome.contact) })
+      ? outcome.undoUnanswered
+        ? t('undoUnanswered')
+        : outcome.undoFailed
+          ? t('undoFailed')
+          : t('recorded', { kind: tKinds(outcome.contact) })
       : outcome?.kind === 'undone'
         ? t('undone')
         : outcome?.kind === 'unanswered'

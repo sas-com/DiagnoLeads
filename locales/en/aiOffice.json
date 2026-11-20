@@ -389,7 +389,8 @@
               "openHintClosed": " Rows without an underline (campaigns without new prospects) cannot be opened.",
               "openDescription": "Puts the prospects this campaign created on the prospect board",
               "leadsOf": "QR campaign: {campaign}, prospects as they are now",
-              "back": "Back to the campaign board"
+              "back": "Back to the campaign board",
+              "openHintAgencies": " The rows of the agencies' table cannot be opened."
             },
             "agencies": {
               "title": "Sales agencies",
@@ -451,6 +452,7 @@
           "undone": "The record was undone.",
           "failed": "Sorry, that did not work. Please try again in a while.",
           "unanswered": "There was no answer. Please check the contact records to see whether it was saved, and try again if it is not there.",
+          "undoUnanswered": "There was no answer to the undo. Please check the contact records to see whether the record was taken back; if it is still there, you can undo it again.",
           "readOnly": "You do not have permission to record contacts.",
           "choices": {
             "call": "I called",

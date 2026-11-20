@@ -676,6 +676,8 @@ export function OfficeBoardCampaigns({
               <p>
                 {tBoard('qr.openHint')}
                 {closedRows && tBoard('qr.openHintClosed')}
+                {/* The other table of the board has no underline either: said, not left to guess */}
+                {agenciesShown && tBoard('qr.openHintAgencies')}
                 {/* What a row that opens is described by: one short sentence, since a screen
                     reader says it at every row the arrows move to */}
                 <span id={openHintId} className="sr-only">
@@ -744,7 +746,7 @@ export function OfficeBoardCampaigns({
           </thead>
           <tbody>
             {qrRows.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className={ROW}>
                 <th scope="row" className={cn(CELL, FIRST, 'min-w-[7.5rem] text-left font-bold')}>
                   {row.newLeads > 0 ? (
                     <button

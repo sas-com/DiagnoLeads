@@ -95,6 +95,8 @@ const mocks = vi.hoisted(() => ({
   failure: new Error('network') as Error,
   /** The save reached the server although no answer came back */
   savedWithoutAnswer: false,
+  /** The undo reached the server although no answer came back */
+  deletedWithoutAnswer: false,
 }));
 
 /** 12 leads in all; 3 are new, none asked for a consultation, 5 came this week */
@@ -363,6 +365,10 @@ vi.mock('@/lib/trpc/client', () => ({
           isPending: false,
           mutate: (input: { organizationId: string; id: string }) => {
             if (mocks.failDelete) {
+              if (mocks.deletedWithoutAnswer) {
+                mocks.deleted.push(input);
+                mocks.records = mocks.records.filter((r) => r.id !== input.id);
+              }
               options.onError?.(mocks.failure);
               return;
             }
@@ -478,6 +484,7 @@ function reset() {
   mocks.failDelete = false;
   mocks.failure = new Error('network');
   mocks.savedWithoutAnswer = false;
+  mocks.deletedWithoutAnswer = false;
   mocks.saving = false;
   mocks.contactsFail = false;
   mocks.refreshed.mockClear();
@@ -1335,7 +1342,7 @@ describe('the prospects of a QR campaign, opened from its row (#1255)', () => {
     // What the opened board shows, and why it can hold fewer than the count of the row
     expect(
       within(board).getByText(
-        '新しい見込み客のいるキャンペーンの行を開くと、そのキャンペーンの回答から登録された見込み客が見込み客ボードに出ます。出るのは今ある見込み客なので、あとから消したものがあると、「新しい見込み客」の数より少なくなります。下線の無い行（新しい見込み客がいないキャンペーン）は開けません。'
+        '新しい見込み客のいるキャンペーンの行を開くと、そのキャンペーンの回答から登録された見込み客が見込み客ボードに出ます。出るのは今ある見込み客なので、あとから消したものがあると、「新しい見込み客」の数より少なくなります。下線の無い行（新しい見込み客がいないキャンペーン）は開けません。代行会社の表の行は開けません。'
       )
     ).toBeInTheDocument();
     // The keys of the board are shown, and the arrows stay on the rows that open
@@ -1667,16 +1674,52 @@ describe('the customer file in the room', () => {
     );
   });
 
-  it('reads the records again when an undo gets no answer, and does not claim the record is still there (#1254)', async () => {
+  it('keeps the record in hand when an undo gets no answer, so it can be undone again while it is there (#1254)', async () => {
     const { user, office } = await openFile();
     await user.keyboard('2');
     mocks.failDelete = true;
     mocks.failure = new Error('fetch failed', { cause: new RequestTimeoutError(35_000) });
     mocks.refreshed.mockClear();
     await user.keyboard('Z');
-    expect(within(office).getByText(/^応答がありませんでした。/)).toBeInTheDocument();
-    expect(within(office).queryByText(/記録は残っています/)).not.toBeInTheDocument();
+    // Not the words of a save ("try again" would record the contact a second time), and not a
+    // claim that the record is still there
+    expect(
+      within(office).getByText(
+        '取り消しに応答がありませんでした。取り消せたかどうかは、連絡の記録で確かめてください。記録が残っていれば、もう一度取り消せます。'
+      )
+    ).toBeInTheDocument();
+    expect(within(office).queryByText(/記録が無ければ、もう一度お願いします/)).not.toBeInTheDocument();
+    expect(within(office).queryByText(/^取り消せませんでした。記録は残っています/)).not.toBeInTheDocument();
     expect(mocks.refreshed).toHaveBeenCalledTimes(1);
+    // The record is still there: no second record can be made, and the undo is still offered
+    expect(within(office).getByRole('button', { name: /メールした/ })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    mocks.failDelete = false;
+    await user.keyboard('Z');
+    expect(mocks.deleted).toEqual([{ organizationId: ORG_ID, id: 'contact-1' }]);
+    expect(within(office).getByText('記録を取り消しました。')).toBeInTheDocument();
+  });
+
+  it('says the record was undone once the records show it gone, though the undo got no answer (#1254)', async () => {
+    const { user, office, redraw } = await openFile();
+    await user.keyboard('2');
+    mocks.failDelete = true;
+    mocks.deletedWithoutAnswer = true;
+    mocks.failure = new Error('fetch failed', { cause: new RequestTimeoutError(35_000) });
+    await user.keyboard('Z');
+    // The records are read again and no longer hold the record
+    redraw();
+    expect(await within(office).findByText('記録を取り消しました。')).toBeInTheDocument();
+    expect(within(office).queryByText(/^取り消しに応答がありませんでした/)).not.toBeInTheDocument();
+    // The contact can be recorded again, and there is nothing left to undo
+    expect(within(office).getByRole('button', { name: /メールした/ })).not.toHaveAttribute(
+      'aria-disabled'
+    );
+    expect(
+      within(office).queryByRole('button', { name: /いまの記録を取り消す/ })
+    ).not.toBeInTheDocument();
   });
 
   it('offers only the way back to a member who may not change leads', async () => {
