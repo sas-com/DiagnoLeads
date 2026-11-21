@@ -7,7 +7,7 @@ export const workflowAgencyAppointmentsArticle: HelpArticle = {
   summary:
     '営業代行会社から届くアポや診断の回答を、リードに取り込み、初回商談のあとに契約の条件を満たしたかを記録するまでの流れです。',
   routes: [],
-  reviewedAt: '2026-11-08',
+  reviewedAt: '2026-11-19',
   related: ['settings-agency-links', 'workflow-lifecycle', 'deals'],
   blocks: [
     { type: 'h2', id: 'entry', text: '代行会社からリードが届く道' },
@@ -35,7 +35,7 @@ export const workflowAgencyAppointmentsArticle: HelpArticle = {
       content: [
         {
           type: 'text',
-          text: 'アポ日のある行を取り込むと、そのリードに商談（見極め）が自動で作られ、リードは商談中・初回ヒアリングになります。取り込みが終わると、作った件数が出ます。開いている商談があるリード・受注したリードなどには作りません（条件は',
+          text: 'アポ日のある行を取り込むと、そのリードに商談（見極め）が自動で作られ、リードは商談中・初回ヒアリングになります。取り込みが終わると、作った件数が出ます。開いている商談があるリード・成約したリードなどには作りません（条件は',
         },
         { type: 'link', text: '商談の使い方', href: '/help/deals#create' },
         { type: 'text', text: 'にあります）。' },

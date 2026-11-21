@@ -7,7 +7,7 @@ export const leadDetailArticle: HelpArticle = {
   summary:
     '1件のリードについて、連絡・ヒアリング・次の行動・商談をここで記録します。診断の結果や商談前の準備もこの画面で確かめます。',
   routes: ['/leads/[leadId]'],
-  reviewedAt: '2026-11-15',
+  reviewedAt: '2026-11-19',
   related: ['workflow-lifecycle', 'glossary'],
   blocks: [
     { type: 'h2', id: 'header', text: '画面の上の部分' },
@@ -100,7 +100,7 @@ export const leadDetailArticle: HelpArticle = {
         [
           {
             type: 'text',
-            text: '商談（見極め）が自動で作られ、商談のカードに出ます。リードの状態は商談中、商談フェーズは初回ヒアリングになります。開いている商談があるリード・受注したリードなどには作られません（条件は',
+            text: '商談（見極め）が自動で作られ、商談のカードに出ます。リードの状態は商談中、商談フェーズは初回ヒアリングになります。開いている商談があるリード・成約したリードなどには作られません（条件は',
           },
           { type: 'link', text: '商談の使い方', href: '/help/deals#create' },
           { type: 'text', text: 'にあります）。' },

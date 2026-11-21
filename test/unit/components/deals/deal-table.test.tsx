@@ -255,7 +255,7 @@ describe('DealTable', () => {
 
   it('says above the table that won and lost deals are those of the last 30 days', () => {
     renderTable([card({})]);
-    expect(screen.getByText('受注・失注は直近30日の商談を表示しています')).toBeVisible();
+    expect(screen.getByText('受注・失注は過去30日の商談を表示しています')).toBeVisible();
   });
 
   it('writes no text under 14px and gives its links and buttons 44px on phones', () => {

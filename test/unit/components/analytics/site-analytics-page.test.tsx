@@ -90,7 +90,7 @@ describe('SiteAnalyticsPage', () => {
 
   it('asks for another period', async () => {
     renderPage();
-    await userEvent.click(screen.getByRole('radio', { name: '過去7日間' }));
+    await userEvent.click(screen.getByRole('radio', { name: '過去7日' }));
     expect(mocks.input).toEqual({ organizationId: ORG_ID, days: 7 });
   });
 
