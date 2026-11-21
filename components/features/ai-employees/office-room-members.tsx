@@ -29,7 +29,15 @@ import {
 } from './office-room-parts';
 import { roomGuide } from './office-rooms';
 import { FIELD } from './office-talk-staff';
-import { REVOKE_KEY, invitationFigures, invitationNamed } from './rooms/reception';
+import {
+  READ_OFFLINE_FAILS,
+  REVOKE_KEY,
+  invitationFigures,
+  invitationNamed,
+  queryFailure,
+  queryStale,
+} from './rooms/reception';
+import { useDropRefused } from './use-drop-refused';
 
 /** Members read for the shelf: the most `members.list` gives at once */
 export const MEMBERS_SHELF_MAX = 100;
@@ -84,20 +92,14 @@ export function OfficeRoomMembers({
   const format = useFormatter();
   const roleTitle = tOffice(`roles.${role}.title`);
 
-  const members = trpc.members.list.useQuery({
-    organizationId,
-    limit: MEMBERS_SHELF_MAX,
-    offset: 0,
-  });
-  const invitations = trpc.members.listInvitations.useQuery({ organizationId });
-  const invited = invitationFigures(
-    invitations.data,
-    invitations.isError
-      ? invitations.error?.data?.code === 'FORBIDDEN'
-        ? 'forbidden'
-        : 'error'
-      : null
+  const members = trpc.members.list.useQuery(
+    { organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 },
+    READ_OFFLINE_FAILS
   );
+  const invitations = trpc.members.listInvitations.useQuery({ organizationId }, READ_OFFLINE_FAILS);
+  const invited = invitationFigures(invitations.data, queryFailure(invitations));
+  // Only when there is nothing to show: a reading again that failed keeps the members read before
+  const membersFailed = queryFailure(members) !== null;
   const roleLabel = (value: string) =>
     value in ROLE_LABELS ? tMembers(ROLE_LABELS[value as keyof typeof ROLE_LABELS]) : value;
   const day = (value: Date | string) =>
@@ -122,7 +124,7 @@ export function OfficeRoomMembers({
   const [typed, setTyped] = useState('');
   const [refused, setRefused] = useState(false);
   const [outcome, setOutcome] = useState<
-    { kind: 'done'; email: string } | { kind: 'gone' | 'failed' } | null
+    { kind: 'done'; email: string } | { kind: 'gone' | 'failed' | 'hidden' } | null
   >(null);
   const revoke = trpc.members.revokeInvitation.useMutation({
     // Read again whatever came of it, and even when the shelf was left meanwhile: the counter
@@ -132,7 +134,12 @@ export function OfficeRoomMembers({
     // while the revoking is being saved (#1251, owner's decision (a))
     networkMode: 'always',
   });
-  const pending = invitations.data ?? [];
+  useDropRefused(members, () =>
+    utils.members.list.reset({ organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 })
+  );
+  useDropRefused(invitations, () => utils.members.listInvitations.reset({ organizationId }));
+  // Only what may be revoked: none once the invitations are hidden
+  const pending = invited.state === 'ready' ? (invitations.data ?? []) : [];
   // Revoking is offered only to who may see the invitations, and open while there is one
   const mayRevoke = invited.state === 'ready';
   const canOpen = mayRevoke && pending.length > 0;
@@ -148,6 +155,15 @@ export function OfficeRoomMembers({
     setTyped('');
     setRefused(false);
   };
+  // The field closes once revoking is no longer offered (the invitations became hidden meanwhile),
+  // says why, and hands the focus to that sentence instead of letting it fall with the field
+  // biome-ignore lint/correctness/useExhaustiveDependencies: close and focusResult only set state
+  useEffect(() => {
+    if (!revoking || mayRevoke || busy) return;
+    close();
+    setOutcome({ kind: 'hidden' });
+    focusResult();
+  }, [revoking, mayRevoke, busy]);
   const open = () => {
     if (!canOpen) return;
     setOutcome(null);
@@ -207,23 +223,26 @@ export function OfficeRoomMembers({
     };
   }, [keysRef]);
 
-  const report =
-    outcome?.kind === 'done'
+  const report = busy
+    ? tShelf('revoke.saving')
+    : outcome?.kind === 'done'
       ? tShelf('revoke.done', { email: outcome.email })
       : outcome
         ? tShelf(`revoke.${outcome.kind}`)
-        : members.isError
+        : membersFailed
           ? tShelf('error')
           : !members.data
             ? tShelf('reading')
-            : invited.state === 'ready'
-              ? tShelf('reportWithInvitations', {
-                  count: members.data.total,
-                  waiting: invited.waiting,
-                })
-              : // Said, not only shown on the board: who listens does not see it
-                tShelf('report', { count: members.data.total }) +
-                (invited.state === 'error' ? tShelf('invitationsError') : '');
+            : (invited.state === 'ready'
+                ? tShelf('reportWithInvitations', {
+                    count: members.data.total,
+                    waiting: invited.waiting,
+                  })
+                : // Said, not only shown on the board: who listens does not see it
+                  tShelf('report', { count: members.data.total }) +
+                  (invited.state === 'error' ? tShelf('invitationsError') : '')) +
+              // Shown, but not as new: reading it again failed
+              (queryStale(members) || queryStale(invitations) ? tShelf('stale') : '');
   const more = members.data ? members.data.total - members.data.members.length : 0;
 
   return (
@@ -334,7 +353,7 @@ export function OfficeRoomMembers({
           <h2 className="text-xl font-bold">{tShelf('board')}</h2>
         </header>
 
-        {members.isError ? (
+        {membersFailed ? (
           <p className={BOARD_MESSAGE}>{tShelf('error')}</p>
         ) : !members.data ? (
           <output className="m-auto flex items-center gap-3 text-sm text-[#d8d2c4]">

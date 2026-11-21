@@ -473,7 +473,7 @@
           "board": "Due by today",
           "position": "{index} of {total}",
           "reading": "Checking what is due.",
-          "error": "What is due could not be read. Please open the room again in a while.",
+          "error": "What is due could not be read. Please check your connection and open the room again.",
           "forbidden": "You do not have permission to see next actions. Please ask an administrator.",
           "empty": "You have no next actions due today or earlier.",
           "report": "Your next actions due today or earlier: {total}. Here is number {index}.",
@@ -507,7 +507,9 @@
           "openLead": "Open the lead in the normal view",
           "openToday": "Open Today in the normal view",
           "undoFailed": "It could not be undone and is still marked as done. Please check your connection and try again.",
-          "reportNext": "Here is number {index} of {total}."
+          "reportNext": "Here is number {index} of {total}.",
+          "saving": "Saving.",
+          "stale": " The latest could not be read; this is what was read before."
         },
         "deals": {
           "board": "Deal board",
@@ -691,7 +693,7 @@
           "membersShelf": {
             "board": "Members and invitations",
             "reading": "Checking the members.",
-            "error": "The members could not be read. Please open the shelf again in a while.",
+            "error": "The members could not be read. Please check your connection and open the shelf again.",
             "report": "Members: {count}.",
             "reportWithInvitations": "Members: {count}. Pending invitations: {waiting}.",
             "readOnly": "Inviting, roles and removing a member are on the members page of the normal view.",
@@ -714,9 +716,12 @@
               "back": "Give up and go back to the shelf",
               "done": "The invitation to {email} was revoked.",
               "gone": "That invitation was already revoked, or the person has joined. The list was read again.",
-              "failed": "Sorry, it could not be revoked. Please check your connection and try again."
+              "failed": "Sorry, it could not be revoked. Please check your connection and try again.",
+              "saving": "Revoking.",
+              "hidden": "You can no longer see the invitations, so the field to revoke one was closed."
             },
-            "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles."
+            "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles.",
+            "stale": " The latest could not be read; this is what was read before."
           },
           "settingsShelf": {
             "board": "Settings shelf",
@@ -728,7 +733,8 @@
             "due": "What is due",
             "members": "Members and invitations",
             "settings": "Settings"
-          }
+          },
+          "stale": " The latest could not be read; this is what was read before."
         },
         "door": "opens a page",
         "engineering": {

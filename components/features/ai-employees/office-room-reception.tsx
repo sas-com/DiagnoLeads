@@ -25,6 +25,7 @@ import {
 import { OfficeRoomSettings } from './office-room-settings';
 import { roomGuide } from './office-rooms';
 import {
+  READ_OFFLINE_FAILS,
   RECEPTION_SHELVES,
   type ReceptionShelf,
   SHELF_KEYS,
@@ -32,13 +33,11 @@ import {
   dueLine,
   invitationFigures,
   membersLine,
+  queryFailure,
+  queryStale,
   shelfOfKey,
 } from './rooms/reception';
-
-const failureOf = (query: {
-  isError: boolean;
-  error: { data?: { code?: string } | null } | null;
-}) => (!query.isError ? null : query.error?.data?.code === 'FORBIDDEN' ? 'forbidden' : 'error');
+import { useDropRefused } from './use-drop-refused';
 
 /**
  * The reception of the full-screen office, the back office's room (#1196, Epic #1195). At the
@@ -93,17 +92,23 @@ export function OfficeRoomReception({
   }, [busy, onBusyChange]);
 
   // The same questions the shelves ask: what the counter reports is what the shelf then shows
-  const due = trpc.leadFollowUp.dueTasks.useQuery({
-    organizationId,
-    scope: 'mine',
-    limit: DUE_TASKS_MAX,
-  });
-  const members = trpc.members.list.useQuery({
-    organizationId,
-    limit: MEMBERS_SHELF_MAX,
-    offset: 0,
-  });
-  const invitations = trpc.members.listInvitations.useQuery({ organizationId });
+  const due = trpc.leadFollowUp.dueTasks.useQuery(
+    { organizationId, scope: 'mine', limit: DUE_TASKS_MAX },
+    READ_OFFLINE_FAILS
+  );
+  const members = trpc.members.list.useQuery(
+    { organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 },
+    READ_OFFLINE_FAILS
+  );
+  const invitations = trpc.members.listInvitations.useQuery({ organizationId }, READ_OFFLINE_FAILS);
+  const utils = trpc.useUtils();
+  useDropRefused(due, () =>
+    utils.leadFollowUp.dueTasks.reset({ organizationId, scope: 'mine', limit: DUE_TASKS_MAX })
+  );
+  useDropRefused(members, () =>
+    utils.members.list.reset({ organizationId, limit: MEMBERS_SHELF_MAX, offset: 0 })
+  );
+  useDropRefused(invitations, () => utils.members.listInvitations.reset({ organizationId }));
 
   const shelfOpen = shelf !== null;
   useEffect(() => {
@@ -148,9 +153,10 @@ export function OfficeRoomReception({
   const back = () => setShelf(null);
   const guideProps = { role, status, employeeName, look };
 
-  const dueKnown = dueFigures(due.data, failureOf(due));
-  const invited = invitationFigures(invitations.data, failureOf(invitations));
-  const memberCount = members.data?.total ?? null;
+  const dueKnown = dueFigures(due.data, queryFailure(due));
+  const invited = invitationFigures(invitations.data, queryFailure(invitations));
+  // Nothing once the server refused: who left the organization no longer hears its figures
+  const memberCount = queryFailure(members) ? null : (members.data?.total ?? null);
   const aboutDue = dueLine(dueKnown);
   const aboutMembers = membersLine(memberCount, invited);
   // Said once, when all three are known: a sentence that grows as each arrives is read out anew
@@ -228,6 +234,8 @@ export function OfficeRoomReception({
                       memberCount !== null &&
                         invited.state === 'error' &&
                         tDesk('members.invitationsUnread'),
+                      (queryStale(due) || queryStale(members) || queryStale(invitations)) &&
+                        tDesk('stale'),
                       tDesk('ask'),
                     ]
                       .filter(Boolean)
