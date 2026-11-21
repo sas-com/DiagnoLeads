@@ -7,7 +7,7 @@ export const analyticsArticle: HelpArticle = {
   summary:
     'リードの獲得と、その後の進み具合を期間・流入元ごとに分析します。月の振り返りや、獲得の費用対効果の確認に使います。',
   routes: ['/analytics'],
-  reviewedAt: '2026-11-14',
+  reviewedAt: '2026-11-17',
   related: ['glossary'],
   blocks: [
     { type: 'h2', id: 'team', text: 'チームの振り返り（いちばん上）' },

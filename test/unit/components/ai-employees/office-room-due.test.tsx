@@ -35,7 +35,7 @@ const task = (n: number, over: Partial<Record<string, unknown>> = {}) => ({
 
 const mocks = vi.hoisted(() => ({
   inputs: [] as unknown[],
-  mode: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading',
+  mode: 'ok' as 'ok' | 'forbidden' | 'error' | 'loading' | 'staleForbidden' | 'staleError',
   items: [] as unknown[],
   total: null as number | null,
   canEdit: true,
@@ -49,6 +49,12 @@ const mocks = vi.hoisted(() => ({
   updatePending: false,
   // The networkMode each save of the shelves was given (#1251)
   networkModes: {} as Record<string, unknown>,
+  // The options each reading of the reception was given (#1300)
+  queryModes: {} as Record<string, unknown>,
+  // Invitations read before, then reading them again failed with this code
+  invitationsStale: null as null | { data: unknown[]; code: string },
+  // The cached data dropped once the server refused it (#1300)
+  dropped: { dueTasks: vi.fn(), members: vi.fn(), invitations: vi.fn() },
   invitations: 'forbidden' as 'forbidden' | 'error' | unknown[],
   revoked: [] as { organizationId: string; invitationId: string }[],
   revokeFails: null as null | 'NOT_FOUND' | 'INTERNAL',
@@ -71,10 +77,16 @@ vi.mock('@/lib/trpc/client', () => ({
       aiEmployees: { office: { invalidate: vi.fn() } },
       leadFollowUp: {
         tasks: { invalidate: vi.fn() },
-        dueTasks: { invalidate: mocks.refreshed },
+        dueTasks: { invalidate: mocks.refreshed, reset: mocks.dropped.dueTasks },
       },
       deals: { board: { invalidate: vi.fn() } },
-      members: { listInvitations: { invalidate: mocks.invitationsRefreshed } },
+      members: {
+        list: { reset: mocks.dropped.members },
+        listInvitations: {
+          invalidate: mocks.invitationsRefreshed,
+          reset: mocks.dropped.invitations,
+        },
+      },
     }),
     aiEmployees: {
       hire: { useMutation: () => ({ isPending: false, mutate: vi.fn() }) },
@@ -82,8 +94,9 @@ vi.mock('@/lib/trpc/client', () => ({
     },
     members: {
       list: {
-        useQuery: (input: unknown) => {
+        useQuery: (input: unknown, options?: { networkMode?: string }) => {
           mocks.membersInputs.push(input);
+          mocks.queryModes.members = options?.networkMode;
           if (mocks.membersFail) {
             return {
               data: undefined,
@@ -123,8 +136,18 @@ vi.mock('@/lib/trpc/client', () => ({
         },
       },
       listInvitations: {
-        useQuery: () =>
-          Array.isArray(mocks.invitations)
+        useQuery: (_input: unknown, options?: { networkMode?: string }) => {
+          mocks.queryModes.invitations = options?.networkMode;
+          if (mocks.invitationsStale) {
+            // Read before, then reading again failed
+            return {
+              data: mocks.invitationsStale.data,
+              error: { data: { code: mocks.invitationsStale.code } },
+              isError: true,
+              isFetching: false,
+            };
+          }
+          return Array.isArray(mocks.invitations)
             ? { data: mocks.invitations, error: null, isError: false, isFetching: false }
             : {
                 data: undefined,
@@ -133,15 +156,34 @@ vi.mock('@/lib/trpc/client', () => ({
                 },
                 isError: true,
                 isFetching: false,
-              },
+              };
+        },
       },
     },
     leadFollowUp: {
       dueTasks: {
-        useQuery: (input: unknown) => {
+        useQuery: (input: unknown, options?: { networkMode?: string }) => {
           mocks.inputs.push(input);
+          mocks.queryModes.dueTasks = options?.networkMode;
           if (mocks.mode === 'loading') {
             return { data: undefined, error: null, isError: false, isFetching: true };
+          }
+          const read = {
+            items: mocks.items,
+            total: mocks.total ?? mocks.items.length,
+            counts: { mine: mocks.items.length, all: mocks.items.length },
+            scope: 'mine',
+            today: TODAY,
+            canEdit: mocks.canEdit,
+          };
+          if (mocks.mode === 'staleForbidden' || mocks.mode === 'staleError') {
+            // Read before, then reading again failed
+            return {
+              data: read,
+              error: { data: { code: mocks.mode === 'staleForbidden' ? 'FORBIDDEN' : 'INTERNAL' } },
+              isError: true,
+              isFetching: false,
+            };
           }
           if (mocks.mode !== 'ok') {
             return {
@@ -276,6 +318,9 @@ describe('the reception', () => {
     mocks.armMs = 0;
     mocks.updatePending = false;
     mocks.networkModes = {};
+    mocks.queryModes = {};
+    mocks.invitationsStale = null;
+    for (const drop of Object.values(mocks.dropped)) drop.mockClear();
     mocks.members = [member(1, 'owner'), member(2, 'member')];
     mocks.membersTotal = null;
     mocks.membersInputs.length = 0;
@@ -525,7 +570,9 @@ describe('the reception', () => {
     mocks.mode = 'error';
     const { board } = await enterReception();
     expect(
-      within(board).getByText('期限を読めませんでした。時間をおいて、もう一度開いてください。')
+      within(board).getByText(
+        '期限を読めませんでした。通信が切れていないかを確かめて、もう一度開いてください。'
+      )
     ).toBeInTheDocument();
   });
 
@@ -552,6 +599,10 @@ describe('the reception', () => {
 
 describe('the counter of the reception (#1196)', () => {
   beforeEach(() => {
+    mocks.networkModes = {};
+    mocks.queryModes = {};
+    mocks.invitationsStale = null;
+    for (const drop of Object.values(mocks.dropped)) drop.mockClear();
     mocks.inputs.length = 0;
     mocks.mode = 'ok';
     mocks.items = [task(1, { dueOn: '2026-11-10' }), task(2), task(3)];
@@ -782,6 +833,117 @@ describe('the counter of the reception (#1196)', () => {
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
   });
 
+  it('fails the readings at once when offline, so the room says it could not read (#1300)', async () => {
+    const { user } = await enterCounter();
+    expect(mocks.queryModes).toEqual({
+      dueTasks: 'always',
+      members: 'always',
+      invitations: 'always',
+    });
+    mocks.queryModes = {};
+    await user.keyboard('1');
+    expect(mocks.queryModes.dueTasks).toBe('always');
+    await user.keyboard('{Escape}2');
+    expect(mocks.queryModes).toMatchObject({ members: 'always', invitations: 'always' });
+  });
+
+  it('says that a mark or a revoking is being saved (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('1');
+    mocks.updatePending = true;
+    refresh();
+    expect(await within(office).findByText('保存しています。')).toBeInTheDocument();
+    mocks.updatePending = false;
+    refresh();
+    await user.keyboard('{Escape}');
+    await user.keyboard('2');
+    await user.keyboard('1');
+    mocks.revokePending = true;
+    refresh();
+    expect(await within(office).findByText('取り消しています。')).toBeInTheDocument();
+    mocks.revokePending = false;
+  });
+
+  it('drops the invitations read before once the server refuses them, and closes revoking (#1300)', async () => {
+    mocks.invitationsStale = { data: [invitation(1)], code: 'FORBIDDEN' };
+    const { user, office } = await enterCounter();
+    expect(
+      within(office).getByText('招待は、管理者とオーナーだけが見られます。')
+    ).toBeInTheDocument();
+    await user.keyboard('2');
+    const shelf = within(office).getByRole('region', { name: 'メンバーと招待' });
+    expect(within(shelf).queryByText('invited1@example.com')).not.toBeInTheDocument();
+    expect(
+      within(office).queryByRole('button', { name: /招待を取り消す/ })
+    ).not.toBeInTheDocument();
+    // The cache is dropped, so a later reading that fails offline cannot bring them back
+    expect(mocks.dropped.invitations).toHaveBeenCalledWith({ organizationId: ORG_ID });
+  });
+
+  it('drops the queue in hand once the server refuses it, and does not bring it back when offline (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('1');
+    expect(within(office).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
+    mocks.mode = 'staleForbidden';
+    refresh();
+    await waitFor(() =>
+      expect(
+        within(office).queryByRole('article', { name: '見本の次の行動1' })
+      ).not.toBeInTheDocument()
+    );
+    expect(
+      within(office).getAllByText('次の行動を見る権限がありません。管理者に確かめてください。')
+        .length
+    ).toBeGreaterThan(0);
+    expect(mocks.dropped.dueTasks).toHaveBeenCalledWith({
+      organizationId: ORG_ID,
+      scope: 'mine',
+      limit: 200,
+    });
+    expect(within(office).queryByRole('button', { name: /済みにする/ })).not.toBeInTheDocument();
+    // A reading that then fails offline still has data in this mock: the queue in hand stays gone
+    mocks.mode = 'staleError';
+    refresh();
+    expect(
+      within(office).queryByRole('article', { name: '見本の次の行動1' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes the field of the revoking once the invitations are refused, says why and keeps the focus (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    expect(within(office).getByRole('textbox')).toHaveFocus();
+    mocks.invitationsStale = { data: [invitation(1)], code: 'FORBIDDEN' };
+    refresh();
+    const said = await within(office).findByText(
+      '招待を見る権限がなくなったので、取り消しの欄を閉じました。'
+    );
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(said).toHaveFocus();
+  });
+
+  it('keeps the invitations read before when reading them again fails offline, and says so (#1300)', async () => {
+    mocks.invitationsStale = { data: [invitation(1)], code: 'INTERNAL' };
+    const { user, office } = await enterCounter();
+    expect(
+      within(office).getByText(/最新の内容を読めなかったので、前に読んだ内容をお伝えしています。/)
+    ).toBeInTheDocument();
+    await user.keyboard('2');
+    const shelf = within(office).getByRole('region', { name: 'メンバーと招待' });
+    expect(within(shelf).getByText('invited1@example.com')).toBeInTheDocument();
+    expect(within(office).getByText(/前に読んだ内容をお伝えしています/)).toBeInTheDocument();
+  });
+
+  it('keeps the queue in hand when reading it again fails (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('1');
+    mocks.mode = 'error';
+    refresh();
+    expect(within(office).getByRole('article', { name: '見本の次の行動1' })).toBeInTheDocument();
+    expect(within(office).queryByText(/期限を読めませんでした/)).not.toBeInTheDocument();
+  });
+
   it('fails the saves of the shelves at once when offline, not waiting for the network (#1251)', async () => {
     const { user } = await enterCounter();
     await user.keyboard('1');
@@ -812,8 +974,8 @@ describe('the counter of the reception (#1196)', () => {
     // The shelf is rendered again with a mark on its way
     mocks.updatePending = true;
     refresh();
-    const toCounter = within(office).getByRole('button', { name: /窓口へ戻る/ });
-    const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+    const toCounter = within(office).getByRole('button', { name: /窓口に戻る/ });
+    const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
     await waitFor(() => expect(toFloor).toHaveAttribute('aria-disabled', 'true'));
     expect(toCounter).toHaveAttribute('aria-disabled', 'true');
     await user.keyboard('{Escape}');
@@ -834,7 +996,7 @@ describe('the counter of the reception (#1196)', () => {
       'true'
     );
     await waitFor(() =>
-      expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveAttribute(
+      expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toHaveAttribute(
         'aria-disabled',
         'true'
       )
@@ -914,15 +1076,15 @@ describe('the counter of the reception (#1196)', () => {
     fireEvent.keyDown(office, { key: '1', isComposing: true });
     fireEvent.keyDown(office, { key: '2', keyCode: 229 });
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
-    expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveTextContent('Esc');
+    expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toHaveTextContent('Esc');
     await user.keyboard('3');
-    expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).not.toHaveTextContent(
+    expect(within(office).getByRole('button', { name: /フロアに戻る/ })).not.toHaveTextContent(
       'Esc'
     );
-    expect(within(office).getByRole('button', { name: /窓口へ戻る/ })).toHaveTextContent('Esc');
+    expect(within(office).getByRole('button', { name: /窓口に戻る/ })).toHaveTextContent('Esc');
     fireEvent.keyDown(office, { key: 'Escape', isComposing: true });
     expect(within(office).getByRole('region', { name: '設定の棚' })).toBeInTheDocument();
-    await user.click(within(office).getByRole('button', { name: /窓口へ戻る/ }));
+    await user.click(within(office).getByRole('button', { name: /窓口に戻る/ }));
     expect(within(office).getByRole('region', { name: '総務の窓口' })).toBeInTheDocument();
   });
 });

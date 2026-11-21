@@ -72,6 +72,7 @@ const mocks = vi.hoisted(() => ({
   saveOptions: {} as { networkMode?: string },
   saving: false,
   failSave: false,
+  saveErrorCode: 'INTERNAL_SERVER_ERROR',
   refreshed: vi.fn(),
 }));
 
@@ -241,7 +242,7 @@ vi.mock('@/lib/trpc/client', () => ({
           ) => {
             mocks.saves.push(input);
             if (mocks.failSave) {
-              const error = { data: { code: 'INTERNAL_SERVER_ERROR' } };
+              const error = { data: { code: mocks.saveErrorCode } };
               hook.onError?.(error);
               options.onError?.(error);
               return;
@@ -343,6 +344,7 @@ describe('the engineering room', () => {
     mocks.saves.length = 0;
     mocks.saving = false;
     mocks.failSave = false;
+    mocks.saveErrorCode = 'INTERNAL_SERVER_ERROR';
     mocks.refreshed.mockClear();
     mocks.card = {
       estimatedSystem: '見本のシステム',
@@ -838,7 +840,7 @@ describe('the engineering room', () => {
     it('keeps the room open while the card is being saved: the way back to the floor is closed (#1232)', async () => {
       mocks.saving = true;
       const { user, office } = await openFile();
-      const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+      const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
       expect(toFloor).toHaveAttribute('aria-disabled', 'true');
       await user.click(toFloor);
       // Still in the room, with the file open
@@ -850,7 +852,7 @@ describe('the engineering room', () => {
 
     it('leaves the way back to the floor open when nothing is being saved (#1232)', async () => {
       const { user, office } = await openFile();
-      const toFloor = within(office).getByRole('button', { name: /フロアへ戻る/ });
+      const toFloor = within(office).getByRole('button', { name: /フロアに戻る/ });
       expect(toFloor).not.toHaveAttribute('aria-disabled');
       await user.click(toFloor);
       expect(within(office).getByRole('navigation', { name: 'フロア案内' })).toBeInTheDocument();
@@ -878,7 +880,7 @@ describe('the engineering room', () => {
       fireEvent.keyDown(office, { key: '3' });
       // The read is under way: nothing is saved yet, and the way back to the floor is closed
       await waitFor(() =>
-        expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).toHaveAttribute(
+        expect(within(office).getByRole('button', { name: /フロアに戻る/ })).toHaveAttribute(
           'aria-disabled',
           'true'
         )
@@ -887,7 +889,7 @@ describe('the engineering room', () => {
       release();
       await within(office).findByText(/下書きを入れて保存しました/);
       await waitFor(() =>
-        expect(within(office).getByRole('button', { name: /フロアへ戻る/ })).not.toHaveAttribute(
+        expect(within(office).getByRole('button', { name: /フロアに戻る/ })).not.toHaveAttribute(
           'aria-disabled'
         )
       );
@@ -913,6 +915,39 @@ describe('the engineering room', () => {
           'すみません、うまくいきませんでした。時間をおいて、もう一度お願いします。'
         )
       ).toBeInTheDocument();
+    });
+
+    it('says the page is out of date when the server no longer takes what it sends (#1240)', async () => {
+      mocks.failSave = true;
+      mocks.saveErrorCode = 'BAD_REQUEST';
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      expect(
+        await within(office).findByText(
+          '保存できませんでした。画面が古くなっています。ページを読み込み直してから、もう一度お願いします。'
+        )
+      ).toBeInTheDocument();
+      // Every save would be refused the same way: the draft is not offered again
+      expect(
+        within(office).getByRole('button', { name: /事前調査カードの下書きを用意して/ })
+      ).toHaveAttribute('aria-disabled', 'true');
+      await user.keyboard('3');
+      expect(mocks.saves).toHaveLength(1);
+    });
+
+    it('does not offer an undo that would be refused the same way (#1240)', async () => {
+      const { user, office } = await openFile();
+      await user.keyboard('3');
+      mocks.failSave = true;
+      mocks.saveErrorCode = 'BAD_REQUEST';
+      await user.keyboard('z');
+      // The draft is still on the card: the file says so, and where to change it
+      expect(
+        await within(office).findByText(
+          '取り消せませんでした。下書きは保存されたままです。画面が古くなっているため、ここではもう取り消せません。直すときは、ページを読み込み直してから、リードの画面で事前調査カードを開いてください。'
+        )
+      ).toBeInTheDocument();
+      expect(within(office).queryByRole('button', { name: /いまの下書きを取り消す/ })).toBeNull();
     });
 
     it('keeps the undo open when it did not go through', async () => {

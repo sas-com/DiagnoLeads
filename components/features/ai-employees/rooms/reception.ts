@@ -134,3 +134,35 @@ export function invitationNamed<Invitation extends { email: string }>(
  * mark the first one before it was seen.
  */
 export const DUE_ARM_MS = 400;
+
+/**
+ * The reading of the reception's queries (#1300): offline, a query fails after its retries (about
+ * three seconds, app/providers.tsx) instead of waiting for the network, so the room says it could
+ * not read instead of "reading" without end. The same as the saves (#1251).
+ */
+export const READ_OFFLINE_FAILS = { networkMode: 'always' } as const;
+
+export type ReadQuery = {
+  isError: boolean;
+  data: unknown;
+  error: { data?: { code?: string } | null } | null;
+};
+
+// Answers that a reading again never changes: what was read before is no longer the user's to see
+const DENIED = new Set(['FORBIDDEN', 'UNAUTHORIZED']);
+
+/**
+ * Why a query of the reception has nothing to show, if it failed. A reading again that failed for
+ * want of the network keeps what was read before, and that is still shown (`queryStale`); one the
+ * server refused does not: who lost the permission no longer sees what was read with it.
+ */
+export function queryFailure(query: ReadQuery): 'forbidden' | 'error' | null {
+  if (!query.isError) return null;
+  if (DENIED.has(query.error?.data?.code ?? '')) return 'forbidden';
+  return query.data === undefined ? 'error' : null;
+}
+
+/** What a query shows is what was read before: reading it again failed for want of the network */
+export function queryStale(query: ReadQuery): boolean {
+  return query.isError && query.data !== undefined && queryFailure(query) === null;
+}

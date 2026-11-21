@@ -7,7 +7,7 @@ export const siteAnalyticsArticle: HelpArticle = {
   summary:
     '公開ページ（AX の LP・コラム・診断など）の訪問者数とページビューを見ます。計測は自前で、クッキーは使いません。',
   routes: ['/analytics/site'],
-  reviewedAt: '2026-10-28',
+  reviewedAt: '2026-11-17',
   blocks: [
     { type: 'h2', id: 'how', text: '見かた' },
     {

@@ -1,3 +1,4 @@
+import { expectedUpdatedAtSchema } from '@/lib/utils/expected-updated-at';
 import { z } from 'zod';
 
 /** Pre-meeting prep card of a lead (Refs #156) */
@@ -63,6 +64,5 @@ export const leadScopeSchema = z.object({
  */
 export const savePrepCardSchema = leadScopeSchema.extend({
   card: prepCardFieldsSchema,
-  // Bounded: a date near the end of what JavaScript can hold has no next millisecond
-  expectedUpdatedAt: z.date().max(new Date('9999-12-31T00:00:00Z')).nullable(),
+  expectedUpdatedAt: expectedUpdatedAtSchema.nullable(),
 });

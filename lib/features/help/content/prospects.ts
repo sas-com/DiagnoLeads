@@ -7,7 +7,7 @@ export const prospectsArticle: HelpArticle = {
   summary:
     'メンバーがつてや交流会で話したお客様を1行ずつ記録し、営業が次の一手を進めます。連絡先を得たお客様は、ここからリードにします。',
   routes: ['/prospects'],
-  reviewedAt: '2026-11-08',
+  reviewedAt: '2026-11-19',
   related: ['workflow-prospects-to-lead'],
   blocks: [
     { type: 'h2', id: 'write', text: '書くこと・書かないこと' },
@@ -63,7 +63,7 @@ export const prospectsArticle: HelpArticle = {
       content: [
         {
           type: 'text',
-          text: '初回の打ち合わせの日が決まったら、商談日に入れます。リードにした行に商談日を入れると、そのリードに商談（見極め）が自動で作られます。商談日のある行をリードにしたときも作られます。開いている商談があるリード・受注したリードなどには作らず、同じ商談日で保存し直しても作り直しません（条件は',
+          text: '初回の打ち合わせの日が決まったら、商談日に入れます。リードにした行に商談日を入れると、そのリードに商談（見極め）が自動で作られます。商談日のある行をリードにしたときも作られます。開いている商談があるリード・成約したリードなどには作らず、同じ商談日で保存し直しても作り直しません（条件は',
         },
         { type: 'link', text: '商談の使い方', href: '/help/deals#create' },
         { type: 'text', text: 'にあります）。' },
