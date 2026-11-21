@@ -57,7 +57,7 @@ describe('ConversionFunnel', () => {
   it('shows the lifecycle stages and the nurtured leads apart', () => {
     renderIn('ja', <ConversionFunnel funnelData={funnel(0)} />);
 
-    for (const label of ['リード', 'MQL（関心あり）', '商談', 'SQL（適格）', '受注']) {
+    for (const label of ['リード', 'MQL（関心あり）', '商談', 'SQL（適格）', '成約']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
     expect(screen.getByTestId('funnel-nurturing')).toHaveTextContent(

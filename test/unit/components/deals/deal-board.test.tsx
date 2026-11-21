@@ -143,7 +143,7 @@ describe('DealBoard', () => {
     expect(within(proposal).getByText(/加重/)).toBeInTheDocument();
     expect(within(proposal).getAllByRole('listitem')).toHaveLength(2);
     expect(
-      within(screen.getByRole('region', { name: '受注（直近30日）' })).getByText('商談はありません')
+      within(screen.getByRole('region', { name: '受注（過去30日）' })).getByText('商談はありません')
     ).toBeInTheDocument();
   });
 
@@ -155,8 +155,8 @@ describe('DealBoard', () => {
       '課題の確認',
       '提案',
       '条件の調整',
-      '受注（直近30日）',
-      '失注（直近30日）',
+      '受注（過去30日）',
+      '失注（過去30日）',
     ]);
   });
 
@@ -391,7 +391,7 @@ describe('DealBoard', () => {
       dropEffect: '',
     };
     fireEvent.dragStart(screen.getAllByRole('listitem')[0], { dataTransfer });
-    const won = screen.getByRole('region', { name: '受注（直近30日）' });
+    const won = screen.getByRole('region', { name: '受注（過去30日）' });
     fireEvent.dragOver(won, { dataTransfer });
     fireEvent.drop(won, { dataTransfer });
     expect(onMove).toHaveBeenCalledWith(expect.objectContaining({ id: 'deal-1' }), 'won');

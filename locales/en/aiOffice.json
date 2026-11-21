@@ -223,7 +223,7 @@
           "pause": "Rest for a while",
           "resume": "Come back",
           "leave": "Later",
-          "back": "Back to the office",
+          "back": "Back to the floor",
           "rename": "Change the name",
           "log": "Show me the work log",
           "dismiss": "Dismiss this employee"
@@ -1016,7 +1016,7 @@
         "failed": "Sorry, that could not be saved. Please try again in a while.",
         "save": "Save",
         "reset": "Reset",
-        "back": "Back",
+        "back": "Back to the floor",
         "random": "Surprise me",
         "tabs": {
           "look": "Look",
@@ -1139,7 +1139,7 @@
           "standard": "Standard",
           "detailed": "Detailed"
         },
-        "discardBack": "Discard and go back",
+        "discardBack": "Discard and go back to the floor",
         "soon": "Not yet in use"
       },
       "trial3d": {
