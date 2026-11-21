@@ -6,6 +6,7 @@ import {
   type OpenDealStage,
   STAGE_PROBABILITY,
   isOpenStage,
+  moveIsUndoable,
   skipsSqlDecision,
 } from '@/lib/features/deals/types/pipeline';
 import type { SqlDecision } from '@/lib/features/leads/types/pipeline';
@@ -185,7 +186,7 @@ export function useStageMove(
           ? t('toasts.moveUndone', { name: sent.deal.name, stage: stageName(sent.to) })
           : movedMessage(sent.deal.name, sent.to, saved.probability, saved.handedOff);
       // The handoff sheet that went out is not taken back by a move back: no undo then
-      if (!latest || sent.undo || saved.handedOff) {
+      if (!latest || sent.undo || !moveIsUndoable(saved)) {
         toast.success(message);
         return;
       }

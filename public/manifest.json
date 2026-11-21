@@ -1,0 +1,33 @@
+{
+  "name": "DiagnoLeads AI社員オフィス",
+  "short_name": "DiagnoLeads",
+  "description": "AI社員が働くバーチャルオフィスから、見込み客と商談の仕事を進めます。",
+  "lang": "ja",
+  "id": "/office",
+  "start_url": "/office?source=app",
+  "scope": "/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#050915",
+  "theme_color": "#050915",
+  "icons": [
+    {
+      "src": "/images/app/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/app/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/app/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

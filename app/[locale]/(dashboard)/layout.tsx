@@ -1,5 +1,10 @@
 import DashboardShell from '@/components/layout/DashboardShell';
+import { APP_INSTALL_METADATA } from '@/lib/routes/app-install';
+import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
+
+/** The admin pages belong to the installable app (#1125) */
+export const metadata: Metadata = APP_INSTALL_METADATA;
 
 /**
  * Dashboard Layout

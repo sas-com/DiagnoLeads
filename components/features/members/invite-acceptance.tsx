@@ -5,6 +5,7 @@ import { authClient, useSession } from '@/lib/auth/client';
 import { leaveSignedOut } from '@/lib/auth/leave-signed-out';
 import { VERIFY_IN_SIGNED_IN_BROWSER } from '@/lib/auth/verify-email-guard';
 import { useOrganizationContext } from '@/lib/context/organization-context';
+import { arrivalPath } from '@/lib/routes/home';
 import { trpc } from '@/lib/trpc/client';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -66,11 +67,12 @@ export function InviteAcceptance({
     onSuccess: async ({ organizationId }) => {
       setOrganization(organizationId);
       // The organization switcher is not on this page: a list it read before would be kept, without
-      // this organization, and on the dashboard it would select another one. Drop it, so that the
+      // this organization, and on the next page it would select another one. Drop it, so that the
       // switcher reads it there; a read that fails leaves it empty, and the selection as it is
       // (#1046)
       await utils.organizations.list.reset();
-      router.push(`/${locale}/dashboard`);
+      // Joining is coming in: the AI office opens, like after signing in (#1153)
+      router.push(arrivalPath(locale));
     },
     onError: (e) => {
       if (e.data?.code === 'PRECONDITION_FAILED') setVerifyNeeded(true);
@@ -105,7 +107,7 @@ export function InviteAcceptance({
         <p>{t(key[invitation.state])}</p>
         {invitation.state === 'accepted' && (
           <Button asChild className="mt-4 w-full">
-            <Link href={`/${locale}/dashboard`}>{t('openDashboard')}</Link>
+            <Link href={arrivalPath(locale)}>{t('openHome')}</Link>
           </Button>
         )}
       </Panel>

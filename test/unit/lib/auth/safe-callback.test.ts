@@ -8,18 +8,18 @@ describe('safeCallbackPath', () => {
   });
 
   it('falls back for missing values and other sites', () => {
-    expect(safeCallbackPath(null)).toBe('/dashboard');
-    expect(safeCallbackPath('')).toBe('/dashboard');
-    expect(safeCallbackPath('https://evil.example')).toBe('/dashboard');
-    expect(safeCallbackPath('//evil.example')).toBe('/dashboard');
-    expect(safeCallbackPath('/\\evil.example')).toBe('/dashboard');
+    expect(safeCallbackPath(null)).toBe('/office?source=login');
+    expect(safeCallbackPath('')).toBe('/office?source=login');
+    expect(safeCallbackPath('https://evil.example')).toBe('/office?source=login');
+    expect(safeCallbackPath('//evil.example')).toBe('/office?source=login');
+    expect(safeCallbackPath('/\\evil.example')).toBe('/office?source=login');
     expect(safeCallbackPath('javascript:alert(1)', '/home')).toBe('/home');
   });
 
   it('is not fooled by tabs, line breaks or backslashes the browser drops or rewrites', () => {
     for (const value of ['/\t/evil.example', '/\n/evil.example', '/\t\\evil.example', '/\r\n//evil.example']) {
       const result = safeCallbackPath(value);
-      expect(result).toBe('/dashboard');
+      expect(result).toBe('/office?source=login');
       expect(new URL(result, 'https://app.example').origin).toBe('https://app.example');
     }
   });

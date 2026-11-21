@@ -1,0 +1,1404 @@
+'use client';
+
+import { ignoreImeEscape, isImeKey } from '@/components/ui/ime';
+import type { DeskStatus } from '@/lib/features/ai-employees/office';
+import type { OfficeEmployee } from '@/lib/features/ai-employees/service';
+import type { RobotLook } from '@/lib/features/ai-employees/types/profile';
+import { AI_EMPLOYEE_ROLES, type AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
+import { roleHasWork } from '@/lib/features/ai-employees/types/works';
+import { trpc } from '@/lib/trpc/client';
+import { cn } from '@/lib/utils';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUpRight,
+  Box,
+  DoorOpen,
+  List,
+  MessageCircle,
+  Moon,
+  Palette,
+  Plus,
+  ScanSearch,
+  Sun,
+  UserPlus,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
+import { useFormatter, useLocale, useTimeZone, useTranslations } from 'next-intl';
+import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import {
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import {
+  OFFICE_3D_KEY,
+  OFFICE_3D_TRIAL,
+  Office3DBoundary,
+  Office3DTrialPanel,
+} from './office-3d/office-3d-trial';
+import { type OfficeEvent, emotionOf } from './office-3d/office-emotion';
+import { type FpsMeter, createFpsMeter, useFps } from './office-3d/office-fps';
+import { Office3DTags, type Office3DTagsHandle, type Shown3D } from './office-3d/office-tags-3d';
+import type { ScreenRect } from './office-3d/office-view-3d';
+import { type DisplayNote, useOfficeDisplay } from './office-3d/use-office-display';
+import { officeFits } from './office-app';
+import { OfficeTags2D } from './office-floor-labels';
+import { CAP, FOCUS, KEY, PANEL } from './office-hud';
+import { SceneDrawing } from './office-map';
+import {
+  DESK_SEATS,
+  type OfficeArea,
+  TRAINING_ROOM_SPOT,
+  areaOf,
+  spotOf,
+} from './office-map-layout';
+import {
+  type TalkChoice,
+  type TalkLine,
+  cameraOffset,
+  firstRoleToVisit,
+  homeView,
+  hourIn,
+  isNightHour,
+  looksByRole,
+  presidentTasks,
+  statusByRole,
+  talkChoices,
+  talkLineKey,
+} from './office-president';
+import { shade } from './office-prims';
+import { useRecentEvents } from './office-recent-events';
+import { ROLE_ACCENTS } from './office-robot';
+import type { RoomKeys } from './office-room-contract';
+import { ROOM_VIEWS } from './office-room-registry';
+import {
+  DOOR_PAGES,
+  FLOOR_PLACES,
+  type FloorDoor,
+  OFFICE_ROOMS,
+  type OfficeRoom,
+  PLACE_KEYS,
+  ROOM_ROLES,
+  isOfficeRoom,
+  placeOfKey,
+} from './office-rooms';
+import { SCENE_HEIGHT, SCENE_WIDTH, project } from './office-scene';
+import { RobotPortrait } from './office-scene-svg';
+import { OfficeStudio } from './office-studio';
+import { OfficeTalkStaff, type StaffMatter } from './office-talk-staff';
+import { StatusDot } from './office-world-tag';
+
+type Stage = 'title' | 'world' | 'talk' | 'room' | 'studio';
+
+/** The rooms whose name on the floor is a door into them (#1191) */
+const ENTERABLE_AREAS: readonly OfficeArea[] = ['training'];
+
+/**
+ * The floor in 3D (#1135, #1150): three.js is loaded only when the 3D floor is shown (after
+ * clocking in, on a screen and a browser that can show it), so the rest of the app does not
+ * carry it
+ */
+const OfficeCanvas3D = dynamic(() => import('./office-3d/office-canvas-3d'), { ssr: false });
+
+/** The emotions the office also says in words: the ones an event gives, over the status */
+const SAID_FEELINGS = ['proud', 'happy', 'attentive'] as const;
+
+/** How far the office can be dragged past the edge of the screen */
+const PAN_MARGIN = { x: 320, y: 200 };
+/** How far the president can zoom into the office */
+/** How much darker than the role's accent the band under an AI employee's name is */
+export const NAME_BAND_SHADE = 0.8;
+const ZOOM_MAX = 2;
+/** One step of the camera, with the button or the + and - keys */
+const ZOOM_STEP = 1.25;
+/** How close the camera comes in a conversation */
+const TALK_ZOOM = 2.1;
+/** How close the camera comes in a room: the desk stays in view beside the room's board */
+const ROOM_ZOOM = 1.9;
+
+/**
+ * The full-screen office (Refs #1109): the user enters the office as the president of the
+ * company. Three stages: the title (clock in), the office (the whole screen is the floor, with
+ * the staff list, the president's tasks, the map and the actions over it) and a conversation
+ * with an AI employee, where the president answers with choices that hire, pause or resume it.
+ *
+ * Day and night follow the clock here, not the theme. Everything shown comes from the real state
+ * of the office; nothing is scored. Esc steps back (conversation, office, title, out); E talks
+ * to the chosen AI employee; the number keys answer; + and - move the camera in and out, 0 resets
+ * it. Keys held down, or pressed with Ctrl, Alt or the command key, do nothing here.
+ *
+ * The layer is a Radix dialog: it keeps the focus inside, takes it back when the focused control
+ * goes away (the choices change after an answer), and hides the app behind it from assistive
+ * technology. Clicking or dragging the floor leaves the focus on the layer, so the keys go on
+ * working.
+ */
+export function OfficeImmersive({
+  organizationId,
+  companyName,
+  presidentName,
+  employees,
+  canManage,
+  startOn = 'title',
+  onExit,
+}: {
+  organizationId: string;
+  companyName: string | null;
+  presidentName: string | null;
+  employees: readonly OfficeEmployee[];
+  canManage: boolean;
+  /**
+   * The scene the office opens on: the title for who comes in, the floor for who comes home by
+   * the logo (#1169). On the floor at once there was no press to ask the browser for its own
+   * full screen with, so the office only covers the page
+   */
+  startOn?: 'title' | 'world';
+  onExit: () => void;
+}) {
+  const t = useTranslations('aiOffice.immersive');
+  const tOffice = useTranslations('aiOffice');
+  const format = useFormatter();
+  const timeZone = useTimeZone() ?? 'Asia/Tokyo';
+  const locale = useLocale();
+  const router = useRouter();
+  const utils = trpc.useUtils();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+  const [stage, setStage] = useState<Stage>(startOn);
+  // The staff matter open in the conversation: a new name, the work log, the dismissal (#1170)
+  const [staff, setStaff] = useState<StaffMatter | null>(null);
+  // While a staff matter is being saved there is no way back: it is not given up with Esc
+  const [staffBusy, setStaffBusy] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  const [size, setSize] = useState({ w: 1280, h: 800 });
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  // What the AI employee said to the last answer, and whether the answer was carried out
+  // `typed`: carried out in a staff matter, with Enter. The report keeps the focus, so that Enter
+  // pressed once more does not walk out of the conversation before the answer was read
+  const [outcome, setOutcome] = useState<{ text: string; ok: boolean; typed?: boolean } | null>(
+    null
+  );
+  const [dragging, setDragging] = useState(false);
+  // The room the president is in (stage 'room'), and what its keys do
+  const [room, setRoom] = useState<OfficeRoom>(OFFICE_ROOMS[0]);
+  const roomKeys = useRef<RoomKeys | null>(null);
+  // Something is open inside the room (a customer file): Esc closes that first
+  const [roomFileOpen, setRoomFileOpen] = useState(false);
+  // An answer given in the room is being saved: the way back to the floor is closed meanwhile
+  const [roomBusy, setRoomBusy] = useState(false);
+  // The 3D spike (#1135): whether the floor is drawn in 3D, and what the trial panel pretends
+  // (a status and an event for the chosen employee, on this screen only)
+  const [reducedMotion, setReducedMotion] = useState(false);
+  // Followed while the office is open: someone may switch the setting on to stop the motion
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return;
+    const read = () => setReducedMotion(query.matches);
+    read();
+    query.addEventListener?.('change', read);
+    return () => query.removeEventListener?.('change', read);
+  }, []);
+  // Which floor is drawn: what this device remembers, else the default (#1150)
+  const display = useOfficeDisplay({ reducedMotion });
+  const threeD = display.threeD;
+  const [trialStatus, setTrialStatus] = useState<Partial<Record<AiEmployeeRole, DeskStatus>>>({});
+  const [trialEvent, setTrialEvent] = useState<Partial<Record<AiEmployeeRole, OfficeEvent>>>({});
+  // How fast the 3D floor is drawn: read only by what shows it, never the office's state (#1270)
+  const [fpsMeter] = useState(createFpsMeter);
+  // The 3D floor: the name tags over it, and who is on the way to another room right now
+  const tags3d = useRef<Office3DTagsHandle>(null);
+  const shown3dView = useRef<Shown3D | null>(null);
+  const [walking, setWalking] = useState<Partial<Record<AiEmployeeRole, boolean>>>({});
+  const onWalking = useCallback((role: AiEmployeeRole, on: boolean) => {
+    setWalking((current) => (current[role] === on ? current : { ...current, [role]: on }));
+  }, []);
+  // What really just happened to an employee (hired, called back): shown for a short while
+  const [recentEvents, noteEvent] = useRecentEvents(walking);
+  // The customization (#1148): the look of its draft, shown on the 3D robot before it is saved,
+  // and the opening it keeps between its panels for that robot (in the pixels of this screen)
+  const [studioLook, setStudioLook] = useState<RobotLook | null>(null);
+  const [studioOpening, setStudioOpening] = useState<ScreenRect | null>(null);
+  const onStudioOpening = useCallback((rect: ScreenRect | null) => {
+    const root = rootRef.current?.getBoundingClientRect();
+    const next = rect && root ? { ...rect, x: rect.x - root.left, y: rect.y - root.top } : rect;
+    setStudioOpening((current) =>
+      current?.x === next?.x &&
+      current?.y === next?.y &&
+      current?.w === next?.w &&
+      current?.h === next?.h
+        ? current
+        : next
+    );
+  }, []);
+  // The 2D floor stays until the 3D one drew its first frame, and comes back if it cannot be shown
+  const [threeDReady, setThreeDReady] = useState(false);
+  // What the 3D floor showed ends with it, however it ended
+  const clear3d = () => {
+    setThreeDReady(false);
+    // What the trial panel pretended ends with the trial
+    setTrialStatus({});
+    setTrialEvent({});
+    fpsMeter.reset();
+    setWalking({});
+    shown3dView.current = null;
+  };
+  // The office leaves 3D by itself (it could not be shown, or this device is too slow) and says so
+  const leave3d = (why: DisplayNote) => {
+    display.fallBack(why);
+    clear3d();
+  };
+  // The president switches: the choice is remembered on this device (#1150)
+  const toggle3d = () => {
+    if (threeD) clear3d();
+    display.choose(threeD ? '2d' : '3d');
+  };
+  // The 3D floor reports how fast it is drawn: shown under the bar, and watched once (#1150)
+  const fpsReport = useRef<(value: number) => void>(() => undefined);
+  fpsReport.current = (value) => {
+    fpsMeter.report(value);
+    if (display.tooSlow(value)) leave3d('slow');
+  };
+  const onFps3d = useCallback((value: number) => fpsReport.current(value), []);
+
+  const statuses = statusByRole(employees);
+  const byRole = new Map(employees.map((employee) => [employee.role, employee]));
+  const looks = looksByRole(employees);
+  const [selected, setSelected] = useState<AiEmployeeRole>(() =>
+    firstRoleToVisit(statuses, canManage)
+  );
+  // Day and night by the same clock the screen shows
+  const night = isNightHour(hourIn(now, timeZone));
+  const tasks = presidentTasks(statuses, canManage);
+  const hired = employees.length;
+  // Measured once the office is on the screen: never guessed while it is rendered on the server
+  const narrow = mounted && !officeFits(size.w);
+  const vacant = AI_EMPLOYEE_ROLES.length - hired;
+
+  useEffect(() => {
+    setMounted(true);
+    const measure = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    measure();
+    window.addEventListener('resize', measure);
+    const clock = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.clearInterval(clock);
+    };
+  }, []);
+
+  // The stage that just opened takes the focus, and so does what follows an answer: in a
+  // conversation the report of the AI employee (never a choice, so that Enter pressed once too
+  // often cannot hire or pause), then the one way back once the answer was carried out
+  const answered = outcome?.ok === true;
+  // The staff matter that is open. None once its employee is gone (dismissed by someone else while
+  // it was open): the keys, the focus and the panel all follow this one value
+  const matter = byRole.has(selected) ? staff : null;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refocus when the stage or the outcome changes
+  useEffect(() => {
+    if (!mounted) return;
+    rootRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+  }, [mounted, stage, answered, matter]);
+
+  const refresh = () => utils.aiEmployees.office.invalidate({ organizationId });
+  // What the chosen AI employee says, in its own tone (#1134)
+  const say = (line: TalkLine, values?: Record<string, string>) =>
+    t(
+      talkLineKey(line, byRole.get(selected)?.profile.tone ?? 'polite') as 'talk.failed',
+      values as never
+    );
+  const hire = trpc.aiEmployees.hire.useMutation({
+    onSuccess: async (_data, variables) => {
+      setOutcome({ text: t('talk.hired', { name: variables.name }), ok: true });
+      noteEvent(variables.role, 'hired');
+      await refresh();
+    },
+    onError: () => setOutcome({ text: t('talk.failed'), ok: false }),
+  });
+  const update = trpc.aiEmployees.update.useMutation({
+    onSuccess: async (updated, variables) => {
+      setOutcome({
+        text:
+          variables.status === 'paused'
+            ? say('pausedDone', { name: updated.name })
+            : // Until the role has work, going back means going back to training
+              say(roleHasWork(selected) ? 'resumed' : 'resumedTraining', {
+                name: updated.name,
+              }),
+        ok: true,
+      });
+      // Called back from its rest: it cheers when it is back at its place. A rest is no event:
+      // the employee simply sleeps
+      if (variables.status === 'active') {
+        const role = employees.find((employee) => employee.id === variables.employeeId)?.role;
+        if (role) noteEvent(role, 'resumed');
+      }
+      await refresh();
+    },
+    onError: () => setOutcome({ text: say('failed'), ok: false }),
+  });
+
+  const clockIn = () => {
+    setStage('world');
+    // The browser may refuse (no user gesture, an embedded page): the overlay still covers the app
+    rootRef.current?.requestFullscreen?.().catch(() => undefined);
+  };
+  const leave = useCallback(() => {
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => undefined);
+    }
+    onExit();
+  }, [onExit]);
+  // What the room shows comes from the registry: the office does not know the rooms (#1142)
+  const RoomView = ROOM_VIEWS[room];
+  const enterRoom = (next: OfficeRoom) => {
+    setRoom(next);
+    setStage('room');
+  };
+  // The name of the training room on the floor enters it, like its key and the floor guide (#1191)
+  const enterArea = (area: OfficeArea) => {
+    if ((OFFICE_ROOMS as readonly string[]).includes(area)) enterRoom(area as OfficeRoom);
+  };
+  // A place whose room is not built yet opens its page of the normal view (#1162)
+  const doorHref = (door: FloorDoor) => `/${locale}${DOOR_PAGES[door]}`;
+  const openDoor = (door: FloorDoor) => {
+    leave();
+    router.push(doorHref(door));
+  };
+  const talkTo = (role: AiEmployeeRole) => {
+    setSelected(role);
+    setOutcome(null);
+    setStaff(null);
+    setStaffBusy(false);
+    setStage('talk');
+  };
+
+  const selectedStatus = statuses[selected];
+  const selectedEmployee = byRole.get(selected) ?? null;
+  const selectedName = selectedEmployee?.name ?? tOffice(`roles.${selected}.title`);
+  // Only someone who manages the AI employees customizes one, and only one that was hired
+  const canCustomize = canManage && selectedEmployee !== null;
+  // Once an answer was carried out, the only thing left to say is goodbye: the first choice must
+  // not turn into the opposite order under the president's finger
+  const choices: TalkChoice[] = answered ? ['leave'] : talkChoices(selectedStatus, canManage);
+  const busy = hire.isPending || update.isPending;
+  const stepBack = () => {
+    // A staff matter (a new name, the work log, the dismissal) closes first, back to the choices.
+    // Not while it is being saved: stepping back would look like giving it up, and it is not
+    if (stage === 'talk' && matter) {
+      if (!staffBusy) setStaff(null);
+    } else if (stage === 'talk' || stage === 'room' || stage === 'studio') setStage('world');
+    else if (stage === 'world') setStage('title');
+    else leave();
+  };
+  const answer = (choice: TalkChoice) => {
+    if (busy) return;
+    if (choice === 'leave') {
+      setStage('world');
+      return;
+    }
+    if (choice === 'rename' || choice === 'log' || choice === 'dismiss') {
+      // Opens the matter: nothing is carried out by the number itself (#1170)
+      if (selectedEmployee) setStaff(choice);
+      return;
+    }
+    if (choice === 'hire') {
+      // A matter left open for an employee who is gone does not open again for the new one
+      setStaff(null);
+      hire.mutate({
+        organizationId,
+        role: selected,
+        name: tOffice(`roles.${selected}.defaultName`),
+      });
+      return;
+    }
+    if (!selectedEmployee) return;
+    update.mutate({
+      organizationId,
+      employeeId: selectedEmployee.id,
+      status: choice === 'pause' ? 'paused' : 'active',
+    });
+  };
+
+  // Esc is handled by the dialog (onEscapeKeyDown), Tab by its focus scope
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    // A key of a Japanese conversion (IME) belongs to what is being typed, never to the office
+    if (isImeKey(event.nativeEvent)) return;
+    // Leave the browser's and the screen reader's own shortcuts alone, and never repeat an order
+    if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+    if (stage === 'room' || stage === 'studio') {
+      // Esc reaches the room once, through onEscapeKeyDown: here it would be handled twice
+      if (event.key !== 'Escape') roomKeys.current?.(event.nativeEvent);
+      return;
+    }
+    if (stage === 'world') {
+      if (event.key === 'e' || event.key === 'E') {
+        event.preventDefault();
+        talkTo(selected);
+      } else if (event.key === '+' || event.key === '=') {
+        event.preventDefault();
+        zoomBy(ZOOM_STEP);
+      } else if (event.key === '-') {
+        event.preventDefault();
+        zoomBy(1 / ZOOM_STEP);
+      } else if (event.key === '0') {
+        event.preventDefault();
+        resetView();
+      } else if (event.key.toUpperCase() === OFFICE_3D_KEY) {
+        event.preventDefault();
+        toggle3d();
+      } else if ((event.key === 'c' || event.key === 'C') && canCustomize) {
+        event.preventDefault();
+        setStage('studio');
+      } else {
+        const place = placeOfKey(event.key);
+        if (place) {
+          event.preventDefault();
+          if (isOfficeRoom(place)) enterRoom(place);
+          else openDoor(place);
+        }
+      }
+      return;
+    }
+    // While a staff matter is open the numbers belong to what is typed there
+    if (stage === 'talk' && !matter && /^[1-9]$/.test(event.key)) {
+      const choice = choices[Number(event.key) - 1];
+      if (choice) {
+        event.preventDefault();
+        answer(choice);
+      }
+    }
+  };
+
+  // The camera: the floor covers the screen; a conversation moves in on the AI employee
+  const width = Math.max(size.w, (size.h * SCENE_WIDTH) / SCENE_HEIGHT);
+  const height = (width * SCENE_HEIGHT) / SCENE_WIDTH;
+  const spot = spotOf(selected, selectedStatus);
+  const [spotX, spotY] = project(spot.x, spot.y);
+  const home = homeView(size, SCENE_WIDTH / SCENE_HEIGHT);
+  const scale =
+    stage === 'talk' || stage === 'studio'
+      ? TALK_ZOOM
+      : stage === 'room'
+        ? ROOM_ZOOM
+        : stage === 'world'
+          ? home.zoom * zoom
+          : 1.08;
+  // In a room the camera rests on the desk of the room's AI employee, left of the board (the
+  // training room belongs to no one: the camera rests on its study desks)
+  const roomRole = ROOM_ROLES[room];
+  const roomSpot = roomRole ? DESK_SEATS[roomRole] : TRAINING_ROOM_SPOT;
+  const [roomDeskX, roomDeskY] = project(roomSpot.x, roomSpot.y);
+  const camera =
+    stage === 'room'
+      ? cameraOffset({
+          width,
+          height,
+          scale,
+          px: roomDeskX / SCENE_WIDTH,
+          py: (roomDeskY - 45) / SCENE_HEIGHT,
+          targetX: size.w * 0.15,
+          targetY: size.h * 0.3,
+        })
+      : stage === 'talk' || stage === 'studio'
+        ? cameraOffset({
+            width,
+            height,
+            scale,
+            px: spotX / SCENE_WIDTH,
+            py: (spotY - 45) / SCENE_HEIGHT,
+            targetX: size.w * 0.32,
+            targetY: size.h * 0.42,
+          })
+        : {
+            x: (size.w - width * scale) / 2 + (stage === 'world' ? home.x + pan.x : 0),
+            y: (size.h - height * scale) / 2 + (stage === 'world' ? home.y + pan.y : 0),
+          };
+
+  // The office can be dragged a little past the edge of the screen, to see what the panels cover
+  const clampPan = (x: number, y: number, s: number) => {
+    const maxX = Math.max(0, (width * home.zoom * s - size.w) / 2) + PAN_MARGIN.x;
+    const maxY = Math.max(0, (height * home.zoom * s - size.h) / 2) + PAN_MARGIN.y;
+    return { x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
+  };
+  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (stage !== 'world' || (event.target as HTMLElement).closest('button')) return;
+    drag.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+    setDragging(true);
+  };
+  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const start = drag.current;
+    if (!start) return;
+    setPan(
+      clampPan(start.panX + event.clientX - start.x, start.panY + event.clientY - start.y, zoom)
+    );
+  };
+  const endDrag = () => {
+    drag.current = null;
+    setDragging(false);
+  };
+  const zoomBy = (factor: number) => {
+    const next = Math.max(home.out, Math.min(ZOOM_MAX, zoom * factor));
+    setZoom(next);
+    setPan((current) => clampPan(current.x, current.y, next));
+  };
+  const resetView = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const time = format.dateTime(now, { hour: '2-digit', minute: '2-digit' });
+  // The 3D floor stays behind a conversation, a room and the customization (#1148)
+  const show3d = threeD && stage !== 'title';
+  // What a scene other than the floor is about: the desk of the room's employee, or the employee
+  // the president talks to or customizes
+  const subject3d =
+    stage === 'room' ? roomSpot : stage === 'talk' || stage === 'studio' ? spot : null;
+  // What the 3D floor shows: the real statuses, with what the trial panel pretends on top
+  const shown3d = Object.fromEntries(
+    AI_EMPLOYEE_ROLES.map((role) => [
+      role,
+      statuses[role] === 'vacant' ? 'vacant' : (trialStatus[role] ?? statuses[role]),
+    ])
+  ) as Record<AiEmployeeRole, DeskStatus>;
+  const names3d = Object.fromEntries(employees.map((employee) => [employee.role, employee.name]));
+  // What happened to the employees: what was really carried out, with what the trial panel
+  // pretends on top (development only)
+  const events3d = { ...recentEvents, ...trialEvent };
+  // What an employee feels beyond its status: only after something happened to it, never made up
+  const feeling = (role: AiEmployeeRole): (typeof SAID_FEELINGS)[number] | null => {
+    const status = shown3d[role];
+    const event = events3d[role];
+    if (status === 'vacant' || !event || walking[role]) return null;
+    const emotion = emotionOf(status, event);
+    return SAID_FEELINGS.find((said) => said === emotion) ?? null;
+  };
+  const floor3d = employees.map((employee) => {
+    const status = shown3d[employee.role];
+    return {
+      role: employee.role,
+      name: employee.name,
+      status: status === 'vacant' ? ('idle' as const) : status,
+      // In the customization the robot wears the draft, before it is saved
+      look:
+        stage === 'studio' && employee.role === selected && studioLook
+          ? studioLook
+          : employee.profile.look,
+      tone: employee.profile.tone,
+    };
+  });
+  const president = presidentName ?? t('president');
+
+  return (
+    <DialogPrimitive.Root
+      open
+      onOpenChange={(open) => {
+        if (!open) leave();
+      }}
+    >
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Content
+          ref={rootRef}
+          aria-describedby={undefined}
+          onKeyDown={onKeyDown}
+          // The Esc that cancels a Japanese conversion (IME) only ends the conversion
+          onEscapeKeyDown={ignoreImeEscape((event) => {
+            // Esc steps back one stage; only the title leaves the office. A room may use it
+            // first, to close what is open in it
+            event.preventDefault();
+            if ((stage === 'room' || stage === 'studio') && roomKeys.current?.(event)) return;
+            stepBack();
+          })}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            rootRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+          }}
+          // The layer itself holds the focus after a click on the floor: no ring around the screen
+          style={{ outline: 'none', boxShadow: 'none' }}
+          className="fixed inset-0 z-[100000] overflow-clip bg-[#050915] text-[#f5f1e8]"
+        >
+          <DialogPrimitive.Title className="sr-only">{t('label')}</DialogPrimitive.Title>
+          {/* The world: the whole screen is the office */}
+          <div
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={endDrag}
+            onPointerLeave={endDrag}
+            onWheel={(event) => {
+              if (stage === 'world') zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
+            }}
+            className={cn(
+              'absolute inset-0',
+              night
+                ? 'bg-[linear-gradient(180deg,#050915_0%,#0d1730_55%,#161d30_100%)]'
+                : 'bg-[linear-gradient(180deg,#a9d3fb_0%,#dcecfb_45%,#f3efe8_100%)]',
+              stage === 'world' && 'cursor-grab active:cursor-grabbing'
+            )}
+          >
+            <div
+              style={{
+                width,
+                height,
+                transform: `translate(${camera.x}px, ${camera.y}px) scale(${scale})`,
+              }}
+              className={cn(
+                'absolute top-0 left-0 origin-top-left motion-reduce:transition-none',
+                // The floor follows the pointer at once while it is dragged, and glides otherwise
+                !dragging && 'transition-transform duration-700 ease-out',
+                // The 3D floor takes the place of the drawing in the office
+                show3d && threeDReady && 'hidden'
+              )}
+            >
+              <SceneDrawing
+                statuses={statuses}
+                looks={looks}
+                night={stage === 'title' ? true : night}
+                // The names of the rooms are DOM over the floor, clear of the panels (#1177)
+                labels={false}
+              />
+            </div>
+          </div>
+          {/* The name tags and the room names of the 2D floor, laid out clear of each other */}
+          {stage === 'world' && !(show3d && threeDReady) && (
+            <OfficeTags2D
+              statuses={statuses}
+              names={names3d}
+              selected={selected}
+              onChoose={setSelected}
+              onTalk={talkTo}
+              enterableAreas={ENTERABLE_AREAS}
+              onEnterArea={enterArea}
+              camera={camera}
+              scale={scale}
+              width={width}
+              size={size}
+              glide={!dragging && !reducedMotion}
+            />
+          )}
+          {show3d && (
+            <Office3DBoundary onError={() => leave3d('failed')}>
+              <OfficeCanvas3D
+                employees={floor3d}
+                vacant={AI_EMPLOYEE_ROLES.filter((role) => statuses[role] === 'vacant')}
+                // The president standing in front of an employee is something that happens to it.
+                // In the customization it comes before anything else: the employee looks at the
+                // president with its eyes open and nothing over its head, so that the eyes of the
+                // draft can be told apart (a cheer would close them into the same arc)
+                events={
+                  stage === 'studio' || (stage === 'talk' && !events3d[selected])
+                    ? { ...events3d, [selected]: 'president_near' }
+                    : events3d
+                }
+                night={night}
+                stage={stage}
+                subject={subject3d}
+                opening={stage === 'studio' ? studioOpening : null}
+                // Talked to or customized: the employee turns to the viewer
+                attentive={stage === 'talk' || stage === 'studio' ? selected : null}
+                zoom={zoom}
+                // Centred between the side panels, like the 2D floor
+                pan={{ x: pan.x + home.x, y: pan.y }}
+                focus={selectedEmployee ? selected : null}
+                reducedMotion={reducedMotion}
+                onFps={onFps3d}
+                onReady={() => setThreeDReady(true)}
+                onView={(view, places) => {
+                  shown3dView.current = { view, places };
+                  tags3d.current?.place(view, places);
+                }}
+                onWalking={onWalking}
+              />
+            </Office3DBoundary>
+          )}
+          {/* The 3D floor is a picture: its name tags are the same buttons as on the 2D floor */}
+          {show3d && threeDReady && stage === 'world' && (
+            <Office3DTags
+              ref={tags3d}
+              lastShown={shown3dView}
+              statuses={shown3d}
+              names={names3d}
+              selected={selected}
+              onChoose={setSelected}
+              onTalk={talkTo}
+              enterableAreas={ENTERABLE_AREAS}
+              onEnterArea={enterArea}
+            />
+          )}
+          {/* Seen through a camera */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_46%,rgba(0,0,0,0)_50%,rgba(6,10,20,0.55)_100%)]"
+          />
+
+          {stage === 'title' && (
+            <div className="absolute inset-0 flex flex-col justify-between bg-[linear-gradient(90deg,rgba(5,9,21,0.96)_0%,rgba(5,9,21,0.8)_34%,rgba(5,9,21,0.15)_66%,rgba(5,9,21,0)_82%)] p-8 sm:p-16">
+              <div className="space-y-4">
+                <p className="text-sm font-bold tracking-[0.32em] text-[#e9cf9a]">DIAGNOLEADS</p>
+                <h2 className="text-6xl leading-none font-bold tracking-wider text-white sm:text-8xl">
+                  AI OFFICE
+                </h2>
+                <p className="font-serif text-2xl font-bold tracking-[0.12em] text-[#e9cf9a] sm:text-3xl">
+                  {tOffice('title')}
+                </p>
+                <p className="max-w-2xl pt-2 font-serif text-lg leading-loose sm:text-xl">
+                  {t('title.tagline')}
+                </p>
+              </div>
+              <div className="space-y-6">
+                {/* Too narrow for the office (#1139): it says so, and the way out comes first */}
+                {narrow && (
+                  <p className="max-w-md text-base leading-relaxed">{t('title.narrow')}</p>
+                )}
+                <div className="flex max-w-md flex-col gap-1">
+                  {(narrow ? (['back', 'clockIn'] as const) : (['clockIn', 'back'] as const)).map(
+                    (choice, index) => (
+                      <button
+                        key={choice}
+                        type="button"
+                        data-autofocus={index === 0 ? '' : undefined}
+                        onClick={choice === 'clockIn' ? clockIn : leave}
+                        className={cn(
+                          'flex min-h-14 items-center justify-between gap-4 border-l-[3px] px-5 text-left text-lg font-bold',
+                          index === 0
+                            ? 'border-white bg-[linear-gradient(90deg,#f3dfb4_0%,#e9cf9a_70%,rgba(233,207,154,0)_100%)] text-[#1b2130] hover:brightness-105'
+                            : 'border-transparent text-[#d8d2c4] hover:border-[#e9cf9a]/60 hover:bg-white/10 hover:text-white',
+                          FOCUS
+                        )}
+                      >
+                        {t(`title.${choice}`)}
+                        <span className={cn(KEY, index === 0 && 'border-[#1b2130]/60')}>
+                          {choice === 'clockIn' ? 'Enter' : 'Esc'}
+                        </span>
+                      </button>
+                    )
+                  )}
+                </div>
+                <p className="text-sm text-[#d8d2c4]">
+                  {companyName ? `${companyName}　` : ''}
+                  {t('title.staff', { name: president, hired, vacant })}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {stage === 'world' && (
+            <>
+              {/* The president */}
+              <div className={cn(PANEL, 'absolute top-5 left-6 w-72 space-y-1 px-4 pt-3 pb-5')}>
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center bg-[#e9cf9a] text-sm font-bold text-[#1b2130] [clip-path:polygon(50%_0,100%_25%,100%_75%,50%_100%,0_75%,0_25%)]">
+                    {t('president')}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-bold">{president}</p>
+                    {companyName && (
+                      <p className="truncate text-sm text-[#d8d2c4]">{companyName}</p>
+                    )}
+                  </div>
+                </div>
+                <p className="flex items-center gap-2 pt-1 text-sm text-[#d8d2c4]">
+                  {night ? (
+                    <Moon className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                  ) : (
+                    <Sun className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                  )}
+                  <span className="font-bold text-[#f5f1e8]">{time}</span>
+                  {night ? t('night') : t('day')}
+                </p>
+              </div>
+
+              {/* The staff, in the order value passes from hand to hand */}
+              <div
+                className={cn(
+                  PANEL,
+                  'absolute top-36 left-6 w-72 space-y-2 px-4 pt-3 pb-5 xl:top-auto xl:bottom-6'
+                )}
+              >
+                <h2 className={CAP}>{t('staff')}</h2>
+                <p className="text-xs text-[#d8d2c4]">{t('relay')}</p>
+                <ul>
+                  {AI_EMPLOYEE_ROLES.map((role, index) => {
+                    const status = statuses[role];
+                    const employee = byRole.get(role);
+                    return (
+                      <li key={role}>
+                        {index > 0 && (
+                          <ArrowDown
+                            className="mx-auto h-3.5 w-3.5 text-[#e9cf9a]"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelected(role)}
+                          aria-pressed={role === selected}
+                          className={cn(
+                            'flex min-h-11 w-full items-center gap-3 border px-2 py-1 text-left hover:bg-white/10',
+                            role === selected
+                              ? 'border-[#e9cf9a] bg-white/10'
+                              : 'border-transparent',
+                            FOCUS
+                          )}
+                        >
+                          {status === 'vacant' ? (
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center border-2 border-dashed border-[#f5f1e8]/50">
+                              <Plus className="h-5 w-5" aria-hidden="true" />
+                            </span>
+                          ) : (
+                            <span
+                              aria-hidden="true"
+                              style={{ borderColor: ROLE_ACCENTS[role] }}
+                              className="flex h-10 w-10 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
+                            >
+                              <RobotPortrait
+                                role={role}
+                                status={status}
+                                look={looks[role]}
+                                className="h-14 w-10"
+                              />
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className="truncate text-sm font-bold">
+                                {employee?.name ?? tOffice(`roles.${role}.title`)}
+                              </span>
+                              <span
+                                style={{ color: status === 'vacant' ? '#d8d2c4' : undefined }}
+                                className="shrink-0 text-xs font-bold"
+                              >
+                                <StatusDot status={status} /> {tOffice(`status.${status}`)}
+                              </span>
+                            </span>
+                            <span className="block truncate text-xs text-[#d8d2c4]">
+                              {t(`relaySteps.${role}`)}
+                            </span>
+                            {/* Where it is, in words: the floor is a picture. On the 3D floor it
+                                also says when the employee walks, and what it feels after
+                                something really happened */}
+                            {status !== 'vacant' && (
+                              <span className="block truncate text-xs text-[#d8d2c4]">
+                                {show3d && walking[role]
+                                  ? t('walkingTo', {
+                                      room: tOffice(`rooms.${areaOf(role, shown3d[role])}`),
+                                    })
+                                  : tOffice(
+                                      `rooms.${areaOf(role, show3d ? shown3d[role] : status)}`
+                                    )}
+                                {show3d && feeling(role) && `・${t(`feelings.${feeling(role)}`)}`}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* What the president has to do */}
+              <div
+                className={cn(
+                  PANEL,
+                  'absolute top-5 right-6 hidden w-80 space-y-3 px-4 pt-3 pb-6 lg:block'
+                )}
+              >
+                <h2 className={CAP}>{t('tasks.heading')}</h2>
+                {tasks.length === 0 ? (
+                  <p className="text-sm leading-relaxed">
+                    {t(canManage ? 'tasks.none' : 'tasks.noneReadOnly')}
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {tasks.map((task, index) => (
+                      <li key={`${task.kind}-${task.role}`}>
+                        <button
+                          type="button"
+                          onClick={() => talkTo(task.role)}
+                          className={cn(
+                            'flex min-h-11 w-full items-start gap-3 px-1 py-1 text-left text-sm hover:bg-white/10',
+                            FOCUS
+                          )}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className={cn(
+                              'mt-1.5 h-2.5 w-2.5 shrink-0 rotate-45',
+                              index === 0 ? 'bg-[#e9cf9a]' : 'border border-[#f5f1e8]'
+                            )}
+                          />
+                          <span>
+                            <span className="block font-bold">
+                              {t(`tasks.${task.kind}`, {
+                                role: tOffice(`roles.${task.role}.title`),
+                              })}
+                            </span>
+                            <span className="block text-[#d8d2c4]">
+                              {t(`tasks.${task.kind}Why`)}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* The 3D spike's trial panel: pretend a status or an event to watch the robot */}
+              {OFFICE_3D_TRIAL && threeD && threeDReady && selectedEmployee && (
+                <Office3DTrialPanel
+                  name={selectedEmployee.name}
+                  status={trialStatus[selected] ?? selectedStatus}
+                  event={trialEvent[selected]}
+                  fpsMeter={fpsMeter}
+                  onStatus={(status) => {
+                    setTrialStatus((current) => ({ ...current, [selected]: status }));
+                    setTrialEvent((current) => ({ ...current, [selected]: undefined }));
+                  }}
+                  onEvent={(event) =>
+                    setTrialEvent((current) => ({ ...current, [selected]: event }))
+                  }
+                />
+              )}
+              {/* While the 3D floor loads the 2D one stays; if it cannot be shown, the office says so */}
+              {((threeD && !threeDReady) || display.note) && (
+                <output
+                  className={cn(
+                    PANEL,
+                    'absolute bottom-32 left-1/2 block -translate-x-1/2 px-4 py-3 text-sm'
+                  )}
+                >
+                  {t(`trial3d.${display.note ?? 'loading'}`)}
+                </output>
+              )}
+
+              {/* The floor guide: every place of the work. A room is entered; a door opens a page */}
+              <nav
+                aria-label={t('floorGuide')}
+                // Between the side panels (HUD_SIDES), never over them (#1234): where the places
+                // do not fit in one row they wrap there
+                className="absolute inset-x-0 bottom-32 pointer-events-none flex flex-wrap justify-center gap-1.5 px-6 *:pointer-events-auto lg:top-5 lg:right-[21.5rem] lg:bottom-auto lg:left-[19.5rem] lg:px-0"
+              >
+                {FLOOR_PLACES.map((place) => {
+                  const look = cn(
+                    'flex min-h-11 items-center gap-2 border border-[#e9cf9a]/55 bg-[rgba(10,14,24,0.86)] px-2.5 text-left text-sm whitespace-nowrap hover:bg-[rgba(36,44,64,0.95)] min-[1900px]:gap-2.5 min-[1900px]:px-3.5',
+                    FOCUS
+                  );
+                  const label = {
+                    hotkey: PLACE_KEYS[place],
+                    name: tOffice(`rooms.${place}`),
+                    work: t(`room.work.${place}`),
+                  };
+                  return isOfficeRoom(place) ? (
+                    <button
+                      key={place}
+                      type="button"
+                      onClick={() => enterRoom(place)}
+                      className={look}
+                    >
+                      <PlaceLabel {...label} />
+                      {/* A room needs no mark where the row is tight: a door keeps its arrow */}
+                      <DoorOpen
+                        className="hidden h-4 w-4 text-[#e9cf9a] min-[1600px]:block"
+                        aria-hidden="true"
+                      />
+                    </button>
+                  ) : (
+                    <Link key={place} href={doorHref(place)} onClick={leave} className={look}>
+                      <PlaceLabel {...label} />
+                      <span className="sr-only">{t('room.door')}</span>
+                      <ArrowUpRight className="h-4 w-4 text-[#e9cf9a]" aria-hidden="true" />
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {/* The actions */}
+              {/* The row spans the screen only to centre the bar: it lets the pointer through to
+                  the staff list under its ends (#1234) */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-6 flex flex-col items-center">
+                {/* Three groups: the employee, the view, the way out */}
+                <div className="pointer-events-auto flex gap-5">
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => talkTo(selected)} hotkey="E" autoFocus>
+                      <MessageCircle className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.talk')}
+                    </HudButton>
+                    {canCustomize && (
+                      <HudButton onClick={() => setStage('studio')} hotkey="C">
+                        <Palette className="h-6 w-6" aria-hidden="true" />
+                        {t('studio.open')}
+                      </HudButton>
+                    )}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={() => zoomBy(ZOOM_STEP)} hotkey="+">
+                      <ZoomIn className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomIn')}
+                    </HudButton>
+                    <HudButton onClick={() => zoomBy(1 / ZOOM_STEP)} hotkey="-">
+                      <ZoomOut className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.zoomOut')}
+                    </HudButton>
+                    <HudButton onClick={resetView} hotkey="0">
+                      <ScanSearch className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.resetView')}
+                    </HudButton>
+                    <HudButton onClick={toggle3d} hotkey={OFFICE_3D_KEY}>
+                      <Box className="h-6 w-6" aria-hidden="true" />
+                      {t(threeD ? 'trial3d.off' : 'trial3d.on')}
+                    </HudButton>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <HudButton onClick={leave} hotkey="">
+                      <List className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.list')}
+                    </HudButton>
+                    <HudButton onClick={() => setStage('title')} hotkey="Esc">
+                      <DoorOpen className="h-6 w-6" aria-hidden="true" />
+                      {t('actions.clockOut')}
+                    </HudButton>
+                  </div>
+                </div>
+                {/* How fast this device draws the 3D floor, to measure real devices (#1157) */}
+                {threeD && threeDReady && <FpsLine meter={fpsMeter} />}
+              </div>
+
+              {/* The one in front of the president */}
+              <div
+                className={cn(
+                  PANEL,
+                  'absolute right-6 bottom-6 hidden w-80 space-y-3 px-4 pt-3 pb-6 lg:block'
+                )}
+              >
+                <h2 className={CAP}>{t('target')}</h2>
+                <div className="flex items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    style={{ borderColor: ROLE_ACCENTS[selected] }}
+                    className="flex h-16 w-16 shrink-0 items-end justify-center overflow-hidden border-2 bg-[#f2f2f2]"
+                  >
+                    <RobotPortrait
+                      role={selected}
+                      status={selectedStatus}
+                      look={looks[selected]}
+                      className="h-[5.5rem] w-16"
+                    />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-lg font-bold">{selectedName}</p>
+                    <p className="truncate text-sm text-[#d8d2c4]">
+                      {tOffice(`roles.${selected}.title`)}・
+                      {tOffice(`rooms.${areaOf(selected, selectedStatus)}`)}
+                    </p>
+                    <p className="text-sm font-bold">
+                      <StatusDot status={selectedStatus} /> {tOffice(`status.${selectedStatus}`)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => talkTo(selected)}
+                  className={cn(
+                    'flex min-h-11 w-full items-center justify-center gap-2 bg-[#e9cf9a] text-sm font-bold text-[#1b2130] hover:bg-[#f3dfb4]',
+                    FOCUS
+                  )}
+                >
+                  <span className={cn(KEY, 'border-[#1b2130]/60')}>E</span>
+                  {t('actions.talk')}
+                </button>
+              </div>
+            </>
+          )}
+
+          {stage === 'studio' && selectedEmployee && (
+            <>
+              {/* Over the 3D floor the studio darkens towards its board, like a room: the employee
+                  stays in the light, in the opening on the left. Over the 2D floor it is a curtain */}
+              <div
+                aria-hidden="true"
+                className={cn(
+                  'pointer-events-none absolute inset-0',
+                  show3d && threeDReady
+                    ? // The light part is as wide as the opening (26rem), whatever the screen;
+                      // stacked on a narrow screen the opening is in the middle: one thin curtain
+                      'max-lg:bg-[rgba(6,10,20,0.3)] lg:bg-[linear-gradient(90deg,rgba(6,10,20,0.2)_0,rgba(6,10,20,0.2)_28rem,rgba(6,10,20,0.84)_34rem)]'
+                    : 'bg-[rgba(6,10,20,0.78)]'
+                )}
+              />
+              {/* By day the floor behind the title is bright: the title keeps a dark band */}
+              {show3d && threeDReady && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(6,10,20,0.85)_0%,rgba(6,10,20,0)_100%)]"
+                />
+              )}
+              <div className="absolute top-4 left-6">
+                <p className={CAP}>{tOffice(`roles.${selected}.title`)}</p>
+                <h2 className="text-xl font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)]">
+                  {t('studio.of', { name: selectedEmployee.name })}
+                </h2>
+              </div>
+              <OfficeStudio
+                // A fresh studio for each employee: the draft never carries over
+                key={selectedEmployee.id}
+                organizationId={organizationId}
+                employee={selectedEmployee}
+                status={selectedStatus}
+                keysRef={roomKeys}
+                onClose={() => setStage('world')}
+                // The preview is the robot on the 3D floor, once that floor is drawn
+                floor3d={show3d && threeDReady}
+                onLook={setStudioLook}
+                onOpening={onStudioOpening}
+              />
+            </>
+          )}
+
+          {stage === 'room' && (
+            <>
+              {/* The room darkens towards its board; the desk stays in the light */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,rgba(6,10,20,0.15)_0%,rgba(6,10,20,0.45)_30%,rgba(6,10,20,0.82)_100%)]"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(6,10,20,0.85)_0%,rgba(6,10,20,0)_100%)]"
+              />
+              <div className="absolute top-4 left-6">
+                <p className={CAP}>{tOffice(`rooms.${room}`)}</p>
+                <h2 className="text-xl font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)]">
+                  {t(`room.work.${room}`)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                // Not disabled: a disabled button would drop the focus out of the room. While the
+                // room saves an answer it does nothing, like Esc (which the room's keys hold)
+                aria-disabled={roomBusy || undefined}
+                onClick={() => {
+                  if (!roomBusy) setStage('world');
+                }}
+                className={cn(
+                  'absolute top-5 right-6 flex min-h-11 items-center gap-2.5 px-2 text-sm font-bold [text-shadow:0_2px_10px_rgba(4,8,18,0.8)] hover:text-white aria-disabled:cursor-wait aria-disabled:opacity-60',
+                  FOCUS
+                )}
+              >
+                {/* While a file is open, Esc belongs to the file: the key is not shown here */}
+                {!roomFileOpen && <span className={cn(KEY, 'bg-[#0a0e18]/60')}>Esc</span>}
+                {t('room.back')}
+              </button>
+              <RoomView
+                organizationId={organizationId}
+                guide={
+                  roomRole && {
+                    role: roomRole,
+                    status: statuses[roomRole],
+                    name: byRole.get(roomRole)?.name ?? null,
+                    look: looks[roomRole],
+                  }
+                }
+                keysRef={roomKeys}
+                onLeaveOffice={leave}
+                onFileOpenChange={setRoomFileOpen}
+                onBusyChange={setRoomBusy}
+              />
+            </>
+          )}
+
+          {stage === 'talk' && (
+            <>
+              <div aria-hidden="true" className="absolute inset-x-0 top-0 h-16 bg-black" />
+              <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-16 bg-black" />
+              <p className="absolute top-5 left-8 flex items-center gap-3 text-sm text-[#d8d2c4]">
+                <span className={CAP}>{tOffice(`rooms.${areaOf(selected, selectedStatus)}`)}</span>
+                {t('talk.with', { name: selectedName })}
+              </p>
+              <div className="absolute inset-x-4 bottom-20 flex flex-col gap-4 sm:inset-x-16 lg:flex-row lg:items-stretch">
+                <div className="relative flex min-h-48 flex-1 flex-col gap-3 border-t-2 border-[#e9cf9a] bg-[linear-gradient(180deg,rgba(16,21,34,0.95)_0%,rgba(10,14,24,0.92)_100%)] px-6 pt-5 pb-6 sm:pl-48">
+                  <span
+                    aria-hidden="true"
+                    style={{ borderColor: ROLE_ACCENTS[selected] }}
+                    className="absolute -top-16 left-6 hidden h-56 w-36 items-end justify-center overflow-hidden border-[3px] bg-[#f2f2f2] shadow-[0_18px_36px_rgba(4,8,18,0.5)] sm:flex"
+                  >
+                    <RobotPortrait
+                      role={selected}
+                      status={selectedStatus}
+                      look={looks[selected]}
+                      className="h-52 w-36"
+                    />
+                  </span>
+                  <p className="flex flex-wrap items-center gap-3">
+                    <span
+                      // The accent a little darker: white text needs 4.5:1 on every role's color
+                      style={{ backgroundColor: shade(ROLE_ACCENTS[selected], NAME_BAND_SHADE) }}
+                      className="px-3 py-1 text-base font-bold text-white"
+                    >
+                      {selectedName}
+                    </span>
+                    <span className="text-sm text-[#d8d2c4]">
+                      {tOffice(`roles.${selected}.title`)}
+                    </span>
+                    <span className="text-sm font-bold">
+                      <StatusDot status={selectedStatus} /> {tOffice(`status.${selectedStatus}`)}
+                    </span>
+                  </p>
+                  <p
+                    // The report takes the focus when the conversation opens: it is read out, and
+                    // Enter does nothing here
+                    data-autofocus={matter || (answered && !outcome?.typed) ? undefined : ''}
+                    tabIndex={-1}
+                    aria-live="polite"
+                    className={cn(
+                      'text-lg leading-loose outline-none sm:text-xl',
+                      outcome && !outcome.ok && 'font-bold text-[#fca5a5]'
+                    )}
+                  >
+                    {outcome && !outcome.ok && (
+                      <AlertTriangle
+                        className="mr-2 inline h-5 w-5 align-[-3px]"
+                        aria-hidden="true"
+                      />
+                    )}
+                    {outcome?.text ??
+                      `${
+                        selectedStatus === 'vacant'
+                          ? t('talk.lines.vacant', {
+                              role: tOffice(`roles.${selected}.title`),
+                              work: tOffice(`roles.${selected}.description`),
+                            })
+                          : say(selectedStatus, { work: tOffice(`roles.${selected}.description`) })
+                      }${
+                        // Before hiring: say that a role without work yet starts in training
+                        selectedStatus === 'vacant' && !roleHasWork(selected)
+                          ? t('talk.trainingFirst')
+                          : ''
+                      }`}
+                  </p>
+                  {!canManage && (
+                    <p className="text-sm text-[#d8d2c4]">{tOffice('sheet.readOnly')}</p>
+                  )}
+                </div>
+                {/* On a panel of its own: by day the floor behind the choices is bright */}
+                <div className="flex max-h-[calc(100dvh-10rem)] w-full shrink-0 flex-col gap-2 overflow-y-auto border-t-2 border-[#e9cf9a] bg-[rgba(10,14,24,0.92)] p-3 lg:w-80">
+                  {matter && selectedEmployee && (
+                    <OfficeTalkStaff
+                      // A fresh form for each matter and employee: nothing typed carries over
+                      key={`${matter}-${selectedEmployee.id}`}
+                      matter={matter}
+                      organizationId={organizationId}
+                      employee={selectedEmployee}
+                      onBusyChange={setStaffBusy}
+                      onDone={(text) => {
+                        setStaff(null);
+                        setStaffBusy(false);
+                        setOutcome({ text, ok: true, typed: true });
+                        void refresh();
+                      }}
+                      onBack={() => setStaff(null)}
+                    />
+                  )}
+                  {!matter && <h2 className={CAP}>{t('talk.you')}</h2>}
+                  {!matter &&
+                    choices.map((choice, index) => (
+                      <button
+                        // By position: the button under the focus stays when the choices change
+                        // biome-ignore lint/suspicious/noArrayIndexKey: the choices are a short fixed list
+                        key={index}
+                        type="button"
+                        data-autofocus={answered && !outcome?.typed && index === 0 ? '' : undefined}
+                        // Not disabled: a disabled button would drop the focus out of the conversation
+                        aria-disabled={busy}
+                        onClick={() => answer(choice)}
+                        className={cn(
+                          'flex min-h-12 w-full items-center gap-3 border px-4 text-left text-base font-bold aria-disabled:opacity-60',
+                          index === 0
+                            ? 'border-[#e9cf9a] bg-[#e9cf9a] text-[#1b2130] hover:bg-[#f3dfb4]'
+                            : 'border-[#f5f1e8]/45 bg-[#101726] hover:border-[#e9cf9a] hover:bg-[#1c2540]',
+                          // The one that cannot be taken back reads apart from the others
+                          choice === 'dismiss' && 'mt-2 text-[#fca5a5]',
+                          FOCUS
+                        )}
+                      >
+                        <span className={cn(KEY, index === 0 && 'border-[#1b2130]/60')}>
+                          {index + 1}
+                        </span>
+                        {choice === 'hire' && <UserPlus className="h-5 w-5" aria-hidden="true" />}
+                        {answered ? t('talk.choices.back') : t(`talk.choices.${choice}`)}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            </>
+          )}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
+/** A square action of the bar at the bottom, with its key */
+/** The frames a second under the action bar: the only part that renders when the figure changes */
+function FpsLine({ meter }: { meter: FpsMeter }) {
+  const t = useTranslations('aiOffice.immersive');
+  const fps = useFps(meter);
+  if (fps === null) return null;
+  return (
+    <p className="absolute top-full mt-1 text-xs text-[#d8d2c4] tabular-nums [text-shadow:0_1px_6px_rgba(4,8,18,0.9)]">
+      {t('trial3d.fps', { fps })}
+    </p>
+  );
+}
+
+/** What a place of the floor guide says: its key, its name and the work done there */
+function PlaceLabel({ hotkey, name, work }: { hotkey: string; name: string; work: string }) {
+  return (
+    <>
+      <span className={KEY}>{hotkey}</span>
+      <span className="font-bold">{name}</span>
+      {/* Shown where the row has room for it; always read out */}
+      <span className="sr-only text-[#d8d2c4] min-[1900px]:not-sr-only">{work}</span>
+    </>
+  );
+}
+
+function HudButton({
+  onClick,
+  hotkey,
+  autoFocus = false,
+  children,
+}: {
+  onClick: () => void;
+  hotkey: string;
+  autoFocus?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-autofocus={autoFocus ? '' : undefined}
+      className={cn(
+        // The cut corners are drawn on a layer behind the button: clipping the button itself would
+        // clip its focus ring too
+        'relative isolate flex h-[5.25rem] w-[5.25rem] flex-col items-center justify-center gap-1.5 text-center text-xs leading-tight [word-break:auto-phrase] text-[#f5f1e8] before:absolute before:inset-0 before:-z-10 before:border before:border-[#e9cf9a]/55 before:bg-[rgba(10,14,24,0.86)] before:[clip-path:polygon(10px_0,100%_0,100%_calc(100%-10px),calc(100%-10px)_100%,0_100%,0_10px)] hover:before:bg-[rgba(36,44,64,0.95)]',
+        FOCUS
+      )}
+    >
+      {children}
+      {hotkey && (
+        <span className={cn(KEY, 'absolute top-1 right-1 bg-[#0a0e18]/60')}>{hotkey}</span>
+      )}
+    </button>
+  );
+}

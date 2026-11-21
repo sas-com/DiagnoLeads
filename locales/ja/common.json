@@ -86,15 +86,13 @@
     }
   },
   "navigation": {
-    "menu": "メニュー",
-    "management": "管理",
-    "dashboard": "ダッシュボード",
     "today": "今日",
     "leads": "リード管理",
     "deals": "商談",
     "forecast": "売上予測",
     "prospects": "顧客探し（AX）",
     "analytics": "分析",
+    "office": "AI社員オフィス",
     "settings": "設定",
     "organization": "組織",
     "organizations": "組織管理",
@@ -957,42 +955,6 @@
     "count": "件",
     "loading": "読み込み中...",
     "converted": "成約",
-    "widgets": {
-      "customize": "カスタマイズ",
-      "title": "ダッシュボードのカスタマイズ",
-      "description": "ウィジェットの表示/非表示や並び替えができます",
-      "reset": "デフォルトに戻す",
-      "kpiCards": "KPIカード",
-      "kpiCardsDesc": "主要パフォーマンス指標",
-      "statusBreakdown": "ステータス内訳",
-      "statusBreakdownDesc": "リードステータスの分布",
-      "leadTrend": "リードトレンド",
-      "leadTrendDesc": "リード獲得のトレンドチャート",
-      "statusDonut": "ステータスチャート",
-      "statusDonutDesc": "リードステータスのドーナツチャート",
-      "conversionRadial": "コンバージョン＆スコア",
-      "conversionRadialDesc": "ラジアル進捗チャート",
-      "recentActivity": "最近のアクティビティ",
-      "recentActivityDesc": "最新のリードアクティビティ",
-      "pending": "連絡待ちの相談申込",
-      "pendingDesc": "連絡期限の近い順",
-      "recent": "最近のリード",
-      "recentDesc": "最新のリード一覧",
-      "moveUp": "「{name}」を上へ",
-      "moveDown": "「{name}」を下へ",
-      "today": "今日やること",
-      "todayDesc": "期限が今日まで・期限切れの次の行動",
-      "meetings": "今週の商談予定",
-      "meetingsDesc": "次回日程が今週のリード（早い順）",
-      "meetingRate": "次回日程の決定率",
-      "meetingRateDesc": "初回商談から次回日程が決まった率",
-      "status": "対応状況",
-      "statusDesc": "連絡待ち・今日やること・今週の商談の件数",
-      "analytics": "アナリティクス",
-      "analyticsDesc": "期間の推移・移行元システム・前の期間との比較",
-      "pipeline": "パイプライン",
-      "pipelineDesc": "全リードのステータス別の件数"
-    },
     "ax": {
       "description": "AX移行診断から届いたリードと、対応が必要な相談申込を確認します",
       "periodLabel": "集計期間",
@@ -1037,7 +999,7 @@
         "descriptionWeekly": "週ごと（月曜はじまり・日本時間）",
         "others": "その他",
         "weekLabel": "{date}〜",
-        "summary": "直近{days}日の新規リードは{total}件（うち相談申込{consultations}件）。最も多かったのは{peak}の{max}件です"
+        "summary": "過去{days}日の新規リードは{total}件（うち相談申込{consultations}件）。最も多かったのは{peak}の{max}件です"
       },
       "statuses": {
         "title": "いまのパイプライン",
@@ -1068,7 +1030,7 @@
         "noCompany": "（会社名なし）"
       },
       "noOrganization": "組織を選ぶと、ここにリードの状況が表示されます",
-      "periodTag": "直近{days}日",
+      "periodTag": "過去{days}日",
       "periodRange": "{from}〜{to}（日本時間）",
       "allTimeTag": "全期間",
       "cardError": "読み込めませんでした",
@@ -1101,20 +1063,19 @@
       },
       "analytics": {
         "title": "アナリティクス",
-        "toAnalytics": "分析",
         "metricLabel": "表示する数",
         "metric": {
           "leads": "新規リード数",
           "consultations": "相談申込数"
         },
-        "period": "直近{days}日・日ごと（日本時間）",
-        "periodWeekly": "直近{days}日・週ごと（日本時間）",
+        "period": "過去{days}日・日ごと（日本時間）",
+        "periodWeekly": "過去{days}日・週ごと（日本時間）",
         "updatedAt": "{time}時点",
-        "chartLabel": "直近{days}日の{metric}は{total}件",
+        "chartLabel": "過去{days}日の{metric}は{total}件",
         "platforms": "移行元システムごと"
       },
       "insights": {
-        "title": "過去{days}日間のインサイト",
+        "title": "過去{days}日のインサイト",
         "count": "{value}件",
         "changeLabel": "前の{days}日間と比べて",
         "fitOnly": "ほかに適合のみ {value}件",
@@ -1341,7 +1302,7 @@
       "weighted": "加重 {amount}",
       "empty": "商談はありません",
       "dropHere": "ここに移す",
-      "closedTitle": "{stage}（直近{days}日）"
+      "closedTitle": "{stage}（過去{days}日）"
     },
     "card": {
       "daysInStage": "このステージで{days}日",
@@ -1475,7 +1436,7 @@
     },
     "list": {
       "caption": "商談の一覧（{order}）",
-      "closedNote": "受注・失注は直近{days}日の商談を表示しています",
+      "closedNote": "受注・失注は過去{days}日の商談を表示しています",
       "lead": "会社・氏名",
       "marks": "注意",
       "nextAction": "次の行動",
@@ -1751,7 +1712,7 @@
       "description": "組織の基本情報を管理します",
       "notFound": "組織が見つかりません",
       "notFoundDescription": "組織情報を取得できませんでした",
-      "backToDashboard": "ダッシュボードに戻る",
+      "backToOffice": "オフィスに戻る",
       "viewMode": "閲覧モード",
       "viewModeDescription": "組織情報の変更はオーナーのみ可能です。あなたの現在のロールは「{role}」です。",
       "roleAdmin": "管理者",
@@ -2492,8 +2453,8 @@
         "invalidDescription": "リンクが正しくないか、新しい招待で置き換えられています。招待した方に、もう一度送ってもらってください。",
         "expiredDescription": "この招待の有効期限が切れています。招待した方に、もう一度送ってもらってください。",
         "revokedDescription": "この招待は取り消されたか、新しい招待で置き換えられています。最新の招待メールのリンクを開いてください。",
-        "acceptedDescription": "この招待はすでに使われています。参加済みの場合は、ダッシュボードを開いてください。",
-        "openDashboard": "ダッシュボードを開く",
+        "acceptedDescription": "この招待はすでに使われています。参加済みの場合は、オフィスを開いてください。",
+        "openHome": "オフィスを開く",
         "verifyFirst": "参加する前に、{email} があなたのメールアドレスであることを確かめます。確認メールを送り、メールにあるリンクをこのブラウザで開いてください（ログインしたまま）。この画面に戻ります。",
         "sendVerification": "確認メールを送る",
         "resendVerification": "確認メールをもう一度送る",
@@ -2704,6 +2665,7 @@
         "mqlLevels": "MQL段階の内訳",
         "mqlLevelsDescription": "すべての期間のリード。MQL判定日のあるリード（手で MQL にしたものを含む）は関心ありに数えます。段階を押すと一覧で開きます"
       },
+      "unsetSource": "流入元の記録なし",
       "funnel": {
         "total": "総計",
         "conversionRate": "コンバージョン率",
@@ -2715,7 +2677,7 @@
           "mql": "MQL（関心あり）",
           "deal": "商談",
           "sql": "SQL（適格）",
-          "won": "受注"
+          "won": "成約"
         },
         "nurturingNow": "再育成（ナーチャリング）中のリード：{count, number}件（ファネルの段には数えない）",
         "reachedNote": "後の段に進んだリードは前の段にも数えます（代行のアポなど、MQL を経ずに商談に入ったリードも MQL に数えます）"
@@ -5148,7 +5110,7 @@
       "stageMql": "MQL（関心あり）",
       "stageDeal": "商談",
       "stageSql": "SQL（適格）",
-      "stageWon": "受注",
+      "stageWon": "成約",
       "nurturingNow": "再育成（ナーチャリング）中のリード: {count}件"
     },
     "diagnostic": {
@@ -5314,7 +5276,7 @@
     "stale": "希望日時が更新されたため、確定していません。最新の候補を確認して、もう一度選んでください。",
     "confirmError": "確定できませんでした。もう一度お試しください。",
     "readOnly": "確定する権限がありません。",
-    "nextMeetingNote": "確定した日時は、リードの次回日程と「次の行動」に入ります。あわせて商談（見極め）を作ります（開いている商談があるリード・受注したリードなどには作りません）。",
+    "nextMeetingNote": "確定した日時は、リードの次回日程と「次の行動」に入ります。あわせて商談（見極め）を作ります（開いている商談があるリード・成約したリードなどには作りません）。",
     "cancel": "やめる"
   },
   "leadPrep": {
@@ -5342,6 +5304,10 @@
     "drafted": "空欄に下書きを入れました。確認して保存してください。",
     "saved": "事前調査カードを保存しました",
     "saveError": "保存できませんでした。もう一度お試しください。",
+    "conflictTitle": "保存できませんでした。このカードは、編集を始めたあとに保存されています",
+    "conflictBody": "あなたの入力は保存されていません（この画面には残っています）。「最新の内容を読み込む」を押すと、入力は消え、保存されている内容から編集し直せます。入力を残したいときは、先に控えてください。",
+    "reload": "最新の内容を読み込む",
+    "reloadError": "最新の内容を読み込めませんでした。入力中の内容は残っています。もう一度お試しください。",
     "updatedBy": "{date} {name} が更新",
     "drafts": {
       "basisDiagnosis": "Web診断の回答（移行元）",
@@ -5349,7 +5315,15 @@
       "primary": "主な課題。どこで一番困っているか（業務・人・費用）を具体的に確かめる",
       "primaryWithReasons": "主な課題。診断の理由：{reasons}",
       "selected": "診断で選ばれた課題。主な課題との関係を確かめる"
-    }
+    },
+    "conflictSavedBy": "いま保存されている内容：{date} {name} が更新",
+    "conflictShowSaved": "いま保存されている内容を見る",
+    "conflictSavedEmpty": "いま保存されているカードは、中身が空です。",
+    "outdated": "保存できませんでした。画面が古くなっています。ページを読み込み直すと、入力中の内容は消えます。控えてから読み込み直し、もう一度保存してください。",
+    "conflictStatus": "保存できませんでした。上の知らせを確かめてください。",
+    "reloaded": "最新の内容を読み込みました",
+    "startError": "最新のカードを読み込めなかったため、編集を始められませんでした。もう一度お試しください。",
+    "conflictSavedLabel": "いま保存されている内容"
   },
   "actTiming": {
     "title": "動くべき時期",
@@ -5720,7 +5694,7 @@
     },
     "convert": {
       "title": "リードにする",
-      "description": "連絡先を得たお客様を、リード（商談の管理）に移します。会社名と営業担当はこの行から引き継ぎます。商談日が入った行は、リードに商談（見極め）も作ります（開いている商談があるリード・受注したリードなどには作りません）。",
+      "description": "連絡先を得たお客様を、リード（商談の管理）に移します。会社名と営業担当はこの行から引き継ぎます。商談日が入った行は、リードに商談（見極め）も作ります（開いている商談があるリード・成約したリードなどには作りません）。",
       "email": "メールアドレス",
       "name": "氏名（任意）",
       "phone": "電話番号（任意）",
@@ -5814,7 +5788,7 @@
     },
     "handedOverDays": "引き継いで {days} 日",
     "leadBadge": "リード: {status}",
-    "leadLocked": "リードになった行は、リードの画面で進めます。商談日を入れると、そのリードに商談（見極め）を作ります（開いている商談があるリード・受注したリードなどには作りません）",
+    "leadLocked": "リードになった行は、リードの画面で進めます。商談日を入れると、そのリードに商談（見極め）を作ります（開いている商談があるリード・成約したリードなどには作りません）",
     "leadCard": {
       "title": "顧客探しの記録",
       "description": "社員がこのお客様と話した記録です。",
@@ -5900,7 +5874,7 @@
     },
     "import": {
       "title": "代行会社のアポレポートを取り込む",
-      "description": "代行会社のレポート（CSV か Excel）を読み込み、メールアドレス（なければ会社名）でリードに結び付けます。新しいヒアリングには「代行聴取」として事前入力されます。リードは新しく作りません。アポ日のある行は、そのリードに商談（見極め）を作ります（開いている商談があるリード・受注したリードなどには作らず、同じアポ日で取り込み直しても作り直しません）。アポ日が空の行は、前のアポ日を残します。",
+      "description": "代行会社のレポート（CSV か Excel）を読み込み、メールアドレス（なければ会社名）でリードに結び付けます。新しいヒアリングには「代行聴取」として事前入力されます。リードは新しく作りません。アポ日のある行は、そのリードに商談（見極め）を作ります（開いている商談があるリード・成約したリードなどには作らず、同じアポ日で取り込み直しても作り直しません）。アポ日が空の行は、前のアポ日を残します。",
       "chooseFile": "ファイルを選ぶ",
       "template": "様式（CSV）をダウンロード",
       "rows": "{count} 行を読み込みました",
@@ -5942,8 +5916,8 @@
     "title": "サイトの訪問",
     "description": "公開ページの訪問者数とページビュー（自前の計測。クッキーは使いません）",
     "periodLabel": "期間",
-    "period": "過去{days}日間",
-    "periodRange": "過去{days}日間",
+    "period": "過去{days}日",
+    "periodRange": "過去{days}日",
     "overview": "概要",
     "toAnalytics": "リードの分析",
     "metricLabel": "指標",
@@ -5957,7 +5931,7 @@
       "unchanged": "前の期間と同じ"
     },
     "updatedOn": "{day}まで記録",
-    "chartLabel": "{metric}の日ごとの推移（過去{days}日間、合計{total}）",
+    "chartLabel": "{metric}の日ごとの推移（過去{days}日、合計{total}）",
     "visitorsNote": "訪問者数は日ごとに数えています。同じ人が別の日に来ると、それぞれの日に数えます。",
     "pagesTitle": "ページごとの{metric}",
     "empty": "この期間の記録はありません",

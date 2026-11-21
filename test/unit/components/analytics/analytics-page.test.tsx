@@ -124,6 +124,11 @@ vi.mock('next/dynamic', () => ({ default: () => () => null }));
 vi.mock('@/app/[locale]/(dashboard)/analytics/_components/agency-contract-report-card', () => ({
   AgencyContractReportCard: () => null,
 }));
+// The team's review on top (#1164) has its own test (test/unit/components/dashboard/team-sections.test.tsx)
+vi.mock('@/components/dashboard/team-review', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/dashboard/team-review')>()),
+  TeamReview: ({ days }: { days: number }) => <div data-testid="team-review" data-days={days} />,
+}));
 vi.mock('@/components/charts', () => ({
   AreaChart: () => <div data-testid="area-chart" />,
   ChartLegend: ({ categories }: { categories: string[] }) => (
@@ -245,7 +250,7 @@ describe('AnalyticsPage', () => {
     expect(sourceDonut.showLegend).toBe(false);
     expect(sourceDonut.data).toEqual([
       { name: 'LP（自然検索）', value: 8 },
-      { name: '未設定', value: 6 },
+      { name: '流入元の記録なし', value: 6 },
     ]);
     expect(screen.getByText('過去30日に登録されたリードの流入元')).toBeInTheDocument();
     expect(screen.queryByText('lp_organic')).not.toBeInTheDocument();
@@ -271,7 +276,7 @@ describe('AnalyticsPage', () => {
       '￥120,000',
     ]);
     // No SQL / no win: a dash, not a made-up figure; leads without a cost are flagged
-    expect(cells(rows[2])).toEqual(['未設定費用未記録 10 件', '10', '0', '0', '￥0', '—', '—']);
+    expect(cells(rows[2])).toEqual(['流入元の記録なし費用未記録 10 件', '10', '0', '0', '￥0', '—', '—']);
     expect(cells(rows[3])[0]).toBe('合計');
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
     expect(screen.queryByText(/ROI/)).not.toBeInTheDocument();
@@ -373,3 +378,12 @@ describe('AnalyticsPage', () => {
     expect(screen.queryByText('パフォーマンスの概要')).not.toBeInTheDocument();
   });
 });
+
+describe('the team review on the analytics page (#1164)', () => {
+  it('stands above the page’s own figures, for the period chosen on the page', async () => {
+    renderPage();
+    const review = await screen.findByTestId('team-review');
+    expect(review).toHaveAttribute('data-days', '30');
+  });
+});
+

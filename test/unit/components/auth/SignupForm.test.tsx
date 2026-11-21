@@ -147,7 +147,7 @@ describe('SignupForm', () => {
         name: 'John Doe',
         email: 'test@example.com',
         password: 'Password123',
-        callbackURL: '/dashboard',
+        callbackURL: '/office?source=login',
         invitationToken: 'invite-token',
       });
     });
@@ -166,7 +166,7 @@ describe('SignupForm', () => {
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalled();
-      expect(mockPush).toHaveBeenCalledWith('/dashboard');
+      expect(mockPush).toHaveBeenCalledWith('/office?source=login');
     });
     // What the tab read before is another session's, dropped before the page opens (#1057)
     expect(mockClearQueries).toHaveBeenCalledTimes(1);
@@ -218,7 +218,7 @@ describe('SignupForm', () => {
     await user.type(screen.getByLabelText(/confirmPasswordLabel/i), 'Password123');
     await user.click(screen.getByRole('button', { name: /submitButton/i }));
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/office?source=login'));
   });
 
   it('explains that sign-up is by invitation when opened without an invitation', () => {

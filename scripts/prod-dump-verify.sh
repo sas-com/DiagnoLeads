@@ -21,5 +21,5 @@ sleep 5
 psql_() { docker exec -i "$NAME" psql -U supabase_admin -h localhost -d postgres -v ON_ERROR_STOP=1 -qAt "$@"; }
 psql_ -c "create extension if not exists ltree schema extensions; create extension if not exists vector schema extensions;"
 docker exec -i "$NAME" pg_restore -U supabase_admin -h localhost -d postgres --no-owner --no-privileges --clean --if-exists < "$DUMP"
-echo "restored: $(basename "$DUMP")"
+echo "restored: $(basename "$DUMP") (public.site_visit_salts is left out of the dump on purpose, #1126)"
 psql_ -F' ' -c "select table_schema||'.'||table_name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from %I.%I', table_schema, table_name), false, true, '')))[1]::text from information_schema.tables where table_schema in ('public','drizzle') and table_type='BASE TABLE' order by 1"

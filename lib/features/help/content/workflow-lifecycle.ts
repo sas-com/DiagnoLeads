@@ -7,7 +7,7 @@ export const workflowLifecycleArticle: HelpArticle = {
   summary:
     '診断などで届いたリードが、MQL・商談（見極め）・SQL判定を経て受注か失注になるまでの流れと、それぞれの段で使う画面です。',
   routes: [],
-  reviewedAt: '2026-11-08',
+  reviewedAt: '2026-11-19',
   related: ['glossary', 'workflow-prospects-to-lead', 'workflow-agency-appointments'],
   blocks: [
     { type: 'h2', id: 'overview', text: '全体の流れ' },
@@ -32,7 +32,7 @@ export const workflowLifecycleArticle: HelpArticle = {
           { type: 'strong', text: '商談（見極め）' },
           {
             type: 'text',
-            text: '：初回商談の日が決まったら、商談を作ります。相談申込の希望日時をリードの詳細で確定したとき、代行会社のアポレポートを取り込んだとき、顧客探しの行に商談日を入れたときは、自動で作られます（開いている商談があるリード・受注したリードなどには作りません）。それ以外は手で作ります。代行のアポや紹介など、診断のないリードは MQL を経ずにここから始めてよいです。',
+            text: '：初回商談の日が決まったら、商談を作ります。相談申込の希望日時をリードの詳細で確定したとき、代行会社のアポレポートを取り込んだとき、顧客探しの行に商談日を入れたときは、自動で作られます（開いている商談があるリード・成約したリードなどには作りません）。それ以外は手で作ります。代行のアポや紹介など、診断のないリードは MQL を経ずにここから始めてよいです。',
           },
         ],
         [
@@ -59,7 +59,7 @@ export const workflowLifecycleArticle: HelpArticle = {
       type: 'table',
       header: ['段', '使う画面', 'やること'],
       rows: [
-        ['リード・MQL', 'ダッシュボード・リード一覧', '連絡待ちの相談申込に連絡し、担当を決める'],
+        ['リード・MQL', '今日・リード一覧', '連絡待ちの相談申込に連絡し、担当を決める'],
         ['商談（見極め）', 'リードの詳細・商談', 'ヒアリングを記録し、SQL を判定する'],
         [
           '課題の確認〜条件の調整',

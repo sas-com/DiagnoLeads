@@ -167,7 +167,7 @@ describe('NextMeetingRateSection', () => {
     expect(screen.getByRole('heading', { name: t.rateTitle })).toBeInTheDocument();
     expect(screen.getByTestId('next-meeting-rate-value')).toHaveTextContent('75%');
     expect(screen.getByText('6件 / 初回商談 8件')).toBeInTheDocument();
-    expect(screen.getByText('直近7日')).toBeInTheDocument();
+    expect(screen.getByText('過去7日')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: t.rateOverdueLink })).toHaveAttribute(
       'href',
       '/ja/leads?next=overdue&sort=nextMeetingDate&order=asc'

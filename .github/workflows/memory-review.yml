@@ -1,0 +1,145 @@
+# Monthly MemoryBank review (#1111). On the 1st of each month, opens one issue labelled
+# "memory-review" with last month's "役立った／外れた" lines from merged PR bodies and the size of
+# learnings.md, so the review in .factory/memory/README.md actually starts. If last month's
+# issue is still open, the new data goes there as a comment instead of a second issue.
+name: MemoryBank review
+
+on:
+  schedule:
+    # 00:23 UTC on the 1st = 09:23 JST
+    - cron: '23 0 1 * *'
+  workflow_dispatch:
+    inputs:
+      from:
+        description: 'First merge date to collect (YYYY-MM-DD). Default: first day of last month'
+        required: false
+      to:
+        description: 'Last merge date to collect (YYYY-MM-DD). Default: last day of last month'
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+  # The search API leaves out kinds the token cannot read, so without this every month counts
+  # 0 merged PRs even though the repository is public (#1122)
+  pull-requests: read
+
+concurrency:
+  group: memory-review
+  cancel-in-progress: false
+
+jobs:
+  open:
+    name: Open the review issue
+    if: github.repository == 'sas-com/DiagnoLeads'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      INPUT_FROM: ${{ inputs.from }}
+      INPUT_TO: ${{ inputs.to }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: .factory/memory/learnings.md
+          sparse-checkout-cone-mode: false
+
+      - name: Collect last month
+        run: |
+          set -euo pipefail
+          first_of_month=$(date -u +%Y-%m-01)
+          from=${INPUT_FROM:-$(date -u -d "$first_of_month -1 month" +%F)}
+          to=${INPUT_TO:-$(date -u -d "$first_of_month -1 day" +%F)}
+          for d in "$from" "$to"; do
+            [[ "$d" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "Bad date: $d"; exit 1; }
+          done
+          echo "FROM=$from" >> "$GITHUB_ENV"
+          echo "TO=$to" >> "$GITHUB_ENV"
+
+          query="repo:$GH_REPO is:pr is:merged merged:$from..$to"
+          counts=$(gh api -X GET search/issues -f q="$query" -f per_page=1 \
+            --jq '"\(.total_count) \(.incomplete_results)"')
+          read -r prs incomplete <<< "$counts"
+          if [ "$prs" -gt 1000 ] || [ "$incomplete" = "true" ]; then
+            echo "::warning::Search returned $prs PRs (incomplete=$incomplete); only the first 1000 are read"
+          fi
+          if [ "$prs" -eq 0 ]; then
+            echo "::warning::Search returned no merged PRs for $from..$to; check the token's permissions"
+          fi
+          echo "PRS=$prs" >> "$GITHUB_ENV"
+
+          # One line per learning used: "- #<PR> ``役立った：<heading>``" (lines left as "なし" are
+          # skipped). PR bodies are editable by their authors, so the text goes into a code span
+          # (no mentions, HTML or links) and is cut at 300 characters.
+          gh api -X GET search/issues --paginate \
+            -f q="$query" -f per_page=100 -f sort=created -f order=asc \
+            --jq '.items[] | .number as $n | ((.body // "") | gsub("\r"; "") | split("\n")[])
+              | select(test("^\\s*- (役立った|外れた)[：:]"))
+              | select(test("^\\s*- (役立った|外れた)[：:]\\s*なし\\s*$") | not)
+              | sub("^\\s*- "; "") | gsub("`+"; "`") | .[0:300]
+              | "- #\($n) `` \(.) ``"' > used.txt
+
+          python3 - .factory/memory/learnings.md > size.txt <<'PY'
+          import sys
+          lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+          entries, title, length, fenced = [], None, 0, False
+          for line in lines:
+              if line.startswith("```"):
+                  fenced = not fenced
+              if not fenced and (line.startswith("### ") or line.startswith("## ")):
+                  if title is not None:
+                      entries.append((length, title))
+                  title, length = (line[4:], 0) if line.startswith("### ") else (None, 0)
+              elif title is not None:
+                  length += len(line)
+          if title is not None:
+              entries.append((length, title))
+          longest = max(entries) if entries else (0, "なし")
+          print(f"- 行数：{len(lines)}")
+          print(f"- 項目数：{len(entries)}")
+          print(f"- いちばん長い項目：{longest[1]}（本文 {longest[0]} 字）")
+          PY
+
+      - name: Open the issue or add to the open one
+        run: |
+          set -euo pipefail
+          month=$(date -u -d "$FROM" '+%Y年%m月')
+          {
+            echo "${month}分の MemoryBank の見直しです。手順は \`.factory/memory/README.md\` の「メンテナンス（月1回）」。"
+            echo
+            echo "## 集めた学び（${FROM}〜${TO} にマージされた PR ${PRS} 件の本文から）"
+            echo
+            if [ -s used.txt ]; then cat used.txt; else echo "なし"; fi
+            echo
+            echo "見出しが learnings.md と一致しない行は、人が確かめてから数える。「評価」の行にすでにある PR 番号は数えない。"
+            echo
+            echo "## learnings.md の大きさ"
+            echo
+            cat size.txt
+            echo
+            echo "## やること"
+            echo
+            echo "- [ ] 学びの評価の数を増やす（整理の PR に入れてよい。承認は不要）"
+            echo "- [ ] 整理の候補を、ファイルを変えずにこの Issue に書き、オーナーの承認を得る"
+            echo "- [ ] 承認された分を PR で適用する（learnings.md を変えている open な PR を先に確かめる）"
+            echo "- [ ] 古くなった決定を superseded にする"
+            echo "- [ ] \`/doctor prompt-audit\` と \`/doctor prompt-audit .factory/memory\`"
+            echo "- [ ] Anthropic の公式の変更を確かめる（スキル \`official-check\`）"
+            echo "- [ ] 結果（数えた件数・適用した整理・行数）をコメントに書いて閉じる"
+            echo
+            echo "前回までの見直しは \`memory-review\` ラベルの閉じた Issue。最初の見直しでは、#1111 のコメントにある候補も確かめる。"
+            echo
+            echo "（[実行の記録](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})）"
+          } > body.md
+
+          open=$(gh issue list --label memory-review --state open --limit 1 \
+            --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body-file body.md
+            echo "Added to open issue #$open"
+            exit 0
+          fi
+          gh label create memory-review --color 5319E7 \
+            --description "Monthly MemoryBank review" 2>/dev/null || true
+          gh issue create --title "MemoryBank の見直し（${month}）" --label memory-review --body-file body.md

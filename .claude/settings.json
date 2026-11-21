@@ -1,5 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "model": "sonnet",
+  "advisorModel": "fable",
   "permissions": {
     "allow": [
       "Bash(bun run test)",
@@ -14,6 +16,7 @@
       "Bash(bun run typecheck)",
       "Bash(bun run lint)",
       "Bash(bun run arch:check)",
+      "Bash(bun run verify *)",
       "Bash(bun run format)",
       "Bash(bun run build)",
       "Bash(bun run i18n:check)",
@@ -45,7 +48,21 @@
       "Bash(bun run test:e2e*)",
       "Bash(bunx drizzle-kit *)",
       "Bash(git fetch *--u*)",
-      "Edit(./node_modules/**)"
+      "Edit(./node_modules/**)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.claude/settings.local.json)",
+      "Edit(/.claude/hooks/**)",
+      "Edit(/.claude/agents/**)",
+      "Bash(gh pr merge *)",
+      "Bash(gh api *pulls/*/merge*)",
+      "Bash(gh api *pulls/*/auto_merge*)",
+      "Bash(gh api *mergePullRequest*)",
+      "Bash(gh api *enablePullRequestAutoMerge*)",
+      "Bash(gh api *enqueuePullRequest*)",
+      "mcp__github__merge_pull_request",
+      "mcp__github__enable_pr_auto_merge",
+      "mcp__*__merge_pull_request",
+      "mcp__*__enable_pr_auto_merge"
     ],
     "deny": [
       "Read(./.env)",
@@ -66,7 +83,9 @@
       "Bash(git push -u origin main)",
       "Bash(git push -u origin main *)",
       "Bash(git push origin HEAD:main)",
-      "Bash(git push origin HEAD:main *)"
+      "Bash(git push origin HEAD:main *)",
+      "Bash(pkill *)",
+      "Bash(killall *)"
     ]
   },
   "hooks": {

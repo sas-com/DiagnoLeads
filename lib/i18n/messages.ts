@@ -1,4 +1,6 @@
+import enAiOffice from '@/locales/en/aiOffice.json';
 import enCommon from '@/locales/en/common.json';
+import jaAiOffice from '@/locales/ja/aiOffice.json';
 import jaCommon from '@/locales/ja/common.json';
 import type { AbstractIntlMessages } from 'next-intl';
 import type { Locale } from './config';
@@ -14,9 +16,11 @@ import type { Locale } from './config';
  */
 export const MESSAGE_FILES = {
   ja: {
+    aiOffice: jaAiOffice,
     common: jaCommon,
   },
   en: {
+    aiOffice: enAiOffice,
     common: enCommon,
   },
 } satisfies Record<Locale, Record<string, AbstractIntlMessages>>;

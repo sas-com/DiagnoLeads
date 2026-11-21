@@ -104,27 +104,67 @@ export async function getPrepDraftSource(
   };
 }
 
-/** Save the card (created on the first save); false when the lead is not found */
+export type SavePrepCardResult =
+  /** The card's new `updatedAt`: what the next save of the same reader expects */
+  | { status: 'saved'; updatedAt: Date }
+  | { status: 'not_found' }
+  /** Somebody else saved the card (or created it) after it was read: nothing was written */
+  | { status: 'conflict' };
+
+/**
+ * Save the card, which replaces all its fields, only when it is still as the caller read it
+ * (#1225, like the hearings): `expectedUpdatedAt` is the card's `updatedAt` as read, or null when
+ * there was none. The check is part of the one statement that writes, so two saves at the same
+ * moment cannot both go through: the update only matches the row with that `updatedAt`, and the
+ * first save of a card only inserts when the lead has no row yet (the unique index on lead_id).
+ */
 export async function savePrepCard(
   db: Database,
-  input: { organizationId: string; leadId: string; userId: string; card: PrepCardFields },
+  input: {
+    organizationId: string;
+    leadId: string;
+    userId: string;
+    card: PrepCardFields;
+    expectedUpdatedAt: Date | null;
+  },
   now: Date = new Date()
-): Promise<boolean> {
+): Promise<SavePrepCardResult> {
   const [lead] = await db
     .select({ id: leads.id })
     .from(leads)
     .where(and(eq(leads.id, input.leadId), eq(leads.organizationId, input.organizationId)));
-  if (!lead) return false;
-  const values = { ...input.card, updatedBy: input.userId, updatedAt: now };
-  await db
-    .insert(leadPrepCards)
-    .values({
-      ...values,
-      organizationId: input.organizationId,
-      leadId: input.leadId,
-      createdBy: input.userId,
-      createdAt: now,
-    })
-    .onConflictDoUpdate({ target: leadPrepCards.leadId, set: values });
-  return true;
+  if (!lead) return { status: 'not_found' };
+
+  if (input.expectedUpdatedAt === null) {
+    const [created] = await db
+      .insert(leadPrepCards)
+      .values({
+        ...input.card,
+        organizationId: input.organizationId,
+        leadId: input.leadId,
+        createdBy: input.userId,
+        updatedBy: input.userId,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: leadPrepCards.leadId })
+      .returning({ updatedAt: leadPrepCards.updatedAt });
+    return created ? { status: 'saved', updatedAt: created.updatedAt } : { status: 'conflict' };
+  }
+
+  // Always move updatedAt forward, even within the same millisecond: an old token never matches
+  // again. Written as a JS date (milliseconds), so that it comes back equal to what is compared
+  const updatedAt = new Date(Math.max(now.getTime(), input.expectedUpdatedAt.getTime() + 1));
+  const [saved] = await db
+    .update(leadPrepCards)
+    .set({ ...input.card, updatedBy: input.userId, updatedAt })
+    .where(
+      and(
+        eq(leadPrepCards.leadId, input.leadId),
+        eq(leadPrepCards.organizationId, input.organizationId),
+        eq(leadPrepCards.updatedAt, input.expectedUpdatedAt)
+      )
+    )
+    .returning({ updatedAt: leadPrepCards.updatedAt });
+  return saved ? { status: 'saved', updatedAt: saved.updatedAt } : { status: 'conflict' };
 }

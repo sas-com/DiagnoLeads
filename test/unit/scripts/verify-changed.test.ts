@@ -73,11 +73,35 @@ describe('planTests', () => {
     });
   });
 
+  it('runs the check of the key handlers for a changed screen, besides the related tests (#1129)', () => {
+    expect(planTests([modified('components/header/HeaderLeadSearch.tsx')])).toEqual({
+      kind: 'selected',
+      related: ['components/header/HeaderLeadSearch.tsx'],
+      extra: ['test/unit/components/ime-key-guard.test.ts'],
+    });
+  });
+
   it('runs the test that reads a changed JSON file', () => {
     expect(planTests([modified('lib/features/ax-site/web-checklist-pdf.json')])).toEqual({
       kind: 'selected',
       related: [],
       extra: ['test/unit/features/ax-web-checklist.test.ts'],
+    });
+  });
+
+  it('runs the test that reads the backup scripts (#1126)', () => {
+    expect(planTests([modified('scripts/prod-restore-to.sh')])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: ['test/unit/scripts/prod-backup-scripts.test.ts'],
+    });
+  });
+
+  it('runs the same test for the Supabase prepare script (#1184)', () => {
+    expect(planTests([modified('scripts/supabase/prepare.sql')])).toEqual({
+      kind: 'selected',
+      related: [],
+      extra: ['test/unit/scripts/prod-backup-scripts.test.ts'],
     });
   });
 

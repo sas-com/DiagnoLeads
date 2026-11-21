@@ -101,18 +101,93 @@ describe.skipIf(!url)('lead prep cards (PostgreSQL)', () => {
   it('saves the card and reads it back with who updated it', async () => {
     const leadId = await createLead();
     expect((await callers.rep.leadPrep.get({ organizationId: org, leadId })).card).toBeNull();
-    await callers.rep.leadPrep.save({ organizationId: org, leadId, card });
+    const first = await callers.rep.leadPrep.save({
+      organizationId: org,
+      leadId,
+      card,
+      expectedUpdatedAt: null,
+    });
     let got = await callers.rep.leadPrep.get({ organizationId: org, leadId });
     expect(got.card).toMatchObject({ ...card, updatedByName: '営業 太郎' });
+    // The date the save returned is the one the card is read with (milliseconds, both ways)
+    expect(got.card?.updatedAt.getTime()).toBe(first.updatedAt.getTime());
 
-    // A second save replaces it; blanks are dropped
-    await callers.rep.leadPrep.save({
+    // A second save, with the date that was read, replaces it; blanks are dropped
+    const second = await callers.rep.leadPrep.save({
       organizationId: org,
       leadId,
       card: { ...card, recentNews: ' ', hypotheses: { people: '', cost: '値上げ' } },
+      expectedUpdatedAt: got.card?.updatedAt ?? null,
     });
+    expect(second.updatedAt.getTime()).toBeGreaterThan(first.updatedAt.getTime());
     got = await callers.rep.leadPrep.get({ organizationId: org, leadId });
     expect(got.card).toMatchObject({ recentNews: null, hypotheses: { cost: '値上げ' } });
+    expect(got.card?.updatedAt.getTime()).toBe(second.updatedAt.getTime());
+  });
+
+  it('refuses a save over a card somebody saved since it was read, and leaves the card (#1225)', async () => {
+    const leadId = await createLead();
+    const mine = await callers.rep.leadPrep.save({
+      organizationId: org,
+      leadId,
+      card,
+      expectedUpdatedAt: null,
+    });
+    // A colleague saves the card
+    const theirs = await callers.rep.leadPrep.save({
+      organizationId: org,
+      leadId,
+      card: { ...card, recentNews: '同僚が書いた動き' },
+      expectedUpdatedAt: mine.updatedAt,
+    });
+
+    // The date read before the colleague's save no longer goes through
+    await expect(
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId,
+        card: { ...card, recentNews: '古い画面からの保存' },
+        expectedUpdatedAt: mine.updatedAt,
+      })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    // Nor does a save that read "no card"
+    await expect(
+      callers.rep.leadPrep.save({ organizationId: org, leadId, card, expectedUpdatedAt: null })
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    const got = await callers.rep.leadPrep.get({ organizationId: org, leadId });
+    expect(got.card).toMatchObject({ recentNews: '同僚が書いた動き' });
+    expect(got.card?.updatedAt.getTime()).toBe(theirs.updatedAt.getTime());
+  });
+
+  it('lets only one of two first saves at the same moment through (#1225)', async () => {
+    const leadId = await createLead();
+    const results = await Promise.allSettled([
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId,
+        card: { ...card, recentNews: '1人目' },
+        expectedUpdatedAt: null,
+      }),
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId,
+        card: { ...card, recentNews: '2人目' },
+        expectedUpdatedAt: null,
+      }),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    const refused = results.find((result) => result.status === 'rejected');
+    expect(refused).toMatchObject({ reason: { code: 'CONFLICT' } });
+  });
+
+  it('refuses a save that does not say what it read (a screen from before #1225)', async () => {
+    const leadId = await createLead();
+    await expect(
+      // The input type lets unknown keys through, so the missing key is only caught at run time
+      callers.rep.leadPrep.save({ organizationId: org, leadId, card } as never)
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect((await callers.rep.leadPrep.get({ organizationId: org, leadId })).card).toBeNull();
   });
 
   it('drafts from the diagnosis on the lead, its latest AX answer and the playbook', async () => {
@@ -161,12 +236,17 @@ describe.skipIf(!url)('lead prep cards (PostgreSQL)', () => {
 
   it('lets parent viewers read the card, without editing or the playbook', async () => {
     const leadId = await createLead();
-    await callers.rep.leadPrep.save({ organizationId: org, leadId, card });
+    await callers.rep.leadPrep.save({ organizationId: org, leadId, card, expectedUpdatedAt: null });
     const got = await callers.viewer.leadPrep.get({ organizationId: org, leadId });
     expect(got).toMatchObject({ canEdit: false, draftSource: null });
     expect(got.card.firstQuestions).toEqual(card.firstQuestions);
     await expect(
-      callers.viewer.leadPrep.save({ organizationId: org, leadId, card })
+      callers.viewer.leadPrep.save({
+        organizationId: org,
+        leadId,
+        card,
+        expectedUpdatedAt: got.card?.updatedAt ?? null,
+      })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
@@ -176,7 +256,37 @@ describe.skipIf(!url)('lead prep cards (PostgreSQL)', () => {
       callers.rep.leadPrep.get({ organizationId: org, leadId: foreign })
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(
-      callers.rep.leadPrep.save({ organizationId: org, leadId: foreign, card })
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId: foreign,
+        card,
+        expectedUpdatedAt: null,
+      })
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // Nor with a date: the lead is checked in the caller's organization before any card is
+    // looked at, so a foreign lead answers like one that does not exist
+    await expect(
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId: foreign,
+        card,
+        expectedUpdatedAt: new Date(),
+      })
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // A date no card can have is refused as input
+    await expect(
+      callers.rep.leadPrep.save({
+        organizationId: org,
+        leadId: await createLead(),
+        card,
+        expectedUpdatedAt: new Date(8.64e15),
+      })
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // ...nor one before year 1, which SQL could not read either (#1240)
+    for (const expectedUpdatedAt of [new Date(-8.64e15), new Date('0000-01-01T00:00:00Z')]) {
+      await expect(
+        callers.rep.leadPrep.save({ organizationId: org, leadId: await createLead(), card, expectedUpdatedAt })
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    }
   });
 });

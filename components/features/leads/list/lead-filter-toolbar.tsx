@@ -8,6 +8,7 @@
  *
  * It only talks to the controller from useLeadListQuery, so every change goes to the URL.
  */
+import { isComposing } from '@/components/common/form-controls';
 import { TAP_TARGET } from '@/components/common/tap-target';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,7 +64,8 @@ export function LeadFilterToolbar({
             placeholder={t('searchPlaceholder')}
             onChange={(event) => controller.setSearchText(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') {
+              // Not the Enter that confirms a conversion (IME), which would search half-typed text
+              if (event.key === 'Enter' && !isComposing(event)) {
                 event.preventDefault();
                 controller.flushSearch();
               }

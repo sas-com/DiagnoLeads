@@ -1,5 +1,5 @@
 import { randomInt } from 'node:crypto';
-import type { Page, Response } from '@playwright/test';
+import { type Page, type Response, expect } from '@playwright/test';
 
 /**
  * E2E test authentication helper
@@ -48,7 +48,8 @@ export const TEST_USERS = {
  * A client address of its own (sent as X-Forwarded-For) for a test, as each person has in
  * production. The proxy (lib/middleware/rate-limit.ts) and better-auth count sign-ins, sign-ups
  * and session reads per address, and every test runs on the same machine: on one shared address,
- * tests would use up each other's allowance (5 session reads a minute, #519) and fail at random.
+ * tests would use up each other's allowance (5 sign-ins and 3 sign-ups a minute in the proxy, 3 of
+ * each per 10 seconds in better-auth) and fail at random.
  */
 export function uniqueClientAddress(): string {
   return `10.${randomInt(256)}.${randomInt(256)}.${randomInt(256)}`;
@@ -87,8 +88,28 @@ export async function login(page: Page, user: TestUser): Promise<void> {
   // Submit form
   await page.click('button[type="submit"]');
 
-  // Wait for navigation to dashboard
-  await page.waitForURL(/\/dashboard/);
+  // Signing in leads to the AI office (#1153). The office drops the mark of having just come in
+  // from the address once it read it, which is also when it opens its full-screen view
+  await page.waitForURL(
+    (url) => url.pathname.endsWith('/office') && !url.searchParams.has('source')
+  );
+}
+
+/**
+ * Leave the full-screen office that opens after signing in on a wide screen (#1153). It covers
+ * the admin shell (the header, the user menu), so a test that uses the shell right after signing
+ * in leaves it first, with Esc from its title, as a person would. A test that opens another page
+ * with `page.goto` does not need this.
+ */
+export async function leaveFullScreenOffice(page: Page): Promise<void> {
+  // Below 768px (OFFICE_MIN_WIDTH) the office does not open full screen: nothing to leave. CI
+  // runs the desktop project only; the phone projects run on a developer's machine
+  const width = page.viewportSize()?.width;
+  if (width !== undefined && width < 768) return;
+  const office = page.getByRole('dialog');
+  await office.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await office.waitFor({ state: 'hidden' });
 }
 
 /**
@@ -101,8 +122,13 @@ export async function logout(page: Page): Promise<void> {
   // Click logout button
   await page.click('[data-testid="logout-button"]');
 
-  // Wait for navigation to sign-in page
-  await page.waitForURL(/\/login/);
+  // Sign-out asks for the sign-in page, and the session guard of the admin pages
+  // (components/auth/AdminSessionGuard.tsx) asks for it again, with the page to come back to,
+  // when it hears of the ended session before the first request has answered: the first request
+  // is then given up. waitForURL fails on a request given up while it waits, so the address is
+  // read until it is the sign-in page, whichever request brought it (#1156)
+  await expect(page).toHaveURL(/\/login/);
+  await page.waitForLoadState('load');
 }
 
 /**
@@ -127,6 +153,6 @@ export async function setupAuthenticatedTest(
   page: Page,
   user: TestUser = TEST_USERS.owner
 ): Promise<void> {
-  // login() already waits for the dashboard of the user's only organization
+  // login() already waits for the AI office of the user's only organization
   await login(page, user);
 }

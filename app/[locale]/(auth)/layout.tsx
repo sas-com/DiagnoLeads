@@ -1,4 +1,5 @@
 import { ThemeProvider } from '@/context/ThemeContext';
+import { APP_INSTALL_METADATA } from '@/lib/routes/app-install';
 import type { Metadata } from 'next';
 import { NextIntlClientProvider } from 'next-intl';
 import { getTranslations } from 'next-intl/server';
@@ -12,6 +13,8 @@ export async function generateMetadata({
   return {
     title: t('title'),
     description: t('description'),
+    // The sign-in pages belong to the installable app: it opens here when signed out (#1125)
+    ...APP_INSTALL_METADATA,
   };
 }
 

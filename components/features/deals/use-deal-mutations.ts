@@ -11,8 +11,15 @@ import { toast } from 'sonner';
  * settling a move shown ahead) does not show the old values for a moment; a deletion does not
  * wait, as the deal's page leaves at once. A form or a question that says a failure itself
  * (the deal form, the delete question of the deal's page) passes `toastErrors: false`.
+ *
+ * `failOffline`: a change fails at once while the browser is offline instead of waiting for the
+ * connection (#1251). For a screen that closes its ways out while a change is being saved (the
+ * rooms of the office): a change left waiting would keep them closed.
  */
-export function useDealMutations({ toastErrors = true }: { toastErrors?: boolean } = {}) {
+export function useDealMutations({
+  toastErrors = true,
+  failOffline = false,
+}: { toastErrors?: boolean; failOffline?: boolean } = {}) {
   const utils = trpc.useUtils();
   const t = useTranslations('deals.toasts');
   const refresh = () =>
@@ -32,7 +39,11 @@ export function useDealMutations({ toastErrors = true }: { toastErrors?: boolean
     },
     onError,
   });
-  const update = trpc.deals.update.useMutation({ onSuccess: () => refresh(), onError });
+  const update = trpc.deals.update.useMutation({
+    onSuccess: () => refresh(),
+    onError,
+    ...(failOffline ? { networkMode: 'always' as const } : {}),
+  });
   const remove = trpc.deals.delete.useMutation({
     onSuccess: () => {
       void refresh();

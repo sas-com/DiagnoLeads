@@ -19,7 +19,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 何を | `public`・`drizzle`・`app` スキーマの定義とデータ（pg_dump 17、custom 形式）。`cms` は含めない（CMS のパスワードのハッシュがあり、本番の CMS はオフ） |
+| 何を | `public`・`drizzle`・`app` スキーマの定義とデータ（pg_dump 17、custom 形式）。`cms` は含めない（CMS のパスワードのハッシュがあり、本番の CMS はオフ）。表 `public.site_visit_salts`（訪問者のハッシュに使うその日のソルト）も含めない（`dl_readonly` は読めず、データだけを外しても pg_dump は表をロックするので止まる。戻すときに空の表を作り直す。#1126） |
 | どの接続で | 読み取り専用のユーザー `dl_readonly`。接続文字列は `~/.config/diagnoleads/prod-ro.env`（権限 600）にだけ置き、表示しない |
 | どこに | オーナーの PC（WSL）の `~/diagnoleads-backups/`（フォルダ 700・ファイル 600）。リポジトリ・チャット・Issue には置かない |
 | いつ | cron で1時間ごとに起動し、その日（日本時間）の分がまだなければ書き出す。PC が動いている日だけ取れる。本番に SQL を流す前は必ず `--now` で書き出す |
@@ -27,6 +27,8 @@
 | 誰が | 仕組みは自動。中身の確認と戻す判断はオーナー、作業は Claude とオーナー |
 | 暗号化 | ファイル自体は暗号化していない。PC のディスクの暗号化（BitLocker）と、ファイルの権限で守る |
 | スクリプト | `scripts/prod-dump.sh`（書き出し）、`scripts/prod-dump-verify.sh`（使い捨ての DB に戻して件数を出す）、`scripts/prod-restore-to.sh`（新しいプロジェクトへ戻す）。cron が動かすのは `~/diagnoleads-prod-db/prod-dump.sh` の写しで、リポジトリの版を変えたら写し直す |
+
+写し直したら、`bash ~/diagnoleads-prod-db/prod-dump.sh --now` で1回書き出して通ることを確かめる（読めない表があると、その日の控えが取れない。#1126）。
 
 状態の確かめ方：`ls -l ~/diagnoleads-backups/`（今日の日付のファイルがあるか）と `tail ~/diagnoleads-backups/dump.log`。
 
@@ -41,14 +43,18 @@
 **本番の DB に上から流し込まない。** 新しい空の Supabase プロジェクトに流し、確かめてから、アプリの接続先を切り替える。
 
 1. **控えを確かめる**：`bash scripts/prod-dump-verify.sh <控え>` で使い捨ての DB に戻り、件数が出ることを見る
-2. **新しいプロジェクトを作る**（オーナー）：Supabase の管理画面で、同じ組織・同じリージョン（ap-northeast-1）に作る。Free の組織に置けるのは、動いているプロジェクト2つまで
+2. **新しいプロジェクトを作る**（オーナー）：Supabase の管理画面で、同じ組織・同じリージョン（ap-northeast-1）に作る。Free の組織に置けるのは、動いているプロジェクト2つまで。作ったらすぐ、流し込む前に、管理画面で **Data API を無効にする**（`docs/deployment-guide.md` の Supabase の節と同じ。アプリは Data API を使わない。#1184）
 3. **流し込む**（オーナー）：`bash scripts/prod-restore-to.sh <控え>`
    - 新しいプロジェクトの接続文字列（Session pooler、`postgres` ユーザー）を聞かれるので貼る。画面には出ない
    - `public` に表が1つでもあれば止まる（本番に流してしまわないため）
    - 拡張機能（ltree・vector・pgcrypto・uuid-ossp）は `extensions` スキーマに自動で入れる
+   - 控えに入っていない `site_visit_salts` は、空の表として自動で作り直す（その日のソルトはその日だけ使うので、失うものはない）
+   - 流し込む前と最後に `scripts/supabase/prepare.sql` を流し、`anon`・`authenticated` の権限を取り消す（Supabase の既定では、新しい表にこの2つの全権限が付き、新しいプロジェクトの anon キーで Data API から読み書きできてしまうため）。最後に、この2つが `public` の表・ビュー・連番を使えないこと（`PUBLIC` を通した権限も含む）を確かめ、使えれば止まる（#1184）。スクリプトはリポジトリから動かす（写して使うと `prepare.sql` が見つからず、流す前に止まる）
+   - 途中で止まったら、そのプロジェクトには続けて流さない。止まったプロジェクトには本番の個人情報が入っているので、すぐ一時停止するか消す。新しいプロジェクトを作り直して、最初からやり直す
 4. **CMS を使っていたら**：`cms/migrations/sql/` の SQL を、新しいプロジェクトの SQL Editor で流す（控えに cms は入っていない）
-5. **読み取り専用のユーザーを作り直す**：`~/diagnoleads-prod-db/setup-prod-ro.sh` の手順で `dl_readonly` を作り、連番の読み取り（`GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle`）も付ける
+5. **読み取り専用のユーザーを作り直す**：`~/diagnoleads-prod-db/setup-prod-ro.sh` の手順で `dl_readonly` を作り、連番の読み取り（`GRANT SELECT ON ALL SEQUENCES IN SCHEMA public, drizzle`）も付ける。そのあと `site_visit_salts` を `dl_readonly` から読めなくする（`docs/site-visits.md` の「`dl_readonly` の権限」）。読めるままだと鍵が漏れたときに訪問者を突き合わせられ、控えのスクリプトはこの表を外しているので、読めるままでも止まらず気づけない。`select has_table_privilege('dl_readonly', 'public.site_visit_salts', 'SELECT');` が `false` になることを確かめる
 6. **接続先を切り替える**（オーナー）：Vercel の Production の `DATABASE_URL`（ほかに DB の接続文字列を使う変数があればそれも）を新しいプロジェクトに替えて、再デプロイする
+7. **毎日の控えの接続先を替える**（オーナー）：`~/.config/diagnoleads/prod-ro.env` の `PROD_RO_DATABASE_URL` を、新しいプロジェクトの `dl_readonly` の接続文字列に替える（権限 600 のまま）。替わったことは、件数ではなく接続先で確かめる：`grep -c '<新しいプロジェクトの ref>' ~/.config/diagnoleads/prod-ro.env` が `1`（パスワードは出さない）。替えないと、古いプロジェクトは調べ終わるまで残すので（5章の7）、控えはエラーを出さずに古い DB を書き出し続け、次の事故のときに戻せる控えが無い（#1184）
 
 ## 5. 戻した後
 
@@ -56,9 +62,10 @@
 2. マイグレーションの記録（`drizzle.__drizzle_migrations`）が、リポジトリの `drizzle/` の最後の番号までそろっているか確かめる。足りなければ、不足分を SQL Editor で流す
 3. `APP_TEST_MODE` を元に戻して再デプロイする
 4. 本番で診断を1件通し、確認欄（Turnstile）・通知・リードの表示を確かめる
-5. 戻した期間に届いていた問い合わせを、通知メールから営業が拾い直す
-6. 古いプロジェクトは、原因を調べ終わるまで消さない
-7. #51（または新しい Issue）に、時刻・原因・戻した控え・消えた期間を記録する
+5. `bash ~/diagnoleads-prod-db/prod-dump.sh --now` で書き出し、`bash scripts/prod-dump-verify.sh` の `public.diagnostic_submissions` の件数が、新しいプロジェクトの件数（上の4で1件増えている）と同じことを確かめる。古いプロジェクトの件数のままなら、控えはまだ古い DB を読んでいる（4章の7）
+6. 戻した期間に届いていた問い合わせを、通知メールから営業が拾い直す
+7. 古いプロジェクトは、原因を調べ終わるまで消さない
+8. #51（または新しい Issue）に、時刻・原因・戻した控え・消えた期間を記録する
 
 ## 練習の記録
 

@@ -1,0 +1,231 @@
+/**
+ * Where the camera of the 3D office looks, and where a place on the floor lands on the screen
+ * (#1147). The camera is orthographic and keeps the angle of the 2D office, so both can be worked
+ * out without a renderer: the 3D canvas places its camera from these functions, and the name tags
+ * (DOM buttons over the canvas) are placed with the same ones, so a tag always sits on its robot.
+ *
+ * Pure functions.
+ */
+import { FLOOR_DEPTH, FLOOR_WIDTH, type FloorPoint } from '../office-map-layout';
+import { HOME_CLOSE_UP, homeCloseUp } from '../office-president';
+
+/**
+ * The floor units the screen holds when the whole floor is in view, walls and a margin for the
+ * panels included. Chosen so that the 3D floor starts as large as the 2D one (the same rooms at
+ * the same places on the screen, within a few pixels at 1440 by 900).
+ */
+export const FLOOR_SPAN = { w: 34, h: 21.5 };
+
+/** From this zoom on, the camera follows the chosen employee instead of resting on the middle */
+export const FOLLOW_FROM = 1.05;
+
+/** The camera sits this far from what it looks at, along each axis (the angle of the 2D office) */
+export const CAMERA_OFFSET = 30;
+
+/** The middle of the floor: where the camera rests while it follows nobody */
+export const FLOOR_MIDDLE: FloorPoint = { x: FLOOR_WIDTH / 2, y: FLOOR_DEPTH / 2 };
+
+export interface ScreenSize {
+  w: number;
+  h: number;
+}
+
+export interface ScreenPoint {
+  x: number;
+  y: number;
+}
+
+/** What the camera shows: enough to place the camera and to find any floor place on the screen */
+export interface View3D {
+  /** The place on the floor at the middle of the screen (before the pan) */
+  target: FloorPoint;
+  /** Screen pixels for one floor unit */
+  pxPerUnit: number;
+  /** How far the picture is dragged, in screen pixels */
+  pan: ScreenPoint;
+  size: ScreenSize;
+}
+
+/**
+ * Screen pixels for one floor unit. A zoom of 1 is the same close-up the 2D office starts with
+ * on this screen (`homeCloseUp`); stepped back as far as the camera goes, the whole floor fits
+ * into the screen. A scene other than the floor gives its own close-up, the same on any screen.
+ */
+export function pxPerUnit(size: ScreenSize, zoom: number, closeUp = homeCloseUp(size)): number {
+  return Math.min(size.w / FLOOR_SPAN.w, size.h / FLOOR_SPAN.h) * closeUp * zoom;
+}
+
+/** Where the camera looks: at the followed employee once zoomed in, else at the middle */
+export function viewTarget(zoom: number, followed: FloorPoint | null): FloorPoint {
+  return zoom > FOLLOW_FROM && followed ? followed : FLOOR_MIDDLE;
+}
+
+// The camera's own axes, for a camera that looks from (1, 1, 1) at the origin with y up.
+// Floor x runs to the lower right of the screen and floor y to the lower left, like the 2D office.
+const SQRT2 = Math.SQRT2;
+const SQRT6 = Math.sqrt(6);
+
+/** Where a place on the floor (and a height over it, in floor units) lands on the screen */
+export function projectFloor(point: FloorPoint, height: number, view: View3D): ScreenPoint {
+  const dx = point.x - view.target.x;
+  const dz = point.y - view.target.y;
+  const right = (dx - dz) / SQRT2;
+  const up = (2 * height - dx - dz) / SQRT6;
+  return {
+    x: view.size.w / 2 + right * view.pxPerUnit + view.pan.x,
+    y: view.size.h / 2 - up * view.pxPerUnit + view.pan.y,
+  };
+}
+
+/**
+ * Where the camera stands for a view, in the coordinates of the 3D scene (the middle of the floor
+ * at the origin, floor y along z). Dragging the picture to the right moves the camera to the left.
+ */
+export function cameraPosition(view: View3D): [x: number, y: number, z: number] {
+  const right = -view.pan.x / view.pxPerUnit;
+  const up = view.pan.y / view.pxPerUnit;
+  return [
+    view.target.x - FLOOR_MIDDLE.x + CAMERA_OFFSET + right / SQRT2 - up / SQRT6,
+    CAMERA_OFFSET + (2 * up) / SQRT6,
+    view.target.y - FLOOR_MIDDLE.y + CAMERA_OFFSET - right / SQRT2 - up / SQRT6,
+  ];
+}
+
+/** The scenes of the full-screen office that the 3D floor stays behind (#1148) */
+export type Stage3D = 'world' | 'talk' | 'room' | 'studio';
+
+/**
+ * How a scene other than the floor frames what it is about: how close (next to the floor's
+ * starting close-up), and where on the screen, as shares of its width and height. The same
+ * places as in the 2D office: a conversation and the customization keep the employee left of
+ * their panel, a room keeps the desk of its employee in the upper left, clear of the board.
+ */
+export const STAGE_FRAMES: Readonly<
+  Record<Exclude<Stage3D, 'world'>, { close: number; at: ScreenPoint }>
+> = {
+  talk: { close: 2, at: { x: 0.32, y: 0.42 } },
+  studio: { close: 2, at: { x: 0.32, y: 0.42 } },
+  room: { close: 1.8, at: { x: 0.15, y: 0.3 } },
+};
+
+/** The height over the floor of what a scene frames: the middle of a robot */
+export const SUBJECT_HEIGHT = 1.2;
+
+/** A part of the screen, in screen pixels from its upper left corner */
+export interface ScreenRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * What an opening has to hold, in floor units: a robot as the 3D office builds it (about 2.75
+ * tall and 2 wide with its arms at its sides, `ROBOT_SCALE` in robot-3d.tsx) with what it wears
+ * on its head, and the badge of an employee that sleeps or is stuck, which floats up to 3.6 over
+ * the floor. Close enough that the neighbour at the next seat stays at the edge.
+ */
+export const OPENING_SUBJECT = { height: 3.6, width: 2.4 };
+
+/** The share of an opening that its subject fills: the rest is air around it */
+export const OPENING_FILL = 0.88;
+
+/** The closest an opening shows its subject, in screen pixels for one floor unit */
+export const OPENING_CLOSEST = 190;
+
+/**
+ * The view that shows a subject through an opening between the panels (the customization keeps
+ * one where its preview is, #1148): the whole robot inside it, as large as it fits, its middle
+ * at the middle of the opening. Null for an opening with no room in it (not laid out yet).
+ */
+export function openingView(
+  subject: FloorPoint,
+  opening: ScreenRect,
+  size: ScreenSize
+): View3D | null {
+  if (opening.w <= 0 || opening.h <= 0) return null;
+  // A height over the floor shows 2/sqrt(6) as tall on the screen; a width shows as it is
+  const tall = (2 * OPENING_SUBJECT.height) / SQRT6;
+  const scale = Math.min(
+    (opening.h * OPENING_FILL) / tall,
+    (opening.w * OPENING_FILL) / OPENING_SUBJECT.width,
+    OPENING_CLOSEST
+  );
+  return {
+    target: subject,
+    pxPerUnit: scale,
+    pan: {
+      x: opening.x + opening.w / 2 - size.w / 2,
+      // The middle of the robot (half its height over the floor) at the middle of the opening
+      y: opening.y + opening.h / 2 - size.h / 2 + (OPENING_SUBJECT.height / SQRT6) * scale,
+    },
+    size,
+  };
+}
+
+/**
+ * What the camera shows in a scene. On the floor it is the zoom and the drag of the president;
+ * in a conversation, a room or the customization it is the scene's subject (an employee, or the
+ * desk of the room's employee) at the scene's place on the screen, or inside the opening the
+ * scene keeps clear for it. Without a subject, the floor.
+ */
+export function stageView(
+  stage: Stage3D,
+  {
+    size,
+    zoom,
+    pan,
+    followed,
+    subject,
+    opening = null,
+  }: {
+    size: ScreenSize;
+    zoom: number;
+    pan: ScreenPoint;
+    /** Where the chosen employee is right now: for the floor, and for a scene with an opening */
+    followed: FloorPoint | null;
+    /** What the scene is about, for the other scenes */
+    subject: FloorPoint | null;
+    /** The part of the screen the scene keeps clear for its subject, if it has one */
+    opening?: ScreenRect | null;
+  }
+): View3D {
+  if (stage === 'world' || !subject) {
+    return { target: viewTarget(zoom, followed), pxPerUnit: pxPerUnit(size, zoom), pan, size };
+  }
+  // Through an opening the employee itself is shown, also while it is still on its way to where
+  // its status puts it (the subject): never an empty opening
+  const through = opening ? openingView(followed ?? subject, opening, size) : null;
+  if (through) return through;
+  const frame = STAGE_FRAMES[stage];
+  const scale = pxPerUnit(size, frame.close, HOME_CLOSE_UP);
+  return {
+    target: subject,
+    pxPerUnit: scale,
+    // The target lands in the middle of the screen; the pan moves the subject's middle (a
+    // height over the target, so higher on the screen) to the scene's place
+    pan: {
+      x: (frame.at.x - 0.5) * size.w,
+      y: (frame.at.y - 0.5) * size.h + ((2 * SUBJECT_HEIGHT) / SQRT6) * scale,
+    },
+    size,
+  };
+}
+
+/** One step of the whole view gliding to another: where it looks, how close, and its pan */
+export function easeView(from: View3D, to: View3D, share: number): View3D {
+  const step = Math.max(0, Math.min(1, share));
+  const between = (a: number, b: number) => a + (b - a) * step;
+  return {
+    target: easeTarget(from.target, to.target, step),
+    pxPerUnit: between(from.pxPerUnit, to.pxPerUnit),
+    pan: { x: between(from.pan.x, to.pan.x), y: between(from.pan.y, to.pan.y) },
+    size: to.size,
+  };
+}
+
+/** One step of the camera gliding from where it looks to where it should look */
+export function easeTarget(from: FloorPoint, to: FloorPoint, share: number): FloorPoint {
+  const step = Math.max(0, Math.min(1, share));
+  return { x: from.x + (to.x - from.x) * step, y: from.y + (to.y - from.y) * step };
+}

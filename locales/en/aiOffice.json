@@ -1,0 +1,1218 @@
+{
+  "aiOffice": {
+    "title": "AI office",
+    "description": "See how the AI employees work in a virtual office. Each AI employee is a robot that moves around the floor with its status. Open a name tag for its details and work log.",
+    "forbidden": "You do not have permission to view the AI office.",
+    "loadError": "The AI office could not be loaded. Please try again later.",
+    "noOrganization": "Choose an organization to see its AI office.",
+    "updatedAt": "As of {time}",
+    "summary": {
+      "hired": "On staff",
+      "working": "Working",
+      "processedToday": "Handled today",
+      "attention": "Needs attention",
+      "people": "{count}",
+      "items": "{count}",
+      "heading": "Today's summary"
+    },
+    "floor": {
+      "label": "Office floor",
+      "entrance": "Entrance",
+      "scrollHint": "Scroll the floor map sideways.",
+      "legend": {
+        "desk": "Working or needs attention: at its desk",
+        "lounge": "Waiting: lounge",
+        "training": "In training: training room",
+        "charging": "Paused: charging station"
+      }
+    },
+    "rooms": {
+      "desk": "President's desk",
+      "sales": "Sales floor",
+      "training": "Training room",
+      "lounge": "Lounge",
+      "charging": "Charging station",
+      "marketing": "Marketing room",
+      "engineering": "Engineering room",
+      "backoffice": "Reception"
+    },
+    "roles": {
+      "marketer": {
+        "title": "Marketer",
+        "description": "Finds prospects (leads) and tells which ones are worth following.",
+        "defaultName": "AI Marketer"
+      },
+      "sales": {
+        "title": "Sales",
+        "description": "Turns prospects into deals and keeps follow-ups from being dropped.",
+        "defaultName": "AI Sales"
+      },
+      "engineer": {
+        "title": "Engineer",
+        "description": "Sorts out the customer's situation and prepares the proposal.",
+        "defaultName": "AI Engineer"
+      },
+      "back_office": {
+        "title": "Back office",
+        "description": "Keeps watch on the dates and the promises, so that nothing is missed.",
+        "defaultName": "AI Back office"
+      }
+    },
+    "packs": {
+      "sales_management": {
+        "title": "Sales management",
+        "description": "Work any company's sales has, on the leads and deals of this app."
+      },
+      "ax_migration": {
+        "title": "AX migration",
+        "description": "Work specific to selling the migration of legacy systems."
+      }
+    },
+    "works": {
+      "score_new_leads": {
+        "title": "Scoring new prospects",
+        "description": "Scores new prospects (leads) without a score with Claude. Names, emails and other fields that point at a person are never sent."
+      },
+      "check_due_actions": {
+        "title": "Checking the next actions due",
+        "description": "Checks the next actions due soon or overdue every morning. It never changes a lead."
+      },
+      "draft_meeting_prep": {
+        "title": "Drafting the first meeting's preparation",
+        "description": "Sorts out the points of the migration from the diagnosis answers and drafts the preparation of the first meeting."
+      },
+      "recompute_act_timing": {
+        "title": "Recomputing when to act",
+        "description": "Recomputes when to act on each lead every morning, from the hearings and the diagnosis answers."
+      }
+    },
+    "status": {
+      "working": "Working",
+      "attention": "Needs attention",
+      "idle": "Waiting",
+      "training": "In training",
+      "paused": "Paused",
+      "vacant": "Vacant"
+    },
+    "statusHint": {
+      "working": "Working right now.",
+      "attention": "The last run failed or has not finished. Check the work log.",
+      "idle": "Waiting for the next run.",
+      "training": "The work of this role is still being prepared, so it does not work yet. It starts working by itself once ready.",
+      "paused": "A paused employee does not work. Resume it to work from the next run.",
+      "vacant": "No AI employee has this role yet."
+    },
+    "desk": {
+      "hire": "Hire",
+      "openDetails": "Open details",
+      "hireByAdmin": "An admin can hire one",
+      "details": "{role}, in the {place}, {count} handled today",
+      "vacantDetails": "Vacant desk in the {place}"
+    },
+    "sheet": {
+      "vacantTitle": "Vacant desk: {role}",
+      "role": "Role",
+      "room": "Desk in",
+      "hiredAt": "Hired on",
+      "name": "Name",
+      "hireSubmit": "Hire",
+      "manage": "Manage",
+      "rename": "Rename",
+      "pause": "Pause",
+      "resume": "Resume",
+      "dismiss": "Dismiss",
+      "dismissTitle": "Dismiss {name}?",
+      "dismissDescription": "The desk returns to vacant, and this cannot be undone. The work log is kept. You can hire an AI employee for the role again later.",
+      "readOnly": "Only admins can hire and manage AI employees.",
+      "runs": "Work log",
+      "runsCaption": "Up to 20, newest first",
+      "runsEmpty": "No work yet.",
+      "runsError": "The work log could not be loaded.",
+      "columns": {
+        "startedAt": "Started",
+        "trigger": "Trigger",
+        "status": "Result",
+        "processed": "Handled",
+        "resultCode": "Code"
+      },
+      "trigger": {
+        "schedule": "Scheduled",
+        "manual": "Manual"
+      },
+      "runStatus": {
+        "running": "Working",
+        "succeeded": "Succeeded",
+        "failed": "Failed"
+      },
+      "danger": "Cannot be undone",
+      "dismissNote": "Dismissing returns the desk to vacant. The work log is kept as a record.",
+      "place": "Now in",
+      "works": "Work",
+      "workPack": "Work pack: {pack}",
+      "workPreparing": "Being prepared",
+      "workReady": "Running"
+    },
+    "toast": {
+      "hired": "Hired {name}",
+      "renamed": "Renamed to {name}",
+      "paused": "Paused {name}",
+      "resumed": "Resumed {name}",
+      "dismissed": "Dismissed {name}",
+      "conflict": "An AI employee already has this role",
+      "error": "Could not save. Please try again later",
+      "actionError": "Could not do that. Please try again later"
+    },
+    "loading": "Loading",
+    "immersive": {
+      "label": "AI office (office view)",
+      "president": "President",
+      "day": "Day",
+      "night": "Night",
+      "staff": "Staff",
+      "relay": "How value passes on",
+      "relaySteps": {
+        "marketer": "Finds prospects",
+        "sales": "Turns them into deals",
+        "engineer": "Prepares the proposal",
+        "back_office": "Keeps the dates"
+      },
+      "target": "In front of you",
+      "title": {
+        "tagline": "You are the president. With your AI employees, you create new value.",
+        "clockIn": "Enter the office",
+        "back": "Back to the normal view",
+        "staff": "President {name} · {hired} AI employees ({vacant} vacant)",
+        "narrow": "This screen is made for wide screens (a computer, or a tablet held sideways). At this width, please use the normal view."
+      },
+      "tasks": {
+        "heading": "The president's tasks",
+        "none": "Nothing urgent.",
+        "consult": "{role}: talk it over",
+        "consultWhy": "Its work stopped",
+        "resume": "{role}: call back",
+        "resumeWhy": "It is paused",
+        "hire": "{role}: hire",
+        "hireWhy": "This department has nobody",
+        "noneReadOnly": "Nothing urgent. Hiring and resuming are done by an admin."
+      },
+      "actions": {
+        "talk": "Talk",
+        "zoomIn": "Closer",
+        "zoomOut": "Step back",
+        "resetView": "Reset view",
+        "list": "Back to the normal view",
+        "clockOut": "Leave"
+      },
+      "talk": {
+        "with": "Talking with {name}",
+        "you": "President (you)",
+        "hired": "I am {name}. Glad to work with you, President. I will train first and start working once my work is ready.",
+        "paused": "Understood, President. {name} will rest for a while.",
+        "resumed": "{name}, back to work.",
+        "failed": "Sorry, that did not work. Please try again later.",
+        "lines": {
+          "vacant": "This desk ({role}) is vacant. {work}",
+          "training": "President, I am in training. I will start working by myself once my work is ready. This is what I will do: {work}",
+          "paused": "President, I am paused. Say the word and I will come back.",
+          "idle": "President, good to see you. I am waiting for my next work.",
+          "working": "President, I am working right now. I will report when I am done.",
+          "attention": "President, I am sorry. My work stopped half way. The work log has the reason."
+        },
+        "choices": {
+          "hire": "Hire",
+          "pause": "Rest for a while",
+          "resume": "Come back",
+          "leave": "Later",
+          "back": "Back to the floor",
+          "rename": "Change the name",
+          "log": "Show me the work log",
+          "dismiss": "Dismiss this employee"
+        },
+        "resumedTraining": "{name}, back to training. I will start working once my work is ready.",
+        "trainingFirst": " Until its work is ready, a new hire stays in training.",
+        "staff": {
+          "back": "Back to the choices",
+          "failed": "That did not work. Please wait a moment and try again.",
+          "rename": {
+            "title": "Change the name",
+            "label": "New display name",
+            "save": "Use this name",
+            "done": "My name was {from} and is {name} now. I look forward to working with you."
+          },
+          "log": {
+            "title": "Work log",
+            "processed": "{count} processed",
+            "more": "Showing the latest {count}. More (up to {limit}) are in the desk details of the normal view.",
+            "failedDetail": "The result of a failed run is in the desk details of the normal view."
+          },
+          "dismiss": {
+            "title": "Dismiss this employee",
+            "label": "To confirm, type the name of this AI employee, \"{name}\"",
+            "confirm": "Dismiss {name}",
+            "done": "{name} was dismissed. The desk is vacant again.",
+            "mismatch": "The name does not match."
+          }
+        }
+      },
+      "floorGuide": "Floor guide",
+      "room": {
+        "back": "Back to the floor",
+        "work": {
+          "desk": "Today at a glance",
+          "marketing": "Acquisition and prospects",
+          "sales": "Deals",
+          "engineering": "Surveys",
+          "backoffice": "General affairs",
+          "training": "Bringing up the staff"
+        },
+        "guide": {
+          "employee": "{name} looks after this room.",
+          "attention": "The work of {name} has stopped. The figures are read from the records.",
+          "training": "{name} is in training and does not look after this room yet. The figures are read from the records.",
+          "paused": "{name} is paused. The figures are read from the records.",
+          "vacant": "The {role} seat is vacant. The figures are read from the records."
+        },
+        "marketing": {
+          "report": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportWithTop": "New prospects in the last {days} days: {leads}. Reached MQL (interested) or further: {mql}. Reached a deal: {deals}. The largest source is \"{source}\" with {count}.{withoutSource, plural, =0 {} one { # has no source recorded.} other { # have no source recorded.}}",
+          "reportNone": "There are no new prospects in the last {days} days.",
+          "reportLoading": "Reading the figures of this room.",
+          "reportUnavailable": "The figures of this room could not be read.",
+          "ask": {
+            "figures": "Show me the figures",
+            "leads": "Show me the prospects"
+          },
+          "figureBoards": {
+            "sources": "Sources",
+            "funnel": "Progress",
+            "campaigns": "Campaigns"
+          },
+          "leadViews": {
+            "needsAction": "Not started",
+            "consultation": "Consultations",
+            "newThisWeek": "New this week",
+            "mine": "Mine",
+            "all": "All"
+          },
+          "leadCount": "{count, number}",
+          "leadCountSpoken": "{count, plural, one {# prospect} other {# prospects}}",
+          "period": "Prospects created in the last {days} days: {count}",
+          "periodOnly": "Prospects created in the last {days} days",
+          "loading": "Loading",
+          "error": "The figures could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see prospects. Please ask an administrator.",
+          "empty": "No prospects were created in the last {days} days.",
+          "openAnalytics": "Open the analytics in the normal view",
+          "analyticsHint": "Other periods and finer breakdowns are on the analytics page of the normal view.",
+          "sources": {
+            "board": "Source board",
+            "caption": "Prospects, SQL, wins and acquisition cost by source (prospects created in the last {days} days)",
+            "columns": {
+              "source": "Source",
+              "leads": "Prospects",
+              "share": "Share",
+              "sql": "SQL",
+              "won": "Won",
+              "cost": "Acquisition cost",
+              "wonAmount": "Won amount",
+              "roi": "ROI"
+            },
+            "unset": "No source recorded",
+            "total": "Total",
+            "shareValue": "{share}%",
+            "roiValue": "{value}x",
+            "uncosted": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects. {count, plural, one {# has} other {# have}} no cost recorded.",
+            "costed": "The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects.",
+            "returns": "The won amount and the ROI are counted from the deals of these prospects (ROI = won amount ÷ acquisition cost).",
+            "keys": {
+              "open": "open its prospects"
+            },
+            "openHint": "Opening the row of a source shows its prospects of the last {days} days on the prospect board.",
+            "leadsOf": "Source: {source}, last {days} days",
+            "back": "Back to the source board",
+            "openHintClosed": " A row without an underline (no source recorded, for one) cannot be opened.",
+            "openDescription": "Shows its prospects of the last {days} days on the prospect board",
+            "closedRow": " (cannot be opened)",
+            "sqlNote": "The SQL of this table counts the prospects judged SQL. The SQL of the progress board counts the prospects that were won too, so the two can differ."
+          },
+          "funnel": {
+            "board": "Progress board",
+            "caption": "Prospects that reached each stage (prospects created in the last {days} days)",
+            "columns": {
+              "stage": "Stage",
+              "reached": "Reached",
+              "ofAll": "Of all",
+              "fromPrevious": "From the stage before"
+            },
+            "stages": {
+              "lead": "Prospect",
+              "mql": "MQL (interested)",
+              "deal": "Deal",
+              "sql": "SQL (qualified)",
+              "won": "Won"
+            },
+            "percent": "{value}%",
+            "reachedNote": "A prospect that went further counts for the stages before it too (one that entered a deal without MQL counts as MQL).",
+            "nurturing": "Prospects being nurtured now: {count} (not counted as a stage).",
+            "noPrevious": "No stage before"
+          },
+          "scroll": "Table of the {board}. Scroll with the arrow keys",
+          "scrollRows": "Table of the {board}. The up and down arrows choose a row, and scroll at the first and last row",
+          "onWall": "On the wall: {board}",
+          "boardOf": "{board} ({what})",
+          "campaigns": {
+            "board": "Campaign board",
+            "summary": "What the QR campaigns (since each was created) and the sales agencies (last {days} days) brought",
+            "hint": "Campaigns are created and changed, and other periods chosen, in the normal view.",
+            "openQr": "Open the QR campaigns in the normal view",
+            "qr": {
+              "title": "QR campaigns",
+              "period": " (since each was created)",
+              "empty": "There are no QR campaigns yet.",
+              "caption": "Scans, new prospects, their rate and breakdown by QR campaign (since each was created)",
+              "columns": {
+                "campaign": "Campaign",
+                "scans": "Scans",
+                "newLeads": "New prospects",
+                "rate": "New-prospect rate",
+                "interested": "Interested (MQL)",
+                "consultation": "Consultations",
+                "existing": "Answers from existing prospects",
+                "ofNewLeads": "Of the new prospects"
+              },
+              "closed": "Not taking answers",
+              "note": "The new-prospect rate is new prospects ÷ scans. Answers from visits that are not counted as scans are new prospects too, so it can exceed 100%.",
+              "breakdownUnavailable": "The breakdown (interested, consultations, answers from existing prospects) could not be read.",
+              "breakdownReading": "Reading the breakdown.",
+              "notRead": "Could not be read"
+            },
+            "agencies": {
+              "title": "Sales agencies",
+              "empty": "No prospect of the last {days} days has an agency name recorded.",
+              "caption": "Prospects, SQL, wins and acquisition cost by sales agency (prospects created in the last {days} days)",
+              "columns": {
+                "agency": "Agency",
+                "sqlRate": "SQL rate"
+              },
+              "note": "Prospects with an agency name recorded, counted by agency. The acquisition cost is the sum of the amounts (excluding tax) recorded on the prospects.",
+              "period": " (prospects created in the last {days} days)"
+            }
+          },
+          "notComputable": "Cannot be computed"
+        },
+        "leads": {
+          "board": "Prospect board",
+          "views": {
+            "needsAction": "Not started yet (new)",
+            "consultation": "Consultation requested",
+            "newThisWeek": "New this week",
+            "mine": "Assigned to me",
+            "all": "All"
+          },
+          "count": "{count, plural, one {# lead} other {# leads}}",
+          "keys": {
+            "rows": "choose a row",
+            "open": "open"
+          },
+          "columns": {
+            "lead": "Company and name",
+            "mql": "MQL level",
+            "status": "Status",
+            "assignee": "Assignee",
+            "created": "Created"
+          },
+          "noCompany": "No company name",
+          "noLevel": "—",
+          "unassigned": "Unassigned",
+          "empty": "No prospects match this view.",
+          "loading": "Loading",
+          "error": "The prospects could not be read. Please open the room again in a while.",
+          "forbidden": "You do not have permission to see prospects. Please ask an administrator.",
+          "range": "{from}–{to} of {total}",
+          "openHint": "Opening a row opens the customer file in this room.",
+          "openList": "Open the list in the normal view",
+          "prev": "Previous",
+          "next": "Next",
+          "page": "{page} / {pages}"
+        },
+        "file": {
+          "label": "The file of {company}",
+          "title": "Customer file",
+          "reading": "Reading the contact records.",
+          "readError": "The contact records could not be read. Please open the file again in a while.",
+          "noContact": "There is no contact record for this prospect yet.",
+          "latest": "The last contact was \"{kind}\" on {date}. Contact records in all: {total}.",
+          "recorded": "Recorded \"{kind}\". You can undo it if it was a mistake.",
+          "undone": "The record was undone.",
+          "failed": "Sorry, that did not work. Please try again in a while.",
+          "readOnly": "You do not have permission to record contacts.",
+          "choices": {
+            "call": "I called",
+            "email": "I emailed",
+            "no_answer": "No answer",
+            "back": "Back to the board",
+            "undo": "Undo this record"
+          },
+          "contact": "Contact",
+          "email": "Email",
+          "phone": "Phone",
+          "created": "Created",
+          "assignee": "Assignee",
+          "notSet": "Not set",
+          "contacts": "Contact records",
+          "contactsSummary": "{total} in all (no answer: {noAnswer})",
+          "contactsEmpty": "No records yet.",
+          "by": "recorded by {name}",
+          "openDetail": "Open the details in the normal view",
+          "detailHint": "Hearings, next actions and edits are done on the details page in the normal view.",
+          "undoFailed": "The record could not be undone and is still there. Please try again.",
+          "saving": "Recording. The file stays open until it is done.",
+          "undoing": "Taking the record back. The file stays open until it is done."
+        },
+        "due": {
+          "board": "Due by today",
+          "position": "{index} of {total}",
+          "reading": "Checking what is due.",
+          "error": "What is due could not be read. Please check your connection and open the room again.",
+          "forbidden": "You do not have permission to see next actions. Please ask an administrator.",
+          "empty": "You have no next actions due today or earlier.",
+          "report": "Your next actions due today or earlier: {total}. Here is number {index}.",
+          "more": "There are {count} more. Please check them on Today in the normal view.",
+          "done": "Marked as done. You can undo it if it was a mistake.",
+          "undone": "It is no longer marked as done.",
+          "failed": "Sorry, that did not work. Please check your connection and try again.",
+          "finished": "That is all. Marked as done: {done}. Left: {left}.",
+          "readOnly": "You do not have permission to mark next actions as done.",
+          "choices": {
+            "done": "Mark as done",
+            "later": "Later (go to the next)",
+            "next": "Go to the next",
+            "undo": "Undo this one"
+          },
+          "dueToday": "Due today",
+          "overdue": "{days, plural, one {# day} other {# days}} overdue",
+          "takeaway": "Takeaway",
+          "checkWith": "Check with: {name}",
+          "lead": "For",
+          "noLead": "No name",
+          "note": "Note",
+          "queue": "In this order",
+          "states": {
+            "done": "Done",
+            "current": "Now",
+            "later": "Later",
+            "waiting": "Coming"
+          },
+          "allSeen": "You have seen them all.",
+          "openLead": "Open the lead in the normal view",
+          "openToday": "Open Today in the normal view",
+          "undoFailed": "It could not be undone and is still marked as done. Please check your connection and try again.",
+          "reportNext": "Here is number {index} of {total}.",
+          "saving": "Saving.",
+          "stale": " The latest could not be read; this is what was read before."
+        },
+        "deals": {
+          "board": "Deal board",
+          "report": "There are {open} open deals, {amount} in total and {weighted} weighted by probability. {overdue} are past their day, {soon} have to move within a week, and {noNextAction} have no next action.",
+          "reportNone": "There are no open deals.",
+          "reportLoading": "Reading the figures of the board.",
+          "reportUnavailable": "The figures of the board could not be read.",
+          "ask": {
+            "soon": "Show me what has to move within a week",
+            "noNextAction": "Show me those without a next action",
+            "mine": "Show me my own",
+            "all": "Show me everything"
+          },
+          "views": {
+            "soon": "To move within a week (by {date}, with what is late)",
+            "noNextAction": "No next action",
+            "mine": "My deals",
+            "all": "All"
+          },
+          "empty": {
+            "soon": "No deal has to move within a week.",
+            "noNextAction": "Every open deal has a next action.",
+            "mine": "You have no open deals.",
+            "all": "There are no open deals."
+          },
+          "count": "{count, plural, one {# deal} other {# deals}}",
+          "stages": {
+            "all": "Deals and amounts by stage (all open deals)",
+            "mine": "Deals and amounts by stage (all of my deals)"
+          },
+          "keys": {
+            "rows": "Choose a row",
+            "open": "Open"
+          },
+          "columns": {
+            "deal": "Deal / company",
+            "stage": "Stage",
+            "nextAction": "Next action",
+            "amount": "Amount (excl. tax)",
+            "owner": "Owner"
+          },
+          "noLead": "No company name",
+          "noAmount": "No amount yet",
+          "unassigned": "Unassigned",
+          "noNextAction": "No next action",
+          "late": "Overdue",
+          "loading": "Loading",
+          "error": "The deals could not be read. Please open the room again later.",
+          "forbidden": "You do not have permission to see deals. Please ask an administrator.",
+          "range": "{from}–{to} of {total}",
+          "openHint": "Opening a row opens the deal file inside this room.",
+          "prev": "Previous",
+          "next": "Next",
+          "page": "{page} / {pages}",
+          "truncated": "There are many deals, so the board lists the first {limit}. The counts and amounts by stage include all of them.",
+          "normalPages": "Pages of the normal view",
+          "open": {
+            "deals": "Open the deals in the normal view",
+            "forecast": "Open the sales forecast",
+            "prospects": "Open the customer search"
+          },
+          "reportTruncated": "There are {open} open deals, {amount} in total and {weighted} weighted by probability. There are too many to list them all on the board, so please check in the deals of the normal view how many are late, how many have to move within a week and how many have no next action.",
+          "closesOn": "Expected close {date}",
+          "closeLate": "Close date passed"
+        },
+        "dealFile": {
+          "label": "Deal file of \"{name}\"",
+          "title": "Deal file",
+          "standing": "This deal is in the \"{stage}\" stage (probability {probability}%). ",
+          "next": "Its next action is \"{title}\", due {date}.",
+          "noNext": "It has no next action.",
+          "moved": "Moved to \"{stage}\" (probability {probability}%). You can undo this if it was a mistake.",
+          "movedHandedOff": "Moved to \"{stage}\" (probability {probability}%). The handoff sheet was sent to the technical team, so this move cannot be undone.",
+          "done": "Marked the next action \"{title}\" as done. You can undo this if it was a mistake. Record what you did with 5.",
+          "added": "Set the next action \"{title}\", due {date}. To change it, use the deal in the normal view.",
+          "undone": "Undone.",
+          "undoFailed": "The undo did not go through. The change still stands. Please try again.",
+          "failed": "Sorry, that did not work. Please check your connection and try again.",
+          "readOnly": "You do not have permission to change deals.",
+          "choices": {
+            "advance": "Move on to \"{stage}\"",
+            "advanceEnd": "Move on (a win is recorded on the deal's page)",
+            "back": "Move back to \"{stage}\"",
+            "backStart": "Move back a stage",
+            "done": "Mark the next action as done",
+            "add": "Set a next action",
+            "undo": "Undo that",
+            "close": "Back to the board",
+            "advanceSql": "Move on to \"{stage}\" (SQL decision first)",
+            "advanceAsk": "Move on to \"{stage}\" (a word first)",
+            "doneNamed": "Mark \"{title}\" as done",
+            "contact": "Record a contact"
+          },
+          "sql": {
+            "title": "SQL decision",
+            "notQualified": "Not qualified: lose the deal on its page",
+            "back": "Leave it and go back to the choices"
+          },
+          "add": {
+            "title": "Set a next action",
+            "what": "What to do next (required)",
+            "due": "Due (required)",
+            "save": "Set it",
+            "back": "Leave it and go back to the choices",
+            "missing": "Please enter what to do next and a due date.",
+            "days": {
+              "tomorrow": "Tomorrow",
+              "in3Days": "In 3 days",
+              "nextMonday": "Next Monday"
+            },
+            "keeps": "The next action \"{title}\" (due {date}) stays. If it is done, mark it with 3 first."
+          },
+          "stages": "Stages of the deal",
+          "here": "Here now",
+          "deal": "Deal",
+          "nextAction": "Next action",
+          "nextActionMissing": "Not set",
+          "dueOn": "Due {date}",
+          "late": "Overdue",
+          "takeaway": "Takeaway",
+          "notSet": "Not set",
+          "noLead": "No company name",
+          "unassigned": "Unassigned",
+          "openDetail": "Open the deal in the normal view",
+          "detailHint": "Winning and losing, changes to the amount or the expected close date, and contact records are made on the deal's page in the normal view.",
+          "closeLate": "Close date passed",
+          "noAmount": "No amount yet",
+          "gone": "This deal is no longer on the board (it was deleted, or closed as won or lost). It is shown as it was when opened.",
+          "saving": "Saving. This file stays open until it is done.",
+          "failedKept": "Sorry, that answer did not go through. The one before it still stands. Please check your connection and try again.",
+          "handoff": {
+            "title": "Before moving on",
+            "warning": "The first time this prospect moves on from qualification, the handoff sheet is sent to the technical team. A move that sent it cannot be undone.",
+            "go": "Move on to \"{stage}\"",
+            "missing": "Still empty among what the handoff sheet carries: {fields}. You can move on all the same."
+          },
+          "contact": {
+            "title": "Record a contact",
+            "note": "Note (optional: what they answered, for instance)",
+            "pick": "Choose what you did, and it is recorded.",
+            "back": "Leave it and go back to the choices"
+          },
+          "contacted": "Recorded \"{kind}\". You can undo this if it was a mistake."
+        },
+        "reception": {
+          "board": "General affairs counter",
+          "back": "Back to the counter",
+          "reading": "Checking the figures.",
+          "ask": " Which shelf shall I open?",
+          "note": "Only what is recorded is shown. What is due is your own share.",
+          "due": {
+            "forbidden": "You do not have permission to see next actions, so I cannot report what is due.",
+            "error": "What is due could not be read.",
+            "none": "You have no next actions due today or earlier.",
+            "some": "Your next actions due today or earlier: {total}.",
+            "overdue": "Your next actions due today or earlier: {total}, of which {overdue} overdue."
+          },
+          "members": {
+            "members": " Members: {count}.",
+            "withInvitations": " Members: {count}. Pending invitations: {waiting}.",
+            "unread": " The members could not be read.",
+            "invitationsUnread": " The invitations could not be read."
+          },
+          "choices": {
+            "due": "Take what is due by today",
+            "members": "See members and invitations",
+            "settings": "Choose a settings page"
+          },
+          "figures": {
+            "due": "Due by today",
+            "dueValue": "{count}",
+            "overdueValue": "{count} overdue",
+            "members": "Members",
+            "membersValue": "{count}",
+            "invitations": "Pending invitations",
+            "invitationsValue": "{count}",
+            "expiredValue": "{count} more whose link has expired",
+            "invitationsHidden": "Only admins and owners can see invitations.",
+            "unread": "Could not be read"
+          },
+          "membersShelf": {
+            "board": "Members and invitations",
+            "reading": "Checking the members.",
+            "error": "The members could not be read. Please check your connection and open the shelf again.",
+            "report": "Members: {count}.",
+            "reportWithInvitations": "Members: {count}. Pending invitations: {waiting}.",
+            "readOnly": "Inviting, roles and removing a member are on the members page of the normal view.",
+            "members": "Members ({count})",
+            "more": "There are {count} more. Please check them in the normal view.",
+            "invitations": "Invitations sent (expired ones included)",
+            "invitationsHidden": "Only admins and owners can see invitations.",
+            "invitationsError": " The invitations could not be read.",
+            "noInvitations": "No invitation is waiting to be accepted.",
+            "expires": "Expires: {date}",
+            "expired": "Link expired",
+            "open": "Open members in the normal view",
+            "revoke": {
+              "choice": "Revoke an invitation",
+              "title": "Revoke an invitation",
+              "note": "Once revoked, the link that was sent no longer works. It cannot be undone (to invite again, send a new one from the members page of the normal view).",
+              "label": "Type the email address of the invitation to revoke",
+              "confirm": "Revoke this invitation",
+              "mismatch": "That is not the address of a pending invitation.",
+              "back": "Give up and go back to the shelf",
+              "done": "The invitation to {email} was revoked.",
+              "gone": "That invitation was already revoked, or the person has joined. The list was read again.",
+              "failed": "Sorry, it could not be revoked. Please check your connection and try again.",
+              "saving": "Revoking.",
+              "hidden": "You can no longer see the invitations, so the field to revoke one was closed."
+            },
+            "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles.",
+            "stale": " The latest could not be read; this is what was read before."
+          },
+          "settingsShelf": {
+            "board": "Settings shelf",
+            "report": "Choose a page; it opens in the normal view.",
+            "note": "Choose with the up and down keys and open with Enter. The office closes and the page opens in the normal view.",
+            "heading": "Pages to open"
+          },
+          "shelves": {
+            "due": "What is due",
+            "members": "Members and invitations",
+            "settings": "Settings"
+          },
+          "stale": " The latest could not be read; this is what was read before."
+        },
+        "door": "opens a page",
+        "engineering": {
+          "board": "Survey board",
+          "report": "{open} surveys are in progress. {proposal} are in the proposal stage, and {withoutTask} have no next action.",
+          "reportTruncated": "{open} surveys are in progress. {proposal} are in the proposal stage. There are many deals and the board shows only part of them: please check how many have no next action in the deals of the normal view.",
+          "reportEmpty": "No survey is in progress right now.",
+          "reportLoading": "Reading the figures of the board.",
+          "reportUnavailable": "The figures of the board could not be read.",
+          "ask": {
+            "open": "Show me everything in progress",
+            "qualification": "Show me the ones in qualification",
+            "discovery": "Show me the ones in discovery",
+            "proposal": "Show me the ones in the proposal stage",
+            "negotiation": "Show me the ones in negotiation"
+          },
+          "views": {
+            "open": "All in progress"
+          },
+          "columns": {
+            "deal": "Company and deal",
+            "stage": "Stage",
+            "nextAction": "Next action",
+            "owner": "Owner"
+          },
+          "daysInStage": "{days} days in this stage",
+          "due": "Due {date}",
+          "noTask": "Not set",
+          "empty": "No survey deal matches this view.",
+          "error": "The deals could not be read. Please open the room again later.",
+          "forbidden": "You do not have permission to see the deals. Please check with an administrator.",
+          "truncated": "There are many deals: the board shows the first {limit}. The counts by stage count every deal.",
+          "openHint": "Opening a row opens its preparation file inside this room.",
+          "openList": "Open in the deals of the normal view",
+          "file": {
+            "label": "Preparation file of {company}",
+            "title": "Preparation file",
+            "reading": "Reading the hearing and the preparation.",
+            "readError": "The records could not be read. Please open the file again later.",
+            "hearingUnavailable": "The hearing could not be read.",
+            "hearingLatest": "The latest hearing was recorded on {date}. Required fields not filled: {missing}. Not confirmed: {unconfirmed}. To confirm next time: {next}.",
+            "noHearing": "No hearing has been recorded yet.",
+            "prepReady": "The prep card of the first meeting is ready.",
+            "prepNone": "The prep card of the first meeting is not ready yet.",
+            "handedOff": "Moved on from the first hearing on {date}; the handoff sheet is ready.",
+            "notHandedOff": "Has not moved on from the first hearing yet.",
+            "choices": {
+              "hearing": "Show me the hearing summary",
+              "prep": "Show me the prep card",
+              "draft": "Draft the prep card",
+              "undo": "Undo this draft",
+              "back": "Back to the board"
+            },
+            "parts": {
+              "hearing": "Hearing summary",
+              "prep": "Prep card"
+            },
+            "hearingOn": "Hearing of {date}",
+            "notRecorded": "Not filled",
+            "flags": {
+              "missing": "Required, not filled",
+              "unconfirmed": "Not confirmed",
+              "next": "Confirm next time",
+              "changed": "Changed since last time"
+            },
+            "hearingEmpty": "No hearing has been recorded. You can record one under Hearings on the lead's page.",
+            "hearingForbidden": "You do not have permission to see the hearing. Please check with an administrator.",
+            "prepEmpty": "The prep card has not been written yet. You can prepare it on the lead's page.",
+            "readOnlyHint": "Hearings are recorded and the card is edited field by field in the normal view.",
+            "openHandoff": "Open the handoff sheet",
+            "openLead": "Open the lead's page",
+            "openDeal": "Open the deal's page",
+            "drafted": "The empty fields of the prep card were filled from the Web diagnosis and the sales playbook, and saved. What was already written was kept. You can undo this.",
+            "undone": "The draft was undone and the prep card is as it was.",
+            "failed": "Sorry, that did not work. Please try again later.",
+            "outdated": "Not saved. This page is out of date. Please reload it and try again.",
+            "refused": "The prep card was saved from another screen just before this save. The draft was not saved. You can ask for the draft again, from the latest card.",
+            "undoFailed": "The draft could not be undone and is still saved. You can ask to undo it again.",
+            "changedSince": "The prep card was saved from another screen after the draft. Undoing would wipe that, so it cannot be undone here. To change it, open the lead's page.",
+            "noMaterial": "There is nothing to draft from for this customer (no Web diagnosis answers, no sales playbook).",
+            "nothingToFill": "The prep card has no empty field a draft could fill.",
+            "refusedNothing": "The prep card was saved from another screen just before this save. The draft was not saved. The latest card has no empty field a draft could fill.",
+            "checking": "Checking the prep card.",
+            "outdatedUndo": "Not undone. The draft is still saved. This page is out of date, so it cannot be undone here. To change it, reload the page and open the prep card on the lead's page."
+          }
+        },
+        "training": {
+          "subtitle": "Where the AI employees are brought up",
+          "reading": "Reading the training records…",
+          "readError": "The training records could not be read. Please wait a moment and enter the room again.",
+          "guide": {
+            "empty": "No AI employee is hired yet. Talk to an AI employee on the floor and hire it to bring it up here.",
+            "staff": "{count} AI employees are hired, {training} of them in training. Choose one with the up and down keys, and a board with the number keys."
+          },
+          "disabled": "The AI employees cannot think and work with Claude yet (switched off until the legal and information systems departments have agreed). Onboarding and reviews cannot be started yet.",
+          "staffList": "AI employees of the training room",
+          "boards": {
+            "curriculum": "Training",
+            "report": "Report (onboarding)",
+            "notes": "Notes",
+            "review": "Review",
+            "policy": "President's policy"
+          },
+          "step": {
+            "disabled": "Being prepared",
+            "paused": "Paused",
+            "start": "Not started",
+            "running": "In training",
+            "waiting": "Report in",
+            "onboarded": "Approved"
+          },
+          "report": {
+            "disabled": "{name}'s onboarding can start once the system is ready.",
+            "paused": "{name} is paused. Resume it to start its onboarding.",
+            "start": "{name} has not been onboarded yet. It will read its job description and your policy, write its role in its own words in its notes, and report to you.",
+            "running": "{name} is reading its job description and writing its notes (step {steps}). It moves on while this room is open.",
+            "waiting": "{name} handed in its report. Read what it understood, then approve it or tell it what to correct. Approving puts it on probation (Lv.1).",
+            "onboarded": "{name} finished its onboarding on {date}.",
+            "writing": "Writing its notes",
+            "introduction": "Introduction",
+            "roleSummary": "What it understood of its role",
+            "goals": "Goals for the first 30 days",
+            "questions": "Questions for you"
+          },
+          "result": {
+            "refused": "The last onboarding stopped because Claude declined. You can start it again.",
+            "max_tokens": "The last one stopped because an answer was too long. You can start it again.",
+            "context_full": "The last one stopped because the conversation grew too long. You can start it again.",
+            "step_limit": "The last one did not reach its report within the steps allowed. You can start it again.",
+            "token_limit": "The last one reached the limit of what it may use. You can start it again.",
+            "no_report": "The last one stopped without a report. You can start it again.",
+            "claude_error": "The last one stopped because of a problem with the Claude settings. Operations have been told.",
+            "cancelled": "The last onboarding was stopped. You can start it again.",
+            "other": "The last onboarding stopped. You can start it again."
+          },
+          "notes": {
+            "about": "The notes the AI employee wrote itself. Fixing or deleting one keeps a record of the change.",
+            "empty": "{name} has no notes yet.",
+            "forManagers": "Only those who manage the AI employees can read the notes."
+          },
+          "review": {
+            "training": "Reviews start after the onboarding is approved.",
+            "disabled": "Reviews can start once the system is ready.",
+            "paused": "{name} is paused. Resume it to hold a review.",
+            "running": "{name} is reading the counted facts and writing its self-review.",
+            "waiting": "{name} handed in its self-review. Look at the facts and decide.",
+            "open": "The facts are counted. Please decide.",
+            "due": "{name}'s review can be held now. The facts of the period are counted, and {name} writes a self-review.",
+            "not_due": "The next review can be held from {date}.",
+            "writing": "Writing its self-review",
+            "selfReview": "Self-review",
+            "nextGoals": "Goals for the next 30 days",
+            "confirmPromote": "{name} will be raised to {level} and trusted with more. Are you sure?"
+          },
+          "facts": {
+            "period": "Period",
+            "runs": "Runs",
+            "runsValue": "{runs} ({failed} failed)",
+            "daysAtLevel": "Days at this grade",
+            "days": "{days} days",
+            "proposals": "Proposals approved",
+            "proposalsValue": "{approved} / {answered}",
+            "noProposals": "No record (counted once the works hand in proposals)",
+            "recommendation": "What the records show",
+            "level": "Grade"
+          },
+          "recommendation": {
+            "promote": "Meets the bar for a promotion",
+            "keep": "Keep",
+            "narrow": "Trust it with less"
+          },
+          "narrowed": "Its runs failed more often than the bar allows: its grade was lowered by one, and it is trusted with less.",
+          "policy": {
+            "about": "Write in a few words what you expect of the AI employee. It reads this at its onboarding and its reviews.",
+            "empty": "Nothing written yet.",
+            "forManagers": "Only those who manage the AI employees can read the policy."
+          },
+          "fields": {
+            "correction": "What should be corrected",
+            "note": "Content of {path}",
+            "policy": "What you expect of {name}"
+          },
+          "actions": {
+            "start": "Start the onboarding",
+            "resume": "Continue",
+            "cancel": "Stop",
+            "approve": "Approve (to probation)",
+            "correct": "Tell what to correct",
+            "sendCorrection": "Send the correction",
+            "close": "Close",
+            "editNote": "Fix",
+            "saveNote": "Save",
+            "deleteNote": "Delete this note",
+            "startReview": "Start the review",
+            "promote": "Approve the promotion",
+            "confirmPromote": "Raise to {level} (confirm)",
+            "keep": "Keep",
+            "editPolicy": "Write or fix",
+            "savePolicy": "Save",
+            "cancelPromote": "Do not raise",
+            "editTraining": "Edit this employee's training",
+            "editTemplate": "Edit the template",
+            "copyTemplate": "Copy the template again",
+            "confirmCopy": "Copy again (confirm)",
+            "cancelCopy": "Do not copy",
+            "saveTraining": "Save",
+            "saveTemplate": "Save the template"
+          },
+          "errors": {
+            "not_found": "Not found. Please enter the room again.",
+            "agent_disabled": "The system is not ready, so this cannot start.",
+            "paused": "A paused AI employee does not work.",
+            "already_onboarded": "This AI employee has already been onboarded.",
+            "in_training": "This can start after the onboarding is approved.",
+            "open_session": "This AI employee is in the middle of other training.",
+            "not_waiting": "This was already answered. The screen was read again.",
+            "review_not_due": "The next review is not due yet.",
+            "not_recommended": "The records do not call for a promotion.",
+            "level_changed": "The grade had changed. The screen was read again.",
+            "self_review_running": "Please decide once the self-review is in.",
+            "invalid_note": "This note cannot be saved (no contact details or key-like text).",
+            "generic": "That did not work. Please wait a moment and try again.",
+            "personal_data": "Contact details (e-mail addresses, telephone numbers) and key-like text cannot be written. Write about the role and the work only."
+          },
+          "curriculum": {
+            "about": "The training has two parts, the common training (the company and its services) and the role training (the purpose, the scope and the tasks of the role), and each AI employee has its own. The onboarding reads this employee's training.",
+            "forManagers": "Only those who manage the AI employees can read the training.",
+            "copied": "Copied from version {version} of the template.",
+            "copiedDefault": "Copied from the first contents (the catalog of roles and works).",
+            "notCopied": "Not copied yet. It is copied from the current template when the onboarding starts (shown below is the template).",
+            "newer": "The template has been updated (version {version}).",
+            "empty": "Not written",
+            "templateOf": "Template of the {title}",
+            "ownOf": "{name}'s {title}",
+            "confirmCopy": "{name}'s {title} will be replaced by the current template. What was changed for this employee only will be lost. Are you sure?",
+            "templateNote": "Saving a template raises its version and is used for the employees it is copied to from now on. For employees who already have a copy, use \"Copy the template again\"."
+          }
+        }
+      },
+      "tones": {
+        "brisk": {
+          "training": "In training. I start once the work is ready. Planned work: {work}",
+          "paused": "Paused. Call me and I am back.",
+          "idle": "Waiting for the next task.",
+          "working": "Working. I will report when done.",
+          "attention": "The work stopped. The reason is in the work log.",
+          "pausedDone": "Understood. {name} takes a break.",
+          "resumed": "{name}, back.",
+          "resumedTraining": "{name}, back to training.",
+          "failed": "That failed. Please try again in a while."
+        },
+        "friendly": {
+          "training": "Hi, boss! I am in training right now. I will get going as soon as the work is ready. Here is what I will do: {work}",
+          "paused": "I am taking a break right now, boss. Just call me and I will be right back.",
+          "idle": "Hi, boss! Ready for the next task whenever you are.",
+          "working": "I am on it, boss! I will let you know as soon as I am done.",
+          "attention": "Sorry, boss. The work stopped halfway. The reason is in the work log.",
+          "pausedDone": "Got it, boss. {name} will take a little break.",
+          "resumed": "{name} is back! Glad to be here again.",
+          "resumedTraining": "{name} is going back to training. I will start once the work is ready.",
+          "failed": "Sorry, that did not work. Please try again in a little while."
+        },
+        "spirited": {
+          "training": "Boss! I am in training! I will give it everything once the work is ready! Here is what I will do: {work}",
+          "paused": "Boss! I am paused! Call me and I am back at once!",
+          "idle": "Boss! Ready for the next task, any time!",
+          "working": "Boss! Working at full power! I will report as soon as I am done!",
+          "attention": "Boss, my apologies! The work stopped halfway! The reason is in the work log!",
+          "pausedDone": "Understood, boss! {name} will rest and be ready!",
+          "resumed": "{name} is back! Full power!",
+          "resumedTraining": "{name} is going back to training! I start once the work is ready!",
+          "failed": "My apologies! That did not work! Please try again in a while!"
+        }
+      },
+      "studio": {
+        "title": "Customize",
+        "of": "Customize {name}",
+        "open": "Customize",
+        "preview": "Preview of {name}",
+        "sample": "How it talks",
+        "hint": "The look and the personality show as soon as you save.",
+        "dirty": "There are unsaved changes.",
+        "discard": "There are unsaved changes. Press Esc again to discard them and go back.",
+        "saved": "Saved.",
+        "failed": "Sorry, that could not be saved. Please try again in a while.",
+        "save": "Save",
+        "reset": "Reset",
+        "back": "Back to the floor",
+        "random": "Surprise me",
+        "tabs": {
+          "look": "Look",
+          "tone": "Personality",
+          "stats": "Abilities",
+          "work": "Work style"
+        },
+        "parts": {
+          "head": "Head",
+          "eyes": "Eyes",
+          "antenna": "Antenna",
+          "gear": "Gear",
+          "shell": "Shell colour",
+          "accent": "Accent colour"
+        },
+        "options": {
+          "head": {
+            "helmet": "Helmet",
+            "round": "Round",
+            "square": "Square",
+            "dome": "Dome"
+          },
+          "eyes": {
+            "led": "LED",
+            "bar": "Bar",
+            "wide": "Wide"
+          },
+          "antenna": {
+            "single": "One",
+            "double": "Two",
+            "ring": "Ring",
+            "none": "None"
+          },
+          "gear": {
+            "role": "The role's gear",
+            "headset": "Headset",
+            "scanner": "Scanner",
+            "goggles": "Goggles",
+            "eyeshade": "Eyeshade",
+            "bow_tie": "Bow tie",
+            "none": "None"
+          },
+          "shell": {
+            "white": "White",
+            "silver": "Silver",
+            "graphite": "Graphite",
+            "sand": "Sand",
+            "mint": "Mint",
+            "sky": "Sky",
+            "rose": "Rose"
+          },
+          "accent": {
+            "role": "The role's colour",
+            "violet": "Violet",
+            "teal": "Teal",
+            "blue": "Blue",
+            "orange": "Orange",
+            "pink": "Pink",
+            "lime": "Lime",
+            "gold": "Gold",
+            "red": "Red"
+          }
+        },
+        "toneNote": "The personality changes how it talks in a conversation. Check it under \"How it talks\" on the left.",
+        "tones": {
+          "polite": {
+            "name": "Polite",
+            "hint": "Calm and courteous"
+          },
+          "brisk": {
+            "name": "Brisk",
+            "hint": "Short and to the point"
+          },
+          "friendly": {
+            "name": "Friendly",
+            "hint": "Soft and approachable"
+          },
+          "spirited": {
+            "name": "Spirited",
+            "hint": "Lively and forceful"
+          }
+        },
+        "notYet": "This setting decides how the AI employee goes about its work once the work runs. The work is still being prepared, so it changes nothing yet.",
+        "points": "{left} points left (of {total})",
+        "raise": "Raise {name}",
+        "lower": "Lower {name}",
+        "value": "{name}: {value} of {max}",
+        "stats": {
+          "speed": {
+            "name": "Speed",
+            "hint": "Getting things done quickly comes first"
+          },
+          "care": {
+            "name": "Care",
+            "hint": "Fewer gaps and mistakes come first"
+          },
+          "insight": {
+            "name": "Insight",
+            "hint": "Noticing and suggesting comes first"
+          },
+          "grit": {
+            "name": "Grit",
+            "hint": "Following up without giving up comes first"
+          }
+        },
+        "autonomy": {
+          "label": "How far it may go on its own",
+          "ask": {
+            "name": "Ask every time",
+            "hint": "It checks with a person before acting"
+          },
+          "report": {
+            "name": "Act, then report",
+            "hint": "It acts within its work and reports afterwards"
+          }
+        },
+        "reporting": {
+          "label": "How detailed its reports are",
+          "brief": "Brief",
+          "standard": "Standard",
+          "detailed": "Detailed"
+        },
+        "discardBack": "Discard and go back to the floor",
+        "soon": "Not yet in use"
+      },
+      "trial3d": {
+        "on": "3D view",
+        "off": "2D view",
+        "title": "3D trial",
+        "note": "Switch the status of {name} and what happened to it, on this screen only, to watch it walk and feel. The real status does not change.",
+        "fps": "{fps} frames a second",
+        "events": {
+          "run_succeeded": "A run succeeded",
+          "president_near": "The president came near",
+          "hired": "Hired"
+        },
+        "loading": "Loading the 3D floor.",
+        "failed": "The 3D floor could not be shown. The office is back in 2D.",
+        "slow": "3D draws slowly on this device, so the office is shown in 2D. Press \"3D view\" (the V key) to try it again."
+      },
+      "walkingTo": "On the way to {room}",
+      "feelings": {
+        "proud": "Got the work done",
+        "happy": "Glad",
+        "attentive": "Looking at you"
+      }
+    },
+    "enterOffice": "Enter the office",
+    "installApp": "Install as an app",
+    "levels": {
+      "training": "In training",
+      "probation": "Lv.1 Probation",
+      "member": "Lv.2 Full member",
+      "lead": "Lv.3 Lead",
+      "ace": "Lv.4 Ace"
+    },
+    "curriculum": {
+      "kinds": {
+        "common": "Common training",
+        "role": "Role training"
+      },
+      "sections": {
+        "company": "About the company",
+        "services": "Services",
+        "customers": "Customers",
+        "values": "What we value",
+        "donts": "What not to do",
+        "purpose": "Purpose",
+        "scope": "Scope",
+        "tasks": "Concrete tasks",
+        "handoffs": "Who hands work to whom",
+        "measures": "How results are measured"
+      },
+      "hints": {
+        "company": "What the company does and what kind of company it is",
+        "services": "The services or products it offers, and what makes them different",
+        "customers": "Which customers it works with, on which problems",
+        "values": "What matters in the work, how decisions are made",
+        "donts": "What must not be done, what to be careful about",
+        "purpose": "What this role is for",
+        "scope": "What the role covers, and what it does not",
+        "tasks": "The concrete work of each day or week",
+        "handoffs": "From whom it receives work, and to whom it hands it on",
+        "measures": "What counts as a result"
+      },
+      "defaults": {
+        "handoffs": "Receives work from: {from} / Hands work on to: {to}",
+        "none": "none",
+        "measures": "To be decided with the president."
+      }
+    }
+  }
+}

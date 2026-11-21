@@ -1,5 +1,4 @@
 import { analyticsArticle } from './content/analytics';
-import { dashboardArticle } from './content/dashboard';
 import { dealDetailArticle } from './content/deal-detail';
 import { dealsArticle } from './content/deals';
 import { forecastArticle } from './content/forecast';
@@ -8,6 +7,7 @@ import { leadDetailArticle } from './content/lead-detail';
 import { leadHandoffArticle } from './content/lead-handoff';
 import { leadHearingArticle } from './content/lead-hearing';
 import { leadsArticle } from './content/leads';
+import { officeArticle } from './content/office';
 import { organizationsNewArticle } from './content/organizations-new';
 import { prospectsArticle } from './content/prospects';
 import { settingsAgencyLinksArticle } from './content/settings-agency-links';
@@ -32,7 +32,6 @@ import type { HelpArticle, HelpExclusionReason, HelpSection } from './types';
  * the same pull request (.claude/rules/help.md).
  */
 export const HELP_ARTICLES: readonly HelpArticle[] = [
-  dashboardArticle,
   todayArticle,
   leadsArticle,
   leadDetailArticle,
@@ -44,6 +43,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   prospectsArticle,
   analyticsArticle,
   siteAnalyticsArticle,
+  officeArticle,
   settingsProfileArticle,
   settingsOrganizationArticle,
   settingsMembersArticle,
@@ -71,7 +71,6 @@ export const HELP_TABLE_OF_CONTENTS: Readonly<Record<HelpSection, readonly HelpA
   ],
   screens: [
     todayArticle,
-    dashboardArticle,
     leadsArticle,
     leadDetailArticle,
     leadHearingArticle,
@@ -82,6 +81,7 @@ export const HELP_TABLE_OF_CONTENTS: Readonly<Record<HelpSection, readonly HelpA
     prospectsArticle,
     analyticsArticle,
     siteAnalyticsArticle,
+    officeArticle,
   ],
   settings: [
     settingsProfileArticle,
@@ -105,6 +105,8 @@ export const HELP_EXCLUDED_ROUTES: Readonly<Record<string, HelpExclusionReason>>
   // The help center (#874)
   '/help': { kind: 'help' },
   '/help/[articleId]': { kind: 'help' },
+  // Redirects to 今日: the dashboard became part of 今日 and of the analytics page (#1164)
+  '/dashboard': { kind: 'redirect', to: '/today' },
   // Redirects to the organization settings (#164)
   '/organizations': { kind: 'redirect', to: '/settings/organization' },
   // The embed widget was abolished (decision 2026-10-24-embed-widget-abolished); #564 removes it
