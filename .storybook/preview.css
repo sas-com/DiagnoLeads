@@ -1,0 +1,7 @@
+/*
+ * The app's stylesheet, plus the stories as a source for Tailwind: app/globals.css only scans
+ * app/ and components/, and the classes used only in stories must not reach the app's CSS.
+ */
+@import "../app/globals.css";
+@source "../stories/**/*.{ts,tsx,mdx}";
+@source "./**/*.{ts,tsx}";
