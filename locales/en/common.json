@@ -5317,9 +5317,13 @@
       "selected": "Chosen in the diagnosis. Check how it relates to the main challenge"
     },
     "conflictSavedBy": "Saved now: updated by {name} on {date}",
+    "conflictShowSaved": "See what is saved now",
+    "conflictSavedEmpty": "The card saved now is empty.",
+    "outdated": "Not saved. This page is out of date. Reloading clears what you typed, so copy it first, then reload and save again.",
     "conflictStatus": "Not saved. See the notice above.",
     "reloaded": "The latest card was loaded",
-    "startError": "The latest card could not be loaded, so editing did not start. Please try again."
+    "startError": "The latest card could not be loaded, so editing did not start. Please try again.",
+    "conflictSavedLabel": "What is saved now"
   },
   "actTiming": {
     "title": "When to act",

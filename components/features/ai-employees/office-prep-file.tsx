@@ -36,7 +36,11 @@ type Outcome =
   // The server refused the draft: the card was saved in the moment after it was read.
   // fillable: whether the card as it is now still has a field a draft could fill
   | { kind: 'refused'; fillable: boolean }
-  | { kind: 'failed' };
+  | { kind: 'failed' }
+  // The server no longer takes what this screen sends: the page is older than the app
+  | { kind: 'outdated' }
+  // ...for an undo: the draft stays on the card, and this file can no longer take it back
+  | { kind: 'outdatedUndo' };
 
 /** A calendar day ('YYYY-MM-DD') as it is written on the board */
 const dayText = (day: string) => day.replaceAll('-', '/');
@@ -153,7 +157,15 @@ export function OfficePrepFile({
   // Somebody changed the card after the draft (on the lead's page): putting the old card back
   // would wipe what they wrote, so the undo is closed and the file says why
   const stale = outcome?.kind === 'drafted' && !rereading && !samePrepCard(current, outcome.after);
-  const state = { canEdit, drafted, busy: working || rereading, fillable, stale };
+  // A page older than the app has every save refused the same way: nothing is offered again
+  const outdated = outcome?.kind === 'outdated' || outcome?.kind === 'outdatedUndo';
+  const state = {
+    canEdit,
+    drafted,
+    busy: working || rereading,
+    fillable: fillable && !outdated,
+    stale,
+  };
 
   /**
    * The card as the server holds it right now (#1221). `leadPrep.save` replaces the whole card,
@@ -243,7 +255,7 @@ export function OfficePrepFile({
             },
             onError: (error) => {
               if (error.data?.code === 'CONFLICT') void afterRefusal('draft');
-              else setOutcome({ kind: 'failed' });
+              else setOutcome({ kind: outdatedOrFailed(error) });
             },
           }
         );
@@ -257,6 +269,11 @@ export function OfficePrepFile({
             onError: (error) => {
               if (error.data?.code === 'CONFLICT') {
                 void afterRefusal('undo');
+                return;
+              }
+              // Asking again would be refused the same way: the page has to be loaded again
+              if (outdatedOrFailed(error) === 'outdated') {
+                setOutcome({ kind: 'outdatedUndo' });
                 return;
               }
               // The draft is still there: keep it in hand, so the undo can be asked for again
@@ -355,15 +372,24 @@ export function OfficePrepFile({
                     ? outcome.fillable
                       ? t('refused')
                       : t('refusedNothing')
-                    : t('failed')}
+                    : outcome.kind === 'outdated'
+                      ? t('outdated')
+                      : outcome.kind === 'outdatedUndo'
+                        ? t('outdatedUndo')
+                        : t('failed')}
             </p>
           )}
           {/* Why the draft is closed, to those who could ask for it */}
-          {canEdit && !drafted && !fillable && !state.busy && outcome?.kind !== 'refused' && (
-            <p className="text-sm leading-relaxed text-[#d8d2c4]">
-              {material ? t('nothingToFill') : t('noMaterial')}
-            </p>
-          )}
+          {canEdit &&
+            !drafted &&
+            !fillable &&
+            !state.busy &&
+            outcome?.kind !== 'refused' &&
+            !outdated && (
+              <p className="text-sm leading-relaxed text-[#d8d2c4]">
+                {material ? t('nothingToFill') : t('noMaterial')}
+              </p>
+            )}
           {handoff.data && (
             <p className="text-sm leading-relaxed text-[#d8d2c4]">
               {handoff.data.lead.handedOffOn
@@ -587,4 +613,9 @@ export function OfficePrepFile({
       </section>
     </div>
   );
+}
+
+/** A save the server refused as input: the page was opened before a change of the input */
+function outdatedOrFailed(error: { data?: { code?: string } | null }): 'outdated' | 'failed' {
+  return error.data?.code === 'BAD_REQUEST' ? 'outdated' : 'failed';
 }

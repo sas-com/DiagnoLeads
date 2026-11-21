@@ -6,6 +6,7 @@
  * reported, so a catalog change never makes an old hearing unreadable.
  */
 
+import { expectedUpdatedAtSchema } from '@/lib/utils/expected-updated-at';
 import { z } from 'zod';
 import {
   HEARING_FIELDS,
@@ -286,7 +287,7 @@ export const updateLeadHearingSchema = z
     /** Replaces all fields */
     fields: hearingFieldsSchema,
     /** updatedAt the client last read; a newer row means someone else saved meanwhile */
-    expectedUpdatedAt: z.date(),
+    expectedUpdatedAt: expectedUpdatedAtSchema,
   })
   .strict();
 

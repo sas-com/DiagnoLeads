@@ -22,7 +22,7 @@ import {
 import { trpc } from '@/lib/trpc/client';
 import { AlertTriangle, Loader2, Pencil, RefreshCw, Search, Sparkles } from 'lucide-react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 const EMPTY: PrepCardFields = {
@@ -96,6 +96,11 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
       if (error.data?.code === 'CONFLICT') {
         setConflict(true);
         void utils.leadPrep.get.invalidate({ organizationId, leadId });
+      } else if (error.data?.code === 'BAD_REQUEST') {
+        // The input this screen sends is no longer what the server takes: the page was opened
+        // before a change was deployed, and trying again would fail the same way
+        // Kept until closed: it says what a reload costs, which must be read before reloading
+        toast.error(t('outdated'), { duration: Number.POSITIVE_INFINITY });
       } else toast.error(t('saveError'));
     },
   });
@@ -220,22 +225,47 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
                     })}
                   </p>
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  disabled={reading === 'reload'}
-                  onClick={() => void reload()}
-                >
-                  {reading === 'reload' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {t('reload')}
-                </Button>
               </Callout>
+            </div>
+          )}
+          {conflict && (
+            // Outside the notice (role alert): opening the saved card or loading it must not read
+            // the whole notice out again
+            <div className="space-y-2 rounded-md border p-3">
+              {/* What is saved now, next to what was typed: read before choosing to load it */}
+              {stored && stored.updatedAt.getTime() !== base?.getTime() && (
+                <details>
+                  <summary className="cursor-pointer py-1 text-sm font-medium">
+                    {t('conflictShowSaved')}
+                  </summary>
+                  <section
+                    aria-label={t('conflictSavedLabel')}
+                    // biome-ignore lint/a11y/noNoninteractiveTabindex: a box that scrolls takes the keys that scroll it
+                    tabIndex={0}
+                    className="mt-2 max-h-80 overflow-y-auto rounded-md border bg-background p-3"
+                  >
+                    {prepCardFilled(stored) ? (
+                      <PrepCardSummary card={stored} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t('conflictSavedEmpty')}</p>
+                    )}
+                  </section>
+                </details>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={reading === 'reload'}
+                onClick={() => void reload()}
+              >
+                {reading === 'reload' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                )}
+                {t('reload')}
+              </Button>
             </div>
           )}
           {data.draftSource && hasDraftMaterial(data.draftSource) && (
@@ -355,65 +385,83 @@ export function LeadPrepCard({ organizationId, leadId }: LeadPrepCardProps) {
       ) : !card ? (
         <p className="text-sm text-muted-foreground">{t('empty')}</p>
       ) : (
-        <dl className="space-y-3 text-sm">
-          {card.estimatedSystem && (
-            <div>
-              <dt className="text-xs text-muted-foreground">{t('fields.estimatedSystem')}</dt>
-              <dd className="text-foreground">
-                {card.estimatedSystem}
-                {card.estimatedSystemBasis && (
-                  <span className="text-muted-foreground">
-                    {t('basisInline', { basis: card.estimatedSystemBasis })}
-                  </span>
-                )}
-              </dd>
-            </div>
-          )}
-          {card.recentNews && (
-            <div>
-              <dt className="text-xs text-muted-foreground">{t('fields.recentNews')}</dt>
-              <dd className="whitespace-pre-wrap break-words text-foreground">{card.recentNews}</dd>
-            </div>
-          )}
-          {Object.keys(card.hypotheses).length > 0 && (
-            <div>
-              <dt className="text-xs text-muted-foreground">{t('fields.hypotheses')}</dt>
-              <dd>
-                <ul className="space-y-0.5">
-                  {PREP_CHALLENGES.filter((c) => card.hypotheses[c]).map((challenge) => (
-                    <li key={challenge} className="break-words text-foreground">
-                      <span className="font-medium">{tChallenge(challenge)}</span>：
-                      {card.hypotheses[challenge]}
-                    </li>
-                  ))}
-                </ul>
-              </dd>
-            </div>
-          )}
-          <div>
-            <dt className="text-xs text-muted-foreground">{t('fields.firstQuestions')}</dt>
-            <dd>
-              {card.firstQuestions.length > 0 ? (
-                <ol className="list-decimal space-y-0.5 pl-5 text-foreground">
-                  {card.firstQuestions.map((question) => (
-                    <li key={question} className="break-words">
-                      {question}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <span className="text-muted-foreground">{t('noQuestions')}</span>
-              )}
-            </dd>
-          </div>
+        <PrepCardSummary card={card}>
           <p className="text-xs text-muted-foreground">
             {t('updatedBy', {
               date: format.dateTime(new Date(card.updatedAt), { dateStyle: 'medium' }),
               name: card.updatedByName ?? '—',
             })}
           </p>
-        </dl>
+        </PrepCardSummary>
       )}
     </Card>
+  );
+}
+
+/** What a card says, as the card shows it when it is not being edited */
+function PrepCardSummary({
+  card,
+  children,
+}: {
+  card: PrepCardFields;
+  /** Shown under the fields (who updated the card) */
+  children?: ReactNode;
+}) {
+  const t = useTranslations('leadPrep');
+  const tChallenge = useTranslations('leadHearings.options.challenge');
+  return (
+    <dl className="space-y-3 text-sm">
+      {card.estimatedSystem && (
+        <div>
+          <dt className="text-xs text-muted-foreground">{t('fields.estimatedSystem')}</dt>
+          <dd className="text-foreground">
+            {card.estimatedSystem}
+            {card.estimatedSystemBasis && (
+              <span className="text-muted-foreground">
+                {t('basisInline', { basis: card.estimatedSystemBasis })}
+              </span>
+            )}
+          </dd>
+        </div>
+      )}
+      {card.recentNews && (
+        <div>
+          <dt className="text-xs text-muted-foreground">{t('fields.recentNews')}</dt>
+          <dd className="whitespace-pre-wrap break-words text-foreground">{card.recentNews}</dd>
+        </div>
+      )}
+      {Object.keys(card.hypotheses).length > 0 && (
+        <div>
+          <dt className="text-xs text-muted-foreground">{t('fields.hypotheses')}</dt>
+          <dd>
+            <ul className="space-y-0.5">
+              {PREP_CHALLENGES.filter((c) => card.hypotheses[c]).map((challenge) => (
+                <li key={challenge} className="break-words text-foreground">
+                  <span className="font-medium">{tChallenge(challenge)}</span>：
+                  {card.hypotheses[challenge]}
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </div>
+      )}
+      <div>
+        <dt className="text-xs text-muted-foreground">{t('fields.firstQuestions')}</dt>
+        <dd>
+          {card.firstQuestions.length > 0 ? (
+            <ol className="list-decimal space-y-0.5 pl-5 text-foreground">
+              {card.firstQuestions.map((question) => (
+                <li key={question} className="break-words">
+                  {question}
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <span className="text-muted-foreground">{t('noQuestions')}</span>
+          )}
+        </dd>
+      </div>
+      {children}
+    </dl>
   );
 }

@@ -4,7 +4,8 @@
  */
 import { LeadPrepCard } from '@/components/features/lead-prep/lead-prep-card';
 import messages from '@/locales/ja/common.json';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { toast } from 'sonner';
 import { NextIntlClientProvider } from 'next-intl';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -187,6 +188,68 @@ describe('LeadPrepCard', () => {
     expect(mocks.mutate).toHaveBeenLastCalledWith(
       expect.objectContaining({ expectedUpdatedAt: latest.updatedAt })
     );
+  });
+
+  it('shows what is saved now inside the notice, next to what was typed (#1240)', async () => {
+    mocks.result = { data: { card: savedCard, canEdit: true, draftSource }, isError: false };
+    renderCard();
+    await press('編集');
+    fireEvent.change(screen.getByLabelText('最近の動き'), { target: { value: '自分が書いた動き' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    // The card behind the form is read again after the refusal: a colleague's save is there now
+    mocks.result = {
+      data: {
+        card: { ...savedCard, recentNews: '同僚が書いた動き', updatedAt: new Date('2026-10-18T02:00:00Z') },
+        canEdit: true,
+        draftSource,
+      },
+      isError: false,
+    };
+    act(() => mocks.hook.onError?.({ data: { code: 'CONFLICT' } }));
+    fireEvent.click(screen.getByText('いま保存されている内容を見る'));
+    const saved = screen.getByRole('region', { name: 'いま保存されている内容' });
+    expect(within(saved).getByText('同僚が書いた動き')).toBeInTheDocument();
+    // Outside the notice: opening it does not read the whole notice out again
+    expect(within(screen.getByRole('alert')).queryByText('同僚が書いた動き')).toBeNull();
+    // What was typed is still in the form, beside it
+    expect(screen.getByLabelText('最近の動き')).toHaveValue('自分が書いた動き');
+  });
+
+  it('says that a card saved empty is empty, inside the notice (#1240)', async () => {
+    mocks.result = { data: { card: savedCard, canEdit: true, draftSource }, isError: false };
+    renderCard();
+    await press('編集');
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    mocks.result = {
+      data: {
+        card: {
+          ...savedCard,
+          estimatedSystem: null,
+          firstQuestions: [],
+          updatedAt: new Date('2026-10-18T02:00:00Z'),
+        },
+        canEdit: true,
+        draftSource,
+      },
+      isError: false,
+    };
+    act(() => mocks.hook.onError?.({ data: { code: 'CONFLICT' } }));
+    expect(screen.getByText('いま保存されているカードは、中身が空です。')).toBeInTheDocument();
+  });
+
+  it('says the page is out of date when the server no longer takes what it sends (#1240)', async () => {
+    mocks.result = { data: { card: savedCard, canEdit: true, draftSource }, isError: false };
+    renderCard();
+    await press('編集');
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    act(() => mocks.hook.onError?.({ data: { code: 'BAD_REQUEST' } }));
+    // Kept until closed: it says that a reload clears what was typed
+    expect(toast.error).toHaveBeenLastCalledWith(
+      expect.stringContaining('ページを読み込み直すと、入力中の内容は消えます'),
+      { duration: Number.POSITIVE_INFINITY }
+    );
+    // Not the notice of a colleague's save
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('keeps what was typed when the latest card cannot be loaded (#1225)', async () => {
