@@ -580,6 +580,9 @@ export function OfficeBoardCampaigns({
   breakdownState,
   agencyState,
   agencies,
+  keysRef,
+  focusCampaignRef,
+  onOpenCampaign,
   onLeave,
 }: {
   qrState: FigureState;
@@ -588,11 +591,20 @@ export function OfficeBoardCampaigns({
   breakdownState: FigureState;
   agencyState: FigureState;
   agencies: AgencyPerformanceRow[] | undefined;
+  /** Filled with the board's key handler while the board is shown */
+  keysRef: MutableRefObject<RoomKeys | null>;
+  /** The campaign whose row takes the focus when the board comes back from its prospects */
+  focusCampaignRef: MutableRefObject<string | null>;
+  /** A QR campaign's row was opened: its new prospects go on the lead board (#1255) */
+  onOpenCampaign: (campaign: { id: string; name: string }) => void;
   onLeave: () => void;
 }) {
   const t = useTranslations('aiOffice.immersive.room.marketing');
   const tBoard = useTranslations('aiOffice.immersive.room.marketing.campaigns');
   const tSources = useTranslations('aiOffice.immersive.room.marketing.sources');
+  const tLeads = useTranslations('aiOffice.immersive.room.leads');
+  const boardRef = useRef<HTMLElement | null>(null);
+  const openHintId = useId();
   const format = useFormatter();
   const days = MARKETING_RANGE_DAYS;
   const notComputable = <NoFigure reason={t('notComputable')} />;
@@ -613,12 +625,43 @@ export function OfficeBoardCampaigns({
   const forbidden = qrState === 'forbidden' && agencyState === 'forbidden';
   const qrShown = qrState === 'ready' && qrRows.length > 0;
   const agenciesShown = agencyState === 'ready' && agencyRows.length > 0;
+  // A campaign's row opens when it has new prospects to show
+  const opens = qrShown && qrRows.some((row) => row.newLeads > 0);
+  const closedRows = qrRows.some((row) => row.newLeads === 0);
+
+  // Coming back from the prospects of a campaign gives the focus back to its row
+  useEffect(() => {
+    if (!focusCampaignRef.current) return;
+    boardRef.current
+      ?.querySelector<HTMLElement>(`[data-campaign="${focusCampaignRef.current}"]`)
+      ?.focus();
+    focusCampaignRef.current = null;
+  }, [focusCampaignRef]);
+
+  // The board's keys: the arrows move over the rows that open (the QR campaigns with new
+  // prospects). Enter opens the focused row by itself (the rows that open are buttons).
+  useRoomKeys(keysRef, (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return false;
+    return focusNextRow(boardRef.current, '[data-campaign]', event);
+  });
 
   return (
     <FigureBoard
       title={tBoard('board')}
       summary={tBoard('summary', { days })}
       state={forbidden ? 'forbidden' : 'ready'}
+      boardRef={boardRef}
+      keys={
+        opens && (
+          <p className="flex items-center gap-2 text-xs text-[#d8d2c4]">
+            <span className={KEY}>↑</span>
+            <span className={KEY}>↓</span>
+            {tLeads('keys.rows')}
+            <span className={cn(KEY, 'ml-2')}>Enter</span>
+            {tSources('keys.open')}
+          </p>
+        )
+      }
       hint={tBoard('hint')}
       links={[
         { href: '/settings/qr-campaigns', label: tBoard('openQr') },
@@ -629,6 +672,19 @@ export function OfficeBoardCampaigns({
         (qrShown || agenciesShown) && (
           <>
             {qrShown && <p>{tBoard('qr.note')}</p>}
+            {opens && (
+              <p>
+                {tBoard('qr.openHint')}
+                {closedRows && tBoard('qr.openHintClosed')}
+                {/* The other table of the board has no underline either: said, not left to guess */}
+                {agenciesShown && tBoard('qr.openHintAgencies')}
+                {/* What a row that opens is described by: one short sentence, since a screen
+                    reader says it at every row the arrows move to */}
+                <span id={openHintId} className="sr-only">
+                  {tBoard('qr.openDescription')}
+                </span>
+              </p>
+            )}
             {qrShown && breakdownReading && <p>{tBoard('qr.breakdownReading')}</p>}
             {qrShown && (breakdownState === 'error' || breakdownState === 'forbidden') && (
               <p>{tBoard('qr.breakdownUnavailable')}</p>
@@ -690,9 +746,28 @@ export function OfficeBoardCampaigns({
           </thead>
           <tbody>
             {qrRows.map((row) => (
-              <tr key={row.id}>
+              <tr key={row.id} className={ROW}>
                 <th scope="row" className={cn(CELL, FIRST, 'min-w-[7.5rem] text-left font-bold')}>
-                  {row.name}
+                  {row.newLeads > 0 ? (
+                    <button
+                      type="button"
+                      data-campaign={row.id}
+                      aria-describedby={openHintId}
+                      onClick={() => onOpenCampaign({ id: row.id, name: row.name })}
+                      className={cn(
+                        // As high as its row without making it higher: the whole height opens
+                        '-my-3 inline-flex min-h-11 items-center text-left font-bold underline decoration-[#e9cf9a]/60 underline-offset-4 hover:text-white hover:decoration-[#e9cf9a] focus-visible:bg-[#e9cf9a]/15',
+                        FOCUS
+                      )}
+                    >
+                      {row.name}
+                    </button>
+                  ) : (
+                    <>
+                      {row.name}
+                      <span className="sr-only">{tSources('closedRow')}</span>
+                    </>
+                  )}
                   {row.closed && (
                     <span className="ml-2 inline-block text-xs font-normal whitespace-nowrap text-[#d8d2c4]">
                       {tBoard('qr.closed')}

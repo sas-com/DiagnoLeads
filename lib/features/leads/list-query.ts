@@ -69,6 +69,11 @@ export interface LeadListFilters {
   mqlLevel?: MqlLevelFilter[];
   /** Missing a deal (#854); left out when not filtered */
   missingDeal?: true;
+  /**
+   * New leads of a QR campaign (#1255): the campaign's id. The leads that answers carrying the
+   * campaign's code created, as they are now
+   */
+  qrCampaign?: string;
   /** Name, email or company */
   search?: string;
 }
@@ -148,6 +153,7 @@ export const LEAD_LIST_PARAMS = {
   dealRating: 'rating',
   mqlLevel: 'level',
   missingDeal: 'nodeal',
+  qrCampaign: 'qr',
   search: 'q',
   sortBy: 'sort',
   sortOrder: 'order',
@@ -205,6 +211,8 @@ export const leadListUrlSchema = z.object({
     .optional()
     .catch(undefined)
     .transform((v) => (v === '1' ? (true as const) : undefined)),
+  // A campaign's id (#1255); anything else is dropped
+  [LEAD_LIST_PARAMS.qrCampaign]: z.string().uuid().optional().catch(undefined),
   [LEAD_LIST_PARAMS.search]: z
     .string()
     .optional()
@@ -265,6 +273,7 @@ export function parseLeadListQuery(params: SearchParamsLike): LeadListQuery {
       dealRating: p[LEAD_LIST_PARAMS.dealRating],
       mqlLevel: p[LEAD_LIST_PARAMS.mqlLevel],
       missingDeal: p[LEAD_LIST_PARAMS.missingDeal],
+      qrCampaign: p[LEAD_LIST_PARAMS.qrCampaign],
       search: p[LEAD_LIST_PARAMS.search],
     }),
     sort: {
@@ -306,6 +315,7 @@ export function serializeLeadListQuery(query: LeadListQuery): URLSearchParams {
   list(LEAD_LIST_PARAMS.dealRating, f.dealRating ?? []);
   list(LEAD_LIST_PARAMS.mqlLevel, f.mqlLevel ?? []);
   if (f.missingDeal) params.set(LEAD_LIST_PARAMS.missingDeal, '1');
+  if (f.qrCampaign) params.set(LEAD_LIST_PARAMS.qrCampaign, f.qrCampaign);
   if (f.search) params.set(LEAD_LIST_PARAMS.search, f.search);
   if (query.sort.by !== DEFAULT_LEAD_SORT.by || query.sort.order !== DEFAULT_LEAD_SORT.order) {
     params.set(LEAD_LIST_PARAMS.sortBy, query.sort.by);
@@ -357,6 +367,7 @@ export function normalizeFilters(filters: Partial<LeadListFilters>): LeadListFil
   const mqlLevel = pick(MQL_LEVEL_FILTERS, filters.mqlLevel);
   if (mqlLevel.length > 0) result.mqlLevel = mqlLevel;
   if (filters.missingDeal) result.missingDeal = true;
+  if (filters.qrCampaign) result.qrCampaign = filters.qrCampaign;
   if (search) result.search = search;
   return result;
 }
@@ -403,6 +414,7 @@ export function toLeadFilterInput(
   if (f.dealRating && f.dealRating.length > 0) input.dealRating = f.dealRating;
   if (f.mqlLevel && f.mqlLevel.length > 0) input.mqlLevel = f.mqlLevel;
   if (f.missingDeal) input.missingDeal = true;
+  if (f.qrCampaign) input.qrCampaignId = f.qrCampaign;
   if (f.search) input.search = f.search;
   return input;
 }
@@ -561,6 +573,7 @@ export type LeadFilterChip =
   | { kind: 'dealRating'; value: DealRating }
   | { kind: 'mqlLevel'; value: MqlLevelFilter }
   | { kind: 'missingDeal'; value: true }
+  | { kind: 'qrCampaign'; value: string }
   | { kind: 'search'; value: string };
 
 /** One chip per condition (one per selected value for the multi-selects) */
@@ -588,6 +601,7 @@ export function filterChips(filters: LeadListFilters): LeadFilterChip[] {
   for (const value of filters.dealRating ?? []) chips.push({ kind: 'dealRating', value });
   for (const value of filters.mqlLevel ?? []) chips.push({ kind: 'mqlLevel', value });
   if (filters.missingDeal) chips.push({ kind: 'missingDeal', value: true });
+  if (filters.qrCampaign) chips.push({ kind: 'qrCampaign', value: filters.qrCampaign });
   return chips;
 }
 
@@ -652,6 +666,9 @@ export function removeChip(filters: LeadListFilters, chip: LeadFilterChip): Lead
       break;
     case 'missingDeal':
       next.missingDeal = undefined;
+      break;
+    case 'qrCampaign':
+      next.qrCampaign = undefined;
       break;
     case 'search':
       next.search = undefined;

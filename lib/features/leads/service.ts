@@ -4,7 +4,12 @@
 import type { db as defaultDb } from '@/lib/db/client';
 import { deals, leads } from '@/lib/db/schema';
 import { and, count, eq, inArray, sql } from 'drizzle-orm';
-import { leadIsInterested, leadRequestedConsultation, listMqlLevel } from './api/list-sql';
+import {
+  leadIsInterested,
+  leadRequestedConsultation,
+  listMqlLevel,
+  qrCampaignAnswer,
+} from './api/list-sql';
 import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from './types/schemas';
 
 /**
@@ -15,8 +20,11 @@ import { MQL_LEVEL_FILTERS, type MqlLevelFilter } from './types/schemas';
  *   'interest'; NULL without a diagnosis summary)
  * - leadIsInterested: that level is 関心あり (MQL)
  * - leadRequestedConsultation: the list's 相談申込 filter
+ * - qrCampaignAnswer: which answers count for a QR campaign, over the aliases `qra`
+ *   (diagnostic_submissions) and `qrc` (qr_campaigns): the campaigns' breakdown and the list's
+ *   filter by a campaign (#1255) join the two with it
  */
-export { leadIsInterested, leadRequestedConsultation, listMqlLevel };
+export { leadIsInterested, leadRequestedConsultation, listMqlLevel, qrCampaignAnswer };
 
 // A deal moves its lead forward and assigns it like the lead page does (#435); the forecast and
 // the targets name and check the same members (#437)

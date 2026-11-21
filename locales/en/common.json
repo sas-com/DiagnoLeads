@@ -4794,6 +4794,7 @@
     "mql": "MQL",
     "sqlQualified": "SQL (qualified)",
     "missingDeal": "Missing a deal",
+    "qrCampaign": "New leads of a QR campaign",
     "selectedCount": "{count} selected",
     "apply": "Apply",
     "clear": "Clear",

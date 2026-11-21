@@ -8,6 +8,7 @@ import {
   UNSET_SOURCE,
   LEAD_COUNT_VIEWS,
   boardAnalyticsHref,
+  campaignLeadFilters,
   figureState,
   isLeadBoardView,
   isLeadCountView,
@@ -409,5 +410,21 @@ describe('the links of the boards to the analytics page (#1216)', () => {
     for (const board of MARKETING_FIGURE_BOARDS) {
       expect(boardAnalyticsHref(board)).toContain(`range=${MARKETING_RANGE}`);
     }
+  });
+});
+
+describe('the prospects of a QR campaign (#1255)', () => {
+  const CAMPAIGN = 'c0000000-0000-4000-8000-000000000001';
+
+  it('asks the lead list for the campaign only: no period, no other condition', () => {
+    const input = leadBoardInputFor(campaignLeadFilters(CAMPAIGN), 1, ORG_ID);
+    expect(listLeadsSchema.parse(input)).toMatchObject({
+      organizationId: ORG_ID,
+      qrCampaignId: CAMPAIGN,
+      offset: 0,
+    });
+    expect(input.createdFromDay).toBeUndefined();
+    expect(input.inflowSource).toBeUndefined();
+    expect(input.status).toBeUndefined();
   });
 });
