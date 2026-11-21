@@ -909,6 +909,20 @@ describe('the counter of the reception (#1196)', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('closes the field of the revoking once the invitations are refused, says why and keeps the focus (#1300)', async () => {
+    const { user, office, refresh } = await enterCounter();
+    await user.keyboard('2');
+    await user.keyboard('1');
+    expect(within(office).getByRole('textbox')).toHaveFocus();
+    mocks.invitationsStale = { data: [invitation(1)], code: 'FORBIDDEN' };
+    refresh();
+    const said = await within(office).findByText(
+      '招待を見る権限がなくなったので、取り消しの欄を閉じました。'
+    );
+    expect(within(office).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(said).toHaveFocus();
+  });
+
   it('keeps the invitations read before when reading them again fails offline, and says so (#1300)', async () => {
     mocks.invitationsStale = { data: [invitation(1)], code: 'INTERNAL' };
     const { user, office } = await enterCounter();

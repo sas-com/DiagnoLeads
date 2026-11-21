@@ -717,7 +717,8 @@
               "done": "The invitation to {email} was revoked.",
               "gone": "That invitation was already revoked, or the person has joined. The list was read again.",
               "failed": "Sorry, it could not be revoked. Please check your connection and try again.",
-              "saving": "Revoking."
+              "saving": "Revoking.",
+              "hidden": "You can no longer see the invitations, so the field to revoke one was closed."
             },
             "readOnlyMember": "This shelf is read only. Admins and owners invite and change roles.",
             "stale": " The latest could not be read; this is what was read before."

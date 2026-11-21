@@ -124,7 +124,7 @@ export function OfficeRoomMembers({
   const [typed, setTyped] = useState('');
   const [refused, setRefused] = useState(false);
   const [outcome, setOutcome] = useState<
-    { kind: 'done'; email: string } | { kind: 'gone' | 'failed' } | null
+    { kind: 'done'; email: string } | { kind: 'gone' | 'failed' | 'hidden' } | null
   >(null);
   const revoke = trpc.members.revokeInvitation.useMutation({
     // Read again whatever came of it, and even when the shelf was left meanwhile: the counter
@@ -155,10 +155,15 @@ export function OfficeRoomMembers({
     setTyped('');
     setRefused(false);
   };
-  // The field closes once revoking is no longer offered (the invitations became hidden meanwhile)
+  // The field closes once revoking is no longer offered (the invitations became hidden meanwhile),
+  // says why, and hands the focus to that sentence instead of letting it fall with the field
+  // biome-ignore lint/correctness/useExhaustiveDependencies: close and focusResult only set state
   useEffect(() => {
-    if (revoking && !mayRevoke && !busy) close();
-  });
+    if (!revoking || mayRevoke || busy) return;
+    close();
+    setOutcome({ kind: 'hidden' });
+    focusResult();
+  }, [revoking, mayRevoke, busy]);
   const open = () => {
     if (!canOpen) return;
     setOutcome(null);

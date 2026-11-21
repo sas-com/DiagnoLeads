@@ -167,7 +167,12 @@ export function OfficeRoomDue({
     utils.leadFollowUp.dueTasks.reset({ organizationId, scope: 'mine', limit: DUE_TASKS_MAX })
   );
   useEffect(() => {
-    if (forbidden) setQueue(null);
+    if (!forbidden) return;
+    setQueue(null);
+    // The answers go with the queue: a focus on one of them would fall to the page
+    if (document.activeElement === document.body || !document.activeElement?.isConnected) {
+      resultRef.current?.focus();
+    }
   }, [forbidden]);
   const canEdit = loaded?.canEdit === true;
   const today = loaded?.today ?? '';
@@ -248,7 +253,9 @@ export function OfficeRoomDue({
                         ? tDue('report', { total: count, index: 1 })
                         : tDue('reportNext', { total: count, index: index + 1 });
   // Shown, but not as new: reading it again failed for want of the network
-  const reportShown = queue && queryStale(due) ? report + tDue('stale') : report;
+  // Said only with the figures: after an answer, it would make the answer sound doubtful
+  const reportShown =
+    queue && queryStale(due) && !outcome && !update.isPending ? report + tDue('stale') : report;
   const more = loaded ? loaded.total - loaded.items.length : 0;
   // The answer the room expects next: filled
   const mainAction: DueAction | null = dueActionOpen('done', { ...state, busy: false })
