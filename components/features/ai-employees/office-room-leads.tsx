@@ -24,6 +24,7 @@ import {
   MARKETING_RANGE_DAYS,
   type MarketingChoice,
   UNSET_SOURCE,
+  campaignLeadFilters,
   figureState,
   isLeadBoardView,
   isLeadCountView,
@@ -103,6 +104,10 @@ export function OfficeRoomLeads({
   // (#1202), and the row to go back to
   const [source, setSource] = useState<InflowSource | null>(null);
   const lastSource = useRef<string | null>(null);
+  // The QR campaign whose new prospects are on the lead board, opened from its row of the
+  // campaign board (#1255), and the row to go back to
+  const [campaign, setCampaign] = useState<{ id: string; name: string } | null>(null);
+  const lastCampaign = useRef<string | null>(null);
   const reportRef = useRef<HTMLDivElement>(null);
   // "This week" is fixed when the room opens, so the queries keep their keys
   const [now] = useState(() => new Date());
@@ -142,6 +147,8 @@ export function OfficeRoomLeads({
     setChoice(next);
     setSource(null);
     lastSource.current = null;
+    setCampaign(null);
+    lastCampaign.current = null;
     setPage(1);
     setTurned(false);
   };
@@ -154,10 +161,20 @@ export function OfficeRoomLeads({
     setTurned(false);
   };
   const closeSource = () => setSource(null);
+  const openCampaign = (next: { id: string; name: string }) => {
+    lastCampaign.current = next.id;
+    reportRef.current?.focus();
+    // Read anew, like a view of the lead board: what was read before is kept for a while
+    void utils.leads.list.invalidate();
+    setCampaign(next);
+    setPage(1);
+    setTurned(false);
+  };
+  const closeCampaign = () => setCampaign(null);
 
-  // Something is open inside the room (a file, or the prospects of a source): Esc closes it
-  // first, so the office does not show its Esc on the way to the floor
-  const somethingOpen = open !== null || source !== null;
+  // Something is open inside the room (a file, or the prospects of a source or of a campaign):
+  // Esc closes it first, so the office does not show its Esc on the way to the floor
+  const somethingOpen = open !== null || source !== null || campaign !== null;
   useEffect(() => {
     onFileOpenChange(somethingOpen);
     return () => onFileOpenChange(false);
@@ -166,7 +183,7 @@ export function OfficeRoomLeads({
   // The room's keys: numbers choose the board; the other keys are the board's (the lead board
   // moves over its rows and pages, the source board over its rows). While a file is open, the
   // keys are the file's, and Esc closes it instead of leaving the room; while the prospects of a
-  // source are on the wall, Esc goes back to the source board.
+  // source or of a campaign are on the wall, Esc goes back to the board they were opened from.
   useRoomKeys(keysRef, (event) => {
     // A key of a Japanese conversion (IME) is never an answer: it belongs to what is being typed
     if (isImeKey(event)) return false;
@@ -178,8 +195,9 @@ export function OfficeRoomLeads({
       setOpen(null);
       return true;
     }
-    if (source && event.key === 'Escape') {
+    if ((source || campaign) && event.key === 'Escape') {
       closeSource();
+      closeCampaign();
       return true;
     }
     const chosen = marketingChoiceOfKey(event.key);
@@ -221,9 +239,21 @@ export function OfficeRoomLeads({
   const days = MARKETING_RANGE_DAYS;
   const sourceLabel = (name: string) =>
     name === UNSET_SOURCE ? tRoom('sources.unset') : tInflow.has(name) ? tInflow(name) : name;
+  // The lead board one step inside a board of figures: what it shows, and the way back
   const sourceBoardLabel = source
     ? tRoom('sources.leadsOf', { source: sourceLabel(source), days })
-    : null;
+    : campaign
+      ? tRoom('campaigns.qr.leadsOf', { campaign: campaign.name })
+      : null;
+  const inside = source
+    ? { filters: sourceLeadFilters(source, now), back: tRoom('sources.back'), close: closeSource }
+    : campaign
+      ? {
+          filters: campaignLeadFilters(campaign.id),
+          back: tRoom('campaigns.qr.back'),
+          close: closeCampaign,
+        }
+      : null;
   const boardName = sourceBoardLabel
     ? tRoom('boardOf', { board: t('leads.board'), what: sourceBoardLabel })
     : isLeadBoardView(choice)
@@ -343,18 +373,16 @@ export function OfficeRoomLeads({
       </div>
 
       {/* The wall board of the room */}
-      {source || isLeadBoardView(choice) ? (
+      {inside || isLeadBoardView(choice) ? (
         <OfficeBoardLeads
           organizationId={organizationId}
           filters={
-            source
-              ? sourceLeadFilters(source, now)
-              : leadBoardFilters(isLeadBoardView(choice) ? choice : 'all', now)
+            inside?.filters ?? leadBoardFilters(isLeadBoardView(choice) ? choice : 'all', now)
           }
           label={sourceBoardLabel ?? t(`leads.views.${isLeadBoardView(choice) ? choice : 'all'}`)}
           page={page}
           keepRows={turned}
-          back={source ? { label: tRoom('sources.back'), onBack: closeSource } : undefined}
+          back={inside ? { label: inside.back, onBack: inside.close } : undefined}
           keysRef={boardKeys}
           focusLeadRef={lastOpened}
           onTurn={(next) => {
@@ -385,6 +413,9 @@ export function OfficeRoomLeads({
           breakdownState={figureState(breakdowns)}
           agencyState={figureState(agencies)}
           agencies={agencies.data}
+          keysRef={boardKeys}
+          focusCampaignRef={lastCampaign}
+          onOpenCampaign={openCampaign}
           onLeave={onOpenLead}
         />
       )}

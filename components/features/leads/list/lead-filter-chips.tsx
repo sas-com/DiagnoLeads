@@ -88,6 +88,8 @@ export function useFilterChipLabel(): (chip: LeadFilterChip) => string {
           });
         case 'missingDeal':
           return t('missingDeal');
+        case 'qrCampaign':
+          return t('qrCampaign');
       }
     },
     [t, tStatus, tPipeline, assigneeLabel]

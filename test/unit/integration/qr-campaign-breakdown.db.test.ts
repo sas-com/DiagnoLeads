@@ -381,4 +381,94 @@ describe.skipIf(!url)('QR campaign breakdown (PostgreSQL)', () => {
       consultationNewLeads: 0,
     });
   });
+
+  // The lead list filtered by a campaign (#1255): the leads the breakdown counts as new, by the
+  // same rule (qrCampaignAnswer), as they are now. Read through leads.list, as the screens do
+  describe('the lead list of a campaign (#1255)', () => {
+    const listed = async (caller: Caller, organizationId: string, filters: object = {}) =>
+      caller.leads.list({ organizationId, limit: 100, ...filters });
+
+    it("lists the campaign's new leads, and as many of them as the breakdown counts", async () => {
+      const rows = await callerOfA.analytics.getQrCampaignBreakdown({ organizationId: orgA });
+      const counted = breakdownOf(rows, fair.id);
+      // The four leads the fair's answers created. Not listed: the lead that was there before
+      // (re-answers), the test answer's, the one from before the campaign, the other code's
+      // (another case), the one whose answer has no code, and B's
+      const all = await listed(callerOfA, orgA, { qrCampaignId: fair.id });
+      expect(all.total).toBe(4);
+      expect(all.items).toHaveLength(4);
+      for (const item of all.items) expect(item.organizationId).toBe(orgA);
+      // With the list's own filters on top, the counts are the breakdown's
+      const consulted = await listed(callerOfA, orgA, {
+        qrCampaignId: fair.id,
+        consultationRequested: true,
+      });
+      expect(consulted.total).toBe(counted?.consultationNewLeads);
+      const interested = await listed(callerOfA, orgA, {
+        qrCampaignId: fair.id,
+        mqlLevel: ['interest'],
+      });
+      expect(interested.total).toBe(counted?.interestedNewLeads);
+    });
+
+    it('lists nothing for a campaign no answer of the organization created a lead for', async () => {
+      // quiet: its only answer is linked to B's lead, which is not A's to list
+      expect((await listed(callerOfA, orgA, { qrCampaignId: quiet.id })).total).toBe(0);
+    });
+
+    it("lists nothing for another organization's campaign, without an error", async () => {
+      // A asks with B's campaign: A's answer carries B's code, and B's leads are B's
+      const ofA = await listed(callerOfA, orgA, { qrCampaignId: partner.id });
+      expect(ofA).toMatchObject({ total: 0, items: [] });
+      // B asks with A's campaign: B has a lead that answered with A's code
+      const callerOfB = await memberCaller(orgB);
+      const ofB = await listed(callerOfB, orgB, { qrCampaignId: fair.id });
+      expect(ofB).toMatchObject({ total: 0, items: [] });
+      // B's own campaign lists B's one new lead
+      expect((await listed(callerOfB, orgB, { qrCampaignId: partner.id })).total).toBe(1);
+    });
+
+    it('lists nothing for an id no campaign has', async () => {
+      const none = await listed(callerOfA, orgA, {
+        qrCampaignId: '00000000-0000-4000-8000-000000000000',
+      });
+      expect(none.total).toBe(0);
+    });
+
+    it('does not narrow the list without the filter', async () => {
+      const everything = await listed(callerOfA, orgA);
+      expect(everything.total).toBeGreaterThan(4);
+    });
+
+    it('lists as many as the campaign row counted while no lead was deleted, and fewer after', async () => {
+      const campaign = await createCampaign(orgA);
+      const input = (email: string): AxMigrationSubmissionInput => ({
+        answers: as400Answers,
+        contact: { company: '架空製作所', name: '試験 花子', email },
+        privacyConsent: true,
+        consultationRequested: false,
+        tracking: { utmSource: 'qrcode', utmMedium: 'offline', qr: campaign.code },
+        locale: 'ja',
+      });
+      // Two people answer through the diagnosis, as the campaign counts them
+      const first = await submitAxMigrationDiagnosis(pg, orgA, input(`qrl-${unique()}@example.co.jp`), AFTER);
+      const second = await submitAxMigrationDiagnosis(pg, orgA, input(`qrl-${unique()}@example.co.jp`), AFTER);
+      expect([first.ok && first.leadCreated, second.ok && second.leadCreated]).toEqual([true, true]);
+      const completionCount = async () =>
+        (
+          await pg
+            .select({ completionCount: qrCampaigns.completionCount })
+            .from(qrCampaigns)
+            .where(eq(qrCampaigns.id, campaign.id))
+        )[0].completionCount;
+      const list = await listed(callerOfA, orgA, { qrCampaignId: campaign.id });
+      expect(await completionCount()).toBe(2);
+      expect(list.total).toBe(2);
+
+      // One of the two leads is deleted: the row's count stays, the list shows who is there
+      await pg.delete(leads).where(eq(leads.id, list.items[0].id));
+      expect(await completionCount()).toBe(2);
+      expect((await listed(callerOfA, orgA, { qrCampaignId: campaign.id })).total).toBe(1);
+    });
+  });
 });

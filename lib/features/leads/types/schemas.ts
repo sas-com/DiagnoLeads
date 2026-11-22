@@ -251,6 +251,9 @@ export const listLeadsSchema = z.object({
   // Missing a deal (#854, leadMissingDeal): true lists only those leads, false
   // filters nothing. Refused (FORBIDDEN) to those who may not read deals
   missingDeal: z.boolean().optional(),
+  // New leads of a QR campaign of the organization (#1255): the leads that answers carrying the
+  // campaign's code created. A campaign of another organization lists nothing
+  qrCampaignId: z.string().uuid().optional(),
   // Tag filter
   tagIds: z.array(z.string().uuid()).max(LEAD_FILTER_MAX_VALUES).optional(),
 });

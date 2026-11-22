@@ -2,6 +2,7 @@
 
 import { isImeKey } from '@/components/ui/ime';
 import { type RouterOutputs, trpc } from '@/lib/trpc/client';
+import { isRequestTimeout } from '@/lib/trpc/request-timeout';
 import { cn } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useFormatter, useLocale, useTranslations } from 'next-intl';
@@ -35,9 +36,19 @@ export const LEAD_STATUS_COLORS: Record<string, string> = {
 
 type Outcome =
   // undoFailed: the undo did not go through, so the record is still there and can be undone again
-  | { kind: 'recorded'; contact: FileContactChoice; id: string; undoFailed?: boolean }
+  // undoUnanswered: no answer came to the undo within the time limit (#1254); the record is kept
+  // in hand until the records, read again, show whether it is still there
+  | {
+      kind: 'recorded';
+      contact: FileContactChoice;
+      id: string;
+      undoFailed?: boolean;
+      undoUnanswered?: boolean;
+    }
   | { kind: 'undone' }
-  | { kind: 'failed' };
+  | { kind: 'failed' }
+  // No answer came within the time limit (#1254): whether it was saved is not known
+  | { kind: 'unanswered' };
 
 /**
  * A customer file opened inside a room of the full-screen office (#1128): the lead, its contact
@@ -87,8 +98,10 @@ export function OfficeLeadFile({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const contacts = trpc.leadFollowUp.contacts.useQuery({ organizationId, leadId: lead.id });
-  const refresh = () => {
+  const rereadContacts = () =>
     void utils.leadFollowUp.contacts.invalidate({ organizationId, leadId: lead.id });
+  const refresh = () => {
+    rereadContacts();
     void utils.leadActivity.list.invalidate();
     void utils.leadActivity.forDeal.invalidate();
     void utils.leadActivity.myDay.invalidate({ organizationId });
@@ -99,18 +112,36 @@ export function OfficeLeadFile({
       setOutcome({ kind: 'recorded', contact: input.kind as FileContactChoice, id: saved.id });
       refresh();
     },
-    onError: () => setOutcome({ kind: 'failed' }),
+    // Without an answer the server may still have saved the record: it is not offered as
+    // "try again", and what shows contacts is read again so the record shows where it is (#1254)
+    onError: (error) => {
+      if (isRequestTimeout(error)) {
+        setOutcome({ kind: 'unanswered' });
+        refresh();
+      } else {
+        setOutcome({ kind: 'failed' });
+        rereadContacts();
+      }
+    },
   });
   const remove = trpc.leadFollowUp.deleteContact.useMutation({
     onSuccess: () => {
       setOutcome({ kind: 'undone' });
       refresh();
     },
-    // The record is still there: keep it in hand, so the undo can be asked for again
-    onError: () =>
+    // The record is still there: keep it in hand, so the undo can be asked for again. Without an
+    // answer it may be gone already: it stays in hand too, and the records are read again; once
+    // they show it gone, the undo is done (below), and while it is there it can be undone again
+    onError: (error) => {
+      const unanswered = isRequestTimeout(error);
       setOutcome((current) =>
-        current?.kind === 'recorded' ? { ...current, undoFailed: true } : { kind: 'failed' }
-      ),
+        current?.kind === 'recorded'
+          ? { ...current, undoFailed: !unanswered, undoUnanswered: unanswered }
+          : { kind: 'failed' }
+      );
+      if (unanswered) refresh();
+      else rereadContacts();
+    },
   });
   const busy = record.isPending || remove.isPending;
   // The office closes its own way to the floor meanwhile, like the file closes Esc (#1205)
@@ -118,6 +149,17 @@ export function OfficeLeadFile({
     onBusyChange?.(busy);
     return () => onBusyChange?.(false);
   }, [busy, onBusyChange]);
+  // An undo that got no answer was carried out after all: the records, read again, no longer
+  // hold the record
+  const undoneUnanswered =
+    outcome?.kind === 'recorded' &&
+    outcome.undoUnanswered === true &&
+    contacts.data !== undefined &&
+    !contacts.isFetching &&
+    !contacts.data.recent.some((contact) => contact.id === outcome.id);
+  useEffect(() => {
+    if (undoneUnanswered) setOutcome({ kind: 'undone' });
+  }, [undoneUnanswered]);
   const canEdit = contacts.data?.canEdit === true;
   const recorded = outcome?.kind === 'recorded';
   const state = { canEdit, recorded, busy };
@@ -175,24 +217,28 @@ export function OfficeLeadFile({
   const latest = contacts.data?.recent[0];
   const settled =
     outcome?.kind === 'recorded'
-      ? outcome.undoFailed
-        ? t('undoFailed')
-        : t('recorded', { kind: tKinds(outcome.contact) })
+      ? outcome.undoUnanswered
+        ? t('undoUnanswered')
+        : outcome.undoFailed
+          ? t('undoFailed')
+          : t('recorded', { kind: tKinds(outcome.contact) })
       : outcome?.kind === 'undone'
         ? t('undone')
-        : outcome?.kind === 'failed'
-          ? t('failed')
-          : contacts.isError
-            ? t('readError')
-            : !contacts.data
-              ? t('reading')
-              : latest
-                ? t('latest', {
-                    date: moment(latest.contactedAt),
-                    kind: tKinds(latest.kind),
-                    total: contacts.data.total,
-                  })
-                : t('noContact');
+        : outcome?.kind === 'unanswered'
+          ? t('unanswered')
+          : outcome?.kind === 'failed'
+            ? t('failed')
+            : contacts.isError
+              ? t('readError')
+              : !contacts.data
+                ? t('reading')
+                : latest
+                  ? t('latest', {
+                      date: moment(latest.contactedAt),
+                      kind: tKinds(latest.kind),
+                      total: contacts.data.total,
+                    })
+                  : t('noContact');
   // While a request is out, the report says so: Esc and the way back do nothing until its
   // answer is there, and the president is told why (#1227)
   const report = record.isPending ? t('saving') : remove.isPending ? t('undoing') : settled;

@@ -154,6 +154,17 @@ describe('LeadFilterToolbar', () => {
     expect(chips.getByText('相談申込あり')).toBeInTheDocument();
   });
 
+  it('shows the filter by a QR campaign as a chip that can be removed (#1255)', async () => {
+    const user = userEvent.setup();
+    const campaign = 'c0000000-0000-4000-8000-000000000001';
+    renderAt(`qr=${campaign}&consult=1`);
+    expect(within(chipGroup()).getByText('QR キャンペーンの新しいリード')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('button', { name: '条件「QR キャンペーンの新しいリード」を外す' })
+    );
+    expect(lastHref()).toBe('/ja/leads?consult=1');
+  });
+
   it('clears all filters but keeps the sort and other params', async () => {
     const user = userEvent.setup();
     renderAt('leadId=abc&status=new&scoreMin=40&q=山田&sort=name&order=asc');
