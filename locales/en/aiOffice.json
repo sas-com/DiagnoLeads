@@ -941,7 +941,9 @@
             "confirmCopy": "Copy again (confirm)",
             "cancelCopy": "Do not copy",
             "saveTraining": "Save",
-            "saveTemplate": "Save the template"
+            "saveTemplate": "Save the template",
+            "applyUpdate": "Bring in",
+            "applyWithRefresher": "Bring in and refresh"
           },
           "errors": {
             "not_found": "Not found. Please enter the room again.",
@@ -957,7 +959,9 @@
             "self_review_running": "Please decide once the self-review is in.",
             "invalid_note": "This note cannot be saved (no contact details or key-like text).",
             "generic": "That did not work. Please wait a moment and try again.",
-            "personal_data": "Contact details (e-mail addresses, telephone numbers) and key-like text cannot be written. Write about the role and the work only."
+            "personal_data": "Contact details (e-mail addresses, telephone numbers) and key-like text cannot be written. Write about the role and the work only.",
+            "not_copied": "This employee's training has not been copied yet.",
+            "changed_meanwhile": "The template or this employee's training changed meanwhile. The screen was read again."
           },
           "curriculum": {
             "about": "The training has two parts, the common training (the company and its services) and the role training (the purpose, the scope and the tasks of the role), and each AI employee has its own. The onboarding reads this employee's training.",
@@ -970,7 +974,36 @@
             "templateOf": "Template of the {title}",
             "ownOf": "{name}'s {title}",
             "confirmCopy": "{name}'s {title} will be replaced by the current template. What was changed for this employee only will be lost. Are you sure?",
-            "templateNote": "Saving a template raises its version and is used for the employees it is copied to from now on. For employees who already have a copy, use \"Copy the template again\"."
+            "templateNote": "Saving a template raises its version, used for the employees copied from now on. Employees already copied get a notice of the update and can bring it in section by section.",
+            "update": {
+              "title": "Template update (version {from} → version {to})",
+              "about": "The sections the template changed. Choose the sections to replace, then bring the update in. Sections edited for this employee are kept by default.",
+              "none": "The changes are already in this employee's training. Bringing the update in marks it as version {to}.",
+              "unedited": "Not edited for this employee",
+              "edited": "Edited for this employee (replacing it loses that edit)",
+              "unknown": "Not known whether it was edited for this employee (the older version was not kept)",
+              "own": "This employee's text now",
+              "latest": "The template's new text",
+              "replace": "Replace with the template's text",
+              "refresherHint": "With \"Bring in and refresh\", the AI employee then reads what changed and updates its notes."
+            },
+            "refresher": {
+              "title": "Refresher",
+              "running": "{name} is reading what changed in its training and updating its notes.",
+              "done": "{name} finished its refresher ({date}).",
+              "failed": "The last refresher stopped. The update of the training stays in.",
+              "summary": "What changed (in the AI employee's words)",
+              "notesChanged": "Notes updated",
+              "outcome": {
+                "started": "Brought in. The refresher starts.",
+                "not_asked": "Brought in.",
+                "unchanged": "Brought in. No section was replaced, so there is no refresher.",
+                "agent_disabled": "Brought in. The refresher did not start: the system is not ready yet.",
+                "in_training": "Brought in. Before the onboarding there is no refresher: the onboarding reads the new training.",
+                "paused": "Brought in. The refresher did not start: the employee is paused.",
+                "open_session": "Brought in. The refresher did not start: another training is in progress."
+              }
+            }
           }
         }
       },

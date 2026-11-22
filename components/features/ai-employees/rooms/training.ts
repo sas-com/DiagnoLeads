@@ -36,7 +36,10 @@ export interface TrainingSessionView {
 export interface TrainingEmployeeView {
   status: 'active' | 'paused';
   level: AiEmployeeLevel;
+  /** The latest onboarding or review session */
   session: TrainingSessionView | null;
+  /** The latest refresher (#1281), apart from the onboarding and the reviews */
+  refresher?: TrainingSessionView | null;
   review: { status: 'open' | 'decided'; sessionId: string | null } | null;
   nextReviewAt: Date | string | null;
 }
@@ -98,8 +101,10 @@ export function reviewStep(
   if (!agentEnabled) return 'disabled';
   if (employee.status === 'paused') return 'paused';
   const due = employee.nextReviewAt ? new Date(employee.nextReviewAt) : null;
-  if (employee.session && ['running', 'waiting'].includes(employee.session.status))
+  // One open session per employee: a refresher running holds the review back too
+  if ([employee.session, employee.refresher].some((open) => open && isOpen(open.status))) {
     return 'not_due';
+  }
   return due && due.getTime() <= now.getTime() ? 'due' : 'not_due';
 }
 
@@ -107,7 +112,26 @@ export function reviewStep(
 export function runningSession(employee: TrainingEmployeeView): string | null {
   // A paused employee does not work: its session waits until it is resumed
   if (employee.status === 'paused') return null;
-  return employee.session?.status === 'running' ? employee.session.id : null;
+  if (employee.session?.status === 'running') return employee.session.id;
+  return employee.refresher?.status === 'running' ? employee.refresher.id : null;
+}
+
+const isOpen = (status: AiEmployeeSessionStatus) => status === 'running' || status === 'waiting';
+
+/**
+ * Where an employee stands with an update of its training (#1281):
+ * - running: the employee reads the change and fixes its notes
+ * - done: the latest refresher is over (its report is shown)
+ * - failed: it stopped (cancelled, refused, ...); the update itself stays
+ * - none: no refresher yet
+ */
+export type RefresherStep = 'none' | 'running' | 'done' | 'failed';
+
+export function refresherStep(employee: TrainingEmployeeView): RefresherStep {
+  const refresher = employee.refresher;
+  if (!refresher) return 'none';
+  if (refresher.status === 'running') return 'running';
+  return refresher.status === 'succeeded' ? 'done' : 'failed';
 }
 
 /** What a step answered */

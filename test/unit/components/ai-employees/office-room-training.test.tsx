@@ -24,12 +24,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/trpc/client', () => {
   const mutation =
-    (name: string) =>
-    (options: { onSettled?: () => void } = {}) => ({
+    (name: string, result?: unknown) =>
+    (options: { onSettled?: () => void; onSuccess?: (value: unknown) => void } = {}) => ({
       isPending: false,
       mutate: (input: unknown, local: { onSuccess?: () => void; onSettled?: () => void } = {}) => {
         mocks.calls.push({ name, input });
         local.onSuccess?.();
+        if (result !== undefined) options.onSuccess?.(result);
         local.onSettled?.();
         options.onSettled?.();
       },
@@ -68,6 +69,14 @@ vi.mock('@/lib/trpc/client', () => {
         saveTemplate: { useMutation: mutation('saveTemplate') },
         saveTraining: { useMutation: mutation('saveTraining') },
         copyTemplate: { useMutation: mutation('copyTemplate') },
+        applyTemplateUpdate: {
+          useMutation: mutation('applyTemplateUpdate', {
+            templateVersion: 3,
+            replaced: ['company'],
+            refresher: 'started',
+            sessionId: 'refresher-1',
+          }),
+        },
       },
     },
   };
@@ -358,6 +367,7 @@ describe('OfficeRoomTraining', () => {
           common: { kind: 'common', sections: common, templateVersion: 2, updatedAt: new Date() },
         },
       },
+      updates: {},
     };
     const { press } = renderRoom([employee()]);
     press('1');
@@ -424,6 +434,7 @@ describe('OfficeRoomTraining', () => {
         sales: { scope: 'sales', sections: empty, version: 0, updatedAt: null },
       },
       employees: {},
+      updates: {},
     };
     const { press } = renderRoom([
       employee(),
@@ -441,5 +452,193 @@ describe('OfficeRoomTraining', () => {
     const { press } = renderRoom([employee()], { canManage: false });
     press('1');
     expect(screen.getByText('研修の中身は、AI社員を管理できる人だけが読めます。')).toBeInTheDocument();
+  });
+
+  it('tells of a newer template, lets the president choose the sections, and brings it in with a refresher (#1281)', async () => {
+    const user = userEvent.setup();
+    const id = '770e8400-e29b-41d4-a716-446655440001';
+    const own = {
+      company: '古い会社の説明',
+      services: 'この社員向けのサービスの説明',
+      customers: '',
+      values: '',
+      donts: '',
+    };
+    const latest = { ...own, company: '新しい会社の説明', services: '新しいサービスの説明' };
+    mocks.curriculum = {
+      templates: {
+        common: { scope: 'common', sections: latest, version: 3, updatedAt: null },
+        marketer: {
+          scope: 'marketer',
+          sections: { purpose: '', scope: '', tasks: '', handoffs: '', measures: '' },
+          version: 0,
+          updatedAt: null,
+        },
+      },
+      employees: {
+        [id]: { common: { kind: 'common', sections: own, templateVersion: 2, updatedAt: new Date() } },
+      },
+      updates: {
+        [id]: {
+          common: {
+            fromVersion: 2,
+            toVersion: 3,
+            changes: [
+              { section: 'company', base: '古い会社の説明', latest: '新しい会社の説明', own: '古い会社の説明', edited: false },
+              { section: 'services', base: '前のサービスの説明', latest: '新しいサービスの説明', own: 'この社員向けのサービスの説明', edited: true },
+            ],
+          },
+        },
+      },
+    };
+    const { press } = renderRoom([
+      employee({ level: 1, onboardedAt: new Date('2026-11-05T00:00:00Z') }),
+    ]);
+    press('1');
+    expect(screen.getByRole('heading', { name: 'テンプレートの更新（版 2 → 版 3）' })).toBeInTheDocument();
+    expect(screen.getByText('新しい会社の説明')).toBeInTheDocument();
+    expect(screen.getByText(/この社員向けに直しています/)).toBeInTheDocument();
+    // By default: the unedited section is replaced, the edited one is kept
+    const boxes = screen.getAllByRole('checkbox', { name: 'テンプレートの文に置き換える' });
+    expect(boxes.map((box) => (box as HTMLInputElement).checked)).toEqual([true, false]);
+    await user.click(boxes[1] as HTMLElement);
+    await user.click(screen.getByRole('button', { name: '取り込んで再研修する' }));
+    expect(mocks.calls).toEqual([
+      {
+        name: 'applyTemplateUpdate',
+        input: {
+          organizationId: ORG_ID,
+          employeeId: id,
+          kind: 'common',
+          fromVersion: 2,
+          toVersion: 3,
+          replace: ['company', 'services'],
+          refresher: true,
+          locale: 'ja',
+        },
+      },
+    ]);
+    expect(screen.getByText('取り込みました。再研修を始めます。')).toBeInTheDocument();
+  });
+
+  it('offers no refresher before the onboarding, and shows how the last refresher went (#1281)', async () => {
+    const user = userEvent.setup();
+    const id = '770e8400-e29b-41d4-a716-446655440001';
+    const sections = { company: 'a', services: '', customers: '', values: '', donts: '' };
+    mocks.curriculum = {
+      templates: {
+        common: { scope: 'common', sections: { ...sections, company: 'b' }, version: 2, updatedAt: null },
+        marketer: {
+          scope: 'marketer',
+          sections: { purpose: '', scope: '', tasks: '', handoffs: '', measures: '' },
+          version: 0,
+          updatedAt: null,
+        },
+      },
+      employees: { [id]: { common: { kind: 'common', sections, templateVersion: 1, updatedAt: new Date() } } },
+      updates: {
+        [id]: {
+          common: {
+            fromVersion: 1,
+            toVersion: 2,
+            changes: [{ section: 'company', base: null, latest: 'b', own: 'a', edited: null }],
+          },
+        },
+      },
+    };
+    const { press } = renderRoom([employee()]);
+    press('1');
+    expect(screen.getByText(/直したかどうか分かりません/)).toBeInTheDocument();
+    // Not known whether it was edited: kept unless the president says otherwise
+    expect(screen.getByRole('checkbox', { name: 'テンプレートの文に置き換える' })).not.toBeChecked();
+    expect(screen.queryByRole('button', { name: '取り込んで再研修する' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '取り込む' }));
+    expect(mocks.calls[0]?.input).toMatchObject({ replace: [], refresher: false });
+  });
+
+  it('shows a refresher running with a way to stop it, and its report once over (#1281)', async () => {
+    const user = userEvent.setup();
+    mocks.curriculum = {
+      templates: {
+        common: {
+          scope: 'common',
+          sections: { company: '', services: '', customers: '', values: '', donts: '' },
+          version: 0,
+          updatedAt: null,
+        },
+        marketer: {
+          scope: 'marketer',
+          sections: { purpose: '', scope: '', tasks: '', handoffs: '', measures: '' },
+          version: 0,
+          updatedAt: null,
+        },
+      },
+      employees: {},
+      updates: {},
+    };
+    const refresher = (over: Record<string, unknown>) => ({
+      id: 'refresher-1',
+      kind: 'refresher',
+      status: 'running',
+      report: null,
+      resultCode: null,
+      steps: 1,
+      createdAt: new Date('2026-11-20T00:00:00Z'),
+      updatedAt: new Date('2026-11-20T00:00:00Z'),
+      ...over,
+    });
+    mocks.advance.mockResolvedValue({ state: 'running' });
+    const { press } = renderRoom([employee({ level: 1, refresher: refresher({}) })]);
+    press('1');
+    expect(screen.getByText(/が研修の変わった所を読み、記憶ノートを直しています。/)).toBeInTheDocument();
+    // The room moves the refresher on like the other sessions
+    await waitFor(() =>
+      expect(mocks.advance).toHaveBeenCalledWith({ organizationId: ORG_ID, sessionId: 'refresher-1' })
+    );
+    await user.click(screen.getByRole('button', { name: '止める' }));
+    expect(mocks.calls).toContainEqual({
+      name: 'cancelSession',
+      input: { organizationId: ORG_ID, sessionId: 'refresher-1' },
+    });
+  });
+
+  it('shows the report of a refresher that is over (#1281)', () => {
+    mocks.curriculum = {
+      templates: {
+        common: {
+          scope: 'common',
+          sections: { company: '', services: '', customers: '', values: '', donts: '' },
+          version: 0,
+          updatedAt: null,
+        },
+        marketer: {
+          scope: 'marketer',
+          sections: { purpose: '', scope: '', tasks: '', handoffs: '', measures: '' },
+          version: 0,
+          updatedAt: null,
+        },
+      },
+      employees: {},
+      updates: {},
+    };
+    const { press } = renderRoom([
+      employee({
+        level: 1,
+        refresher: {
+          id: 'refresher-1',
+          kind: 'refresher',
+          status: 'succeeded',
+          report: { summary: 'サービスの説明が新しくなりました。', notes_changed: ['/memories/company.md'] },
+          resultCode: null,
+          steps: 3,
+          createdAt: new Date('2026-11-20T00:00:00Z'),
+          updatedAt: new Date('2026-11-20T00:00:00Z'),
+        },
+      }),
+    ]);
+    press('1');
+    expect(screen.getByText(/の再研修が終わりました（2026年11月20日）。/)).toBeInTheDocument();
+    expect(screen.getByText('サービスの説明が新しくなりました。')).toBeInTheDocument();
+    expect(screen.getByText('/memories/company.md')).toBeInTheDocument();
   });
 });

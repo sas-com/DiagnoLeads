@@ -193,4 +193,16 @@ describe('the migration of the AI employee tables', () => {
     expect(training).toContain('ADD COLUMN "level" integer DEFAULT 0 NOT NULL');
     expect(training).toContain(`ADD COLUMN "policy" text DEFAULT '' NOT NULL`);
   });
+
+  it('turns it on for the version history of the templates, kept from the templates saved (#1281)', () => {
+    const updates = readFileSync(
+      resolve(__dirname, '../../../../drizzle/0042_training_updates.sql'),
+      'utf8'
+    );
+    expect(updates).toContain(
+      'ALTER TABLE "ai_training_template_versions" ENABLE ROW LEVEL SECURITY;'
+    );
+    expect(updates).toContain('INSERT INTO "ai_training_template_versions"');
+    expect(updates).toContain(`"kind" IN ('onboarding', 'review', 'refresher')`);
+  });
 });

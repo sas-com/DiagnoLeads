@@ -6,7 +6,13 @@
  * empty. Every query is scoped by organizationId; every save is written to the audit log.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import { aiEmployeeTrainings, aiEmployees, aiTrainingTemplates, auditLogs } from '@/lib/db/schema';
+import {
+  aiEmployeeTrainings,
+  aiEmployees,
+  aiTrainingTemplateVersions,
+  aiTrainingTemplates,
+  auditLogs,
+} from '@/lib/db/schema';
 import enAiOffice from '@/locales/en/aiOffice.json';
 import jaAiOffice from '@/locales/ja/aiOffice.json';
 import { and, eq, sql } from 'drizzle-orm';
@@ -146,7 +152,7 @@ function audit(
   });
 }
 
-/** Saves a template; its version goes up by one */
+/** Saves a template; its version goes up by one, and a copy of that version is kept */
 export async function saveTemplate(
   db: Database,
   input: {
@@ -192,6 +198,15 @@ export async function saveTemplate(
       })
       .returning({ id: aiTrainingTemplates.id, version: aiTrainingTemplates.version });
     if (!saved) throw new Error('The template was not saved');
+    // A copy of each version: what an employee's copy was made from, to show an update (#1281)
+    await tx.insert(aiTrainingTemplateVersions).values({
+      organizationId: input.organizationId,
+      scope: input.scope,
+      version: saved.version,
+      sections,
+      createdBy: input.userId,
+      createdAt: now,
+    });
     await audit(tx, {
       organizationId: input.organizationId,
       userId: input.userId,

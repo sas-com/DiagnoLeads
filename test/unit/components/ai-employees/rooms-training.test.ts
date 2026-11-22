@@ -5,6 +5,7 @@ import {
   boardOfKey,
   nextStepDelay,
   onboardingStep,
+  refresherStep,
   reviewStep,
   runningSession,
 } from '@/components/features/ai-employees/rooms/training';
@@ -18,7 +19,10 @@ const base = {
   review: null,
   nextReviewAt: null,
 };
-const session = (kind: 'onboarding' | 'review', status: 'running' | 'waiting' | 'failed') => ({
+const session = (
+  kind: 'onboarding' | 'review' | 'refresher',
+  status: 'running' | 'waiting' | 'failed' | 'succeeded' | 'cancelled'
+) => ({
   id: 's',
   kind,
   status,
@@ -77,5 +81,33 @@ describe('the steps of a running session', () => {
     for (const state of ['waiting', 'failed', 'paused', 'disabled', 'closed'] as const) {
       expect(nextStepDelay(state)).toBeNull();
     }
+  });
+});
+
+describe('the refresher (#1281)', () => {
+  const onboarded = { ...base, level: 1 as const };
+  it('is moved on by the room, holds the review back, and says how it went', () => {
+    expect(runningSession({ ...onboarded, refresher: session('refresher', 'running') })).toBe('s');
+    expect(
+      runningSession({ ...onboarded, status: 'paused', refresher: session('refresher', 'running') })
+    ).toBeNull();
+    expect(
+      reviewStep(
+        { ...onboarded, nextReviewAt: '2026-11-14', refresher: session('refresher', 'running') },
+        true,
+        NOW
+      )
+    ).toBe('not_due');
+    expect(
+      reviewStep(
+        { ...onboarded, nextReviewAt: '2026-11-14', refresher: session('refresher', 'succeeded') },
+        true,
+        NOW
+      )
+    ).toBe('due');
+    expect(refresherStep(onboarded)).toBe('none');
+    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'running') })).toBe('running');
+    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'succeeded') })).toBe('done');
+    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'cancelled') })).toBe('failed');
   });
 });

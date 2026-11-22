@@ -7,7 +7,11 @@ import { employeeScopeSchema, officeScopeSchema } from './schemas';
  * Shared by the service, the router and the screen.
  */
 
-export const AI_EMPLOYEE_SESSION_KINDS = ['onboarding', 'review'] as const;
+/**
+ * The kinds of work of a session: the onboarding, a review, and a refresher (the employee reads
+ * an update of its training and fixes its notes, #1281)
+ */
+export const AI_EMPLOYEE_SESSION_KINDS = ['onboarding', 'review', 'refresher'] as const;
 export type AiEmployeeSessionKind = (typeof AI_EMPLOYEE_SESSION_KINDS)[number];
 
 export const AI_EMPLOYEE_SESSION_STATUSES = [

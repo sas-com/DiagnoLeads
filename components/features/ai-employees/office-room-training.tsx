@@ -8,9 +8,11 @@ import {
   TRAINING_KINDS,
   TRAINING_SECTIONS,
   TRAINING_SECTION_MAX_LENGTH,
+  type TemplateChange,
   type TemplateScope,
   type TrainingKind,
   type TrainingSections,
+  replacedByDefault,
 } from '@/lib/features/ai-employees/types/curriculum';
 import { type AiEmployeeLevel, LEVEL_KEYS } from '@/lib/features/ai-employees/types/levels';
 import type { AiEmployeeRole } from '@/lib/features/ai-employees/types/roles';
@@ -44,6 +46,7 @@ import {
   boardOfKey,
   nextStepDelay,
   onboardingStep,
+  refresherStep,
   reviewStep,
   runningSession,
 } from './rooms/training';
@@ -118,6 +121,11 @@ export function OfficeRoomTraining({
   } | null>(null);
   const [confirmPromote, setConfirmPromote] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // What became of an update brought in (not an error): said in the board's plain colors
+  const [info, setInfo] = useState<string | null>(null);
+  // The president's choice of each section of an update, by employee, kind, version and section;
+  // a section never chosen follows replacedByDefault
+  const [replaceChoice, setReplaceChoice] = useState<Record<string, boolean>>({});
 
   const refresh = () => utils.aiEmployees.training.invalidate(scope);
   const onError = (error: unknown) => setNotice(t(`errors.${errorCode(error)}`));
@@ -147,6 +155,15 @@ export function OfficeRoomTraining({
     onSettled: refreshCurriculum,
     onError,
   });
+  // An update of a template brought in (#1281); a refresher started is moved on like the others
+  const applyUpdate = trpc.aiEmployees.applyTemplateUpdate.useMutation({
+    onSettled: () => {
+      void refreshCurriculum();
+      void refresh();
+    },
+    onError,
+    onSuccess: (result) => setInfo(t(`curriculum.refresher.outcome.${result.refresher}`)),
+  });
 
   const busy =
     start.isPending ||
@@ -158,7 +175,8 @@ export function OfficeRoomTraining({
     editNote.isPending ||
     saveTemplate.isPending ||
     saveTraining.isPending ||
-    copyTemplate.isPending;
+    copyTemplate.isPending ||
+    applyUpdate.isPending;
   useEffect(() => {
     onBusyChange(busy);
     return () => onBusyChange(false);
@@ -223,6 +241,7 @@ export function OfficeRoomTraining({
     setConfirmCopy(null);
     setConfirmPromote(false);
     setNotice(null);
+    setInfo(null);
   };
 
   const onRoomKey: RoomKeys = (event) => {
@@ -375,6 +394,9 @@ export function OfficeRoomTraining({
             <output className="block border border-[#fca5a5]/60 px-3 py-2 text-sm text-[#fecaca]">
               {notice}
             </output>
+          )}
+          {info && (
+            <output className="block border border-[#f5f1e8]/30 px-3 py-2 text-sm">{info}</output>
           )}
           {training.isPending ? (
             <RoomBoardLoading>{t('reading')}</RoomBoardLoading>
@@ -705,6 +727,7 @@ export function OfficeRoomTraining({
           const templateScope = kind === 'common' ? 'common' : role;
           const template = data.templates[templateScope];
           const own = data.employees[selected.id]?.[kind];
+          const update = own ? data.updates[selected.id]?.[kind] : undefined;
           const shown = own?.sections ?? template.sections;
           const editingOwn =
             field?.kind === 'training' &&
@@ -733,6 +756,7 @@ export function OfficeRoomTraining({
                   ? ` ${t('curriculum.newer', { version: template.version })}`
                   : ''}
               </p>
+              {update && !editingOwn && !editingTemplate && updatePanel(kind, update)}
               {editingOwn || editingTemplate ? (
                 sectionsForm({
                   kind,
@@ -837,7 +861,156 @@ export function OfficeRoomTraining({
           );
         })}
         <p className="text-sm text-[#d8d2c4]">{t('curriculum.templateNote')}</p>
+        {refresherSection()}
       </>
+    );
+  }
+
+  /**
+   * A newer template for one kind of the employee's training (#1281): the sections it changed,
+   * each with the employee's text and the template's, and whether to replace it. Bringing it in
+   * is done with the buttons only; the refresher is offered while the agents work and the
+   * employee's onboarding is approved
+   */
+  function updatePanel(
+    kind: TrainingKind,
+    update: { fromVersion: number; toVersion: number; changes: TemplateChange[] }
+  ) {
+    if (!selected) return null;
+    const employeeId = selected.id;
+    const keyOf = (section: string) => `${employeeId}:${kind}:${update.toVersion}:${section}`;
+    const chosen = (change: TemplateChange) =>
+      replaceChoice[keyOf(change.section)] ?? replacedByDefault(change);
+    const refresherOffered =
+      agentEnabled &&
+      selected.level > 0 &&
+      selected.status !== 'paused' &&
+      update.changes.length > 0;
+    const send = (refresher: boolean) =>
+      applyUpdate.mutate({
+        organizationId,
+        employeeId,
+        kind,
+        fromVersion: update.fromVersion,
+        toVersion: update.toVersion,
+        replace: update.changes.filter(chosen).map((change) => change.section),
+        refresher,
+        locale,
+      });
+    return (
+      <div className="space-y-3 border border-[#e9cf9a] px-4 py-3">
+        <h4 className="font-bold">
+          {t('curriculum.update.title', { from: update.fromVersion, to: update.toVersion })}
+        </h4>
+        <p className="text-sm text-[#d8d2c4]">
+          {update.changes.length > 0
+            ? t('curriculum.update.about')
+            : t('curriculum.update.none', { to: update.toVersion })}
+        </p>
+        {update.changes.map((change) => {
+          const id = `${FIELD_ID}-update-${kind}-${change.section}`;
+          return (
+            <div key={change.section} className="space-y-2 border-t border-[#f5f1e8]/15 pt-3">
+              <p className="font-bold">{tOffice(`curriculum.sections.${change.section}`)}</p>
+              <p className="text-xs text-[#d8d2c4]">
+                {t(
+                  `curriculum.update.${
+                    change.edited === null ? 'unknown' : change.edited ? 'edited' : 'unedited'
+                  }`
+                )}
+              </p>
+              <dl className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <dt className={CAP}>{t('curriculum.update.own')}</dt>
+                  <dd className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {change.own.trim() || t('curriculum.empty')}
+                  </dd>
+                </div>
+                <div>
+                  <dt className={CAP}>{t('curriculum.update.latest')}</dt>
+                  <dd className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {change.latest.trim() || t('curriculum.empty')}
+                  </dd>
+                </div>
+              </dl>
+              <label htmlFor={id} className="flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  id={id}
+                  type="checkbox"
+                  checked={chosen(change)}
+                  onChange={(event) =>
+                    setReplaceChoice((current) => ({
+                      ...current,
+                      [keyOf(change.section)]: event.target.checked,
+                    }))
+                  }
+                  className="h-5 w-5"
+                />
+                {t('curriculum.update.replace')}
+              </label>
+            </div>
+          );
+        })}
+        {refresherOffered && (
+          <p className="text-xs text-[#d8d2c4]">{t('curriculum.update.refresherHint')}</p>
+        )}
+        <div className="flex flex-wrap gap-3">
+          {action({
+            main: !refresherOffered,
+            onClick: () => send(false),
+            children: t('actions.applyUpdate'),
+          })}
+          {refresherOffered &&
+            action({
+              main: true,
+              onClick: () => send(true),
+              children: t('actions.applyWithRefresher'),
+            })}
+        </div>
+      </div>
+    );
+  }
+
+  /** The latest refresher of the employee: running (it can be stopped), over, or stopped */
+  function refresherSection() {
+    if (!selected?.refresher) return null;
+    const session = selected.refresher;
+    const step = refresherStep(selected);
+    const report = session.report as
+      | { summary?: string; notes_changed?: string[] }
+      | null
+      | undefined;
+    return (
+      <section className="space-y-3 border border-[#f5f1e8]/15 px-4 py-3">
+        <h3 className="text-lg font-bold">{t('curriculum.refresher.title')}</h3>
+        <p className="text-base leading-relaxed" aria-live="polite">
+          {step === 'running'
+            ? t('curriculum.refresher.running', { name: selected.name })
+            : step === 'done'
+              ? t('curriculum.refresher.done', {
+                  name: selected.name,
+                  date: date(session.updatedAt),
+                })
+              : t('curriculum.refresher.failed')}
+        </p>
+        {step === 'done' && report && (
+          <ReportView
+            rows={[[t('curriculum.refresher.summary'), report.summary ?? '']]}
+            lists={[[t('curriculum.refresher.notesChanged'), report.notes_changed ?? []]]}
+          />
+        )}
+        {step === 'running' && (
+          <div className="flex flex-wrap items-center gap-3">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            {stalled === session.id &&
+              action({ onClick: () => setStalled(null), children: t('actions.resume') })}
+            {action({
+              onClick: () => cancel.mutate({ organizationId, sessionId: session.id }),
+              children: t('actions.cancel'),
+            })}
+          </div>
+        )}
+      </section>
     );
   }
 
@@ -1022,6 +1195,7 @@ export function OfficeRoomTraining({
         onClick={() => {
           if (!busy) {
             setNotice(null);
+            setInfo(null);
             onClick();
           }
         }}

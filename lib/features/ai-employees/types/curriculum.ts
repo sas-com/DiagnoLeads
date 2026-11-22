@@ -104,3 +104,90 @@ export const copyTemplateSchema = employeeScopeSchema.extend({
 export const curriculumScopeSchema = officeScopeSchema.extend({
   locale: z.enum(['ja', 'en']),
 });
+
+/**
+ * A section of an employee's training the template changed since the employee's copy was made
+ * (#1281). The employee may have edited it meanwhile: replacing it would lose that edit.
+ */
+export interface TemplateChange {
+  section: string;
+  /** What the template said when the copy was made; null when that version is not known */
+  base: string | null;
+  /** What the template says now */
+  latest: string;
+  /** What the employee's copy says now */
+  own: string;
+  /** Whether the copy was edited in this section since it was made; null when not known */
+  edited: boolean | null;
+}
+
+/**
+ * The sections the template changed since an employee's copy was made, in the order of the
+ * format. `bases` are what the template may have said at the copy's version: one text, several
+ * (the built-in default of a role in either language) or none when that version is not known.
+ * - The copy already says what the template says: nothing to bring
+ * - The copy still says what the template said: unedited, the template changed it
+ * - Otherwise the copy was edited: shown only when the template changed the section too (or the
+ *   base is not known), never for an edit of the employee's alone
+ */
+export function templateChanges(
+  kind: TrainingKind,
+  input: {
+    bases: readonly TrainingSections[];
+    latest: TrainingSections;
+    own: TrainingSections;
+  }
+): TemplateChange[] {
+  const changes: TemplateChange[] = [];
+  for (const section of TRAINING_SECTIONS[kind]) {
+    const latest = input.latest[section] ?? '';
+    const own = input.own[section] ?? '';
+    if (own === latest) continue;
+    const texts = input.bases.map((base) => base[section] ?? '');
+    if (texts.length === 0) {
+      changes.push({ section, base: null, latest, own, edited: null });
+    } else if (texts.includes(own)) {
+      changes.push({ section, base: own, latest, own, edited: false });
+    } else if (!texts.every((text) => text === latest)) {
+      changes.push({ section, base: texts[0] ?? null, latest, own, edited: true });
+    }
+  }
+  return changes;
+}
+
+/**
+ * Whether a change is brought in unless the president says otherwise: the sections the employee's
+ * copy did not edit are replaced, its own edits (or what is not known) are kept (provisional,
+ * #1281)
+ */
+export function replacedByDefault(change: TemplateChange): boolean {
+  return change.edited === false;
+}
+
+/**
+ * Bring a newer template into an employee's training: the sections to replace, the versions the
+ * president saw (nothing changes if either moved meanwhile), and whether a refresher follows
+ */
+export const applyTemplateUpdateSchema = employeeScopeSchema
+  .extend({
+    kind: z.enum(TRAINING_KINDS),
+    fromVersion: z.number().int().min(0),
+    toVersion: z.number().int().min(1),
+    replace: z.array(z.string().max(30)).max(10),
+    refresher: z.boolean(),
+    locale: z.enum(['ja', 'en']),
+  })
+  .superRefine((input, ctx) => {
+    const known = TRAINING_SECTIONS[input.kind];
+    if (input.toVersion <= input.fromVersion) {
+      ctx.addIssue({ code: 'custom', message: 'Not newer', path: ['toVersion'] });
+    }
+    if (new Set(input.replace).size !== input.replace.length) {
+      ctx.addIssue({ code: 'custom', message: 'Repeated section', path: ['replace'] });
+    }
+    for (const section of input.replace) {
+      if (!known.includes(section)) {
+        ctx.addIssue({ code: 'custom', message: 'Unknown section', path: ['replace'] });
+      }
+    }
+  });
