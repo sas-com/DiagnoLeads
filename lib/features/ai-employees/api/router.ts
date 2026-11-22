@@ -199,6 +199,7 @@ export const aiEmployeesRouter = router({
         kind: input.kind,
         fromVersion: input.fromVersion,
         toVersion: input.toVersion,
+        copyUpdatedAt: input.copyUpdatedAt,
         replace: input.replace,
         refresher: input.refresher,
         locale: input.locale,

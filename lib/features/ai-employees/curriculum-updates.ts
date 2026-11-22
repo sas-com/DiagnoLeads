@@ -198,6 +198,8 @@ export async function applyTemplateUpdate(
     kind: TrainingKind;
     fromVersion: number;
     toVersion: number;
+    /** When the president read the employee's copy: an edit made since then refuses the update */
+    copyUpdatedAt: Date;
     replace: readonly string[];
     refresher: boolean;
     locale: CurriculumLocale;
@@ -229,40 +231,51 @@ export async function applyTemplateUpdate(
   if (!employee || !isAiEmployeeRole(employee.role)) return { ok: false, failure: 'not_found' };
   const scope = scopeOf(input.kind, employee.role);
 
-  const [template] = await db
-    .select({ sections: aiTrainingTemplates.sections, version: aiTrainingTemplates.version })
-    .from(aiTrainingTemplates)
-    .where(
-      and(
-        eq(aiTrainingTemplates.organizationId, input.organizationId),
-        eq(aiTrainingTemplates.scope, scope)
+  // Read and written in one transaction, the copy locked: a manager's edit of the copy made since
+  // the president read it (its version stays the same) is never overwritten
+  const outcome = await db.transaction(async (tx) => {
+    const [template] = await tx
+      .select({ sections: aiTrainingTemplates.sections, version: aiTrainingTemplates.version })
+      .from(aiTrainingTemplates)
+      .where(
+        and(
+          eq(aiTrainingTemplates.organizationId, input.organizationId),
+          eq(aiTrainingTemplates.scope, scope)
+        )
+      );
+    if (!template || template.version !== input.toVersion) return 'changed_meanwhile' as const;
+    const [copy] = await tx
+      .select({
+        id: aiEmployeeTrainings.id,
+        sections: aiEmployeeTrainings.sections,
+        templateVersion: aiEmployeeTrainings.templateVersion,
+        updatedAt: aiEmployeeTrainings.updatedAt,
+      })
+      .from(aiEmployeeTrainings)
+      .where(
+        and(
+          eq(aiEmployeeTrainings.organizationId, input.organizationId),
+          eq(aiEmployeeTrainings.employeeId, employee.id),
+          eq(aiEmployeeTrainings.kind, input.kind)
+        )
       )
-    );
-  if (!template || template.version !== input.toVersion) {
-    return { ok: false, failure: 'changed_meanwhile' };
-  }
-  const [copy] = await db
-    .select({ sections: aiEmployeeTrainings.sections })
-    .from(aiEmployeeTrainings)
-    .where(
-      and(
-        eq(aiEmployeeTrainings.organizationId, input.organizationId),
-        eq(aiEmployeeTrainings.employeeId, employee.id),
-        eq(aiEmployeeTrainings.kind, input.kind)
-      )
-    );
-  if (!copy) return { ok: false, failure: 'not_copied' };
+      .for('update');
+    if (!copy) return 'not_copied' as const;
+    if (
+      copy.templateVersion !== input.fromVersion ||
+      copy.updatedAt.getTime() !== input.copyUpdatedAt.getTime()
+    ) {
+      return 'changed_meanwhile' as const;
+    }
 
-  const latest = completeSections(input.kind, template.sections);
-  const before = completeSections(input.kind, copy.sections);
-  const after: TrainingSections = { ...before };
-  for (const section of input.replace) {
-    if (section in after) after[section] = latest[section] ?? '';
-  }
-  const changed = Object.keys(after).filter((section) => after[section] !== before[section]);
-
-  const updated = await db.transaction(async (tx) => {
-    const [row] = await tx
+    const latest = completeSections(input.kind, template.sections);
+    const before = completeSections(input.kind, copy.sections);
+    const after: TrainingSections = { ...before };
+    for (const section of input.replace) {
+      if (Object.hasOwn(after, section)) after[section] = latest[section] ?? '';
+    }
+    const changed = Object.keys(after).filter((section) => after[section] !== before[section]);
+    await tx
       .update(aiEmployeeTrainings)
       .set({
         sections: after,
@@ -272,14 +285,10 @@ export async function applyTemplateUpdate(
       })
       .where(
         and(
-          eq(aiEmployeeTrainings.organizationId, input.organizationId),
-          eq(aiEmployeeTrainings.employeeId, employee.id),
-          eq(aiEmployeeTrainings.kind, input.kind),
-          eq(aiEmployeeTrainings.templateVersion, input.fromVersion)
+          eq(aiEmployeeTrainings.id, copy.id),
+          eq(aiEmployeeTrainings.organizationId, input.organizationId)
         )
-      )
-      .returning({ id: aiEmployeeTrainings.id });
-    if (!row) return false;
+      );
     await tx.insert(auditLogs).values({
       organizationId: input.organizationId,
       userId: input.userId,
@@ -292,13 +301,14 @@ export async function applyTemplateUpdate(
       },
       metadata: { event: 'employee_training_updated', replaced: changed },
     });
-    return true;
+    return { templateVersion: template.version, before, after, changed };
   });
-  if (!updated) return { ok: false, failure: 'changed_meanwhile' };
+  if (typeof outcome === 'string') return { ok: false, failure: outcome };
+  const { before, after, changed } = outcome;
 
   const done = (refresher: RefresherOutcome, sessionId: string | null = null) => ({
     ok: true as const,
-    value: { templateVersion: template.version, replaced: changed, refresher, sessionId },
+    value: { templateVersion: outcome.templateVersion, replaced: changed, refresher, sessionId },
   });
   if (!input.refresher) return done('not_asked');
   if (changed.length === 0) return done('unchanged');
@@ -333,7 +343,21 @@ export async function applyTemplateUpdate(
         updatedAt: now,
       })
       .returning({ id: aiEmployeeSessions.id });
-    return session ? done('started', session.id) : done('open_session');
+    if (!session) return done('open_session');
+    // Which update led to the refresher (it changes the notes without the president's answer)
+    await db.insert(auditLogs).values({
+      organizationId: input.organizationId,
+      userId: input.userId,
+      action: 'update',
+      resource: 'ai_training',
+      resourceId: employee.id,
+      changes: {
+        before: null,
+        after: { kind: input.kind, sessionId: session.id, sections: changed },
+      },
+      metadata: { event: 'refresher_started' },
+    });
+    return done('started', session.id);
   } catch (error) {
     if (isOpenSessionConflict(error)) return done('open_session');
     throw error;

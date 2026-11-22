@@ -476,7 +476,14 @@ describe('OfficeRoomTraining', () => {
         },
       },
       employees: {
-        [id]: { common: { kind: 'common', sections: own, templateVersion: 2, updatedAt: new Date() } },
+        [id]: {
+          common: {
+            kind: 'common',
+            sections: own,
+            templateVersion: 2,
+            updatedAt: new Date('2026-11-19T00:00:00Z'),
+          },
+        },
       },
       updates: {
         [id]: {
@@ -512,6 +519,7 @@ describe('OfficeRoomTraining', () => {
           kind: 'common',
           fromVersion: 2,
           toVersion: 3,
+          copyUpdatedAt: new Date('2026-11-19T00:00:00Z'),
           replace: ['company', 'services'],
           refresher: true,
           locale: 'ja',

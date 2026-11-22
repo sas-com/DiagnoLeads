@@ -756,7 +756,11 @@ export function OfficeRoomTraining({
                   ? ` ${t('curriculum.newer', { version: template.version })}`
                   : ''}
               </p>
-              {update && !editingOwn && !editingTemplate && updatePanel(kind, update)}
+              {own &&
+                update &&
+                !editingOwn &&
+                !editingTemplate &&
+                updatePanel(kind, update, own.updatedAt)}
               {editingOwn || editingTemplate ? (
                 sectionsForm({
                   kind,
@@ -874,7 +878,8 @@ export function OfficeRoomTraining({
    */
   function updatePanel(
     kind: TrainingKind,
-    update: { fromVersion: number; toVersion: number; changes: TemplateChange[] }
+    update: { fromVersion: number; toVersion: number; changes: TemplateChange[] },
+    copyUpdatedAt: Date
   ) {
     if (!selected) return null;
     const employeeId = selected.id;
@@ -893,6 +898,7 @@ export function OfficeRoomTraining({
         kind,
         fromVersion: update.fromVersion,
         toVersion: update.toVersion,
+        copyUpdatedAt: new Date(copyUpdatedAt),
         replace: update.changes.filter(chosen).map((change) => change.section),
         refresher,
         locale,

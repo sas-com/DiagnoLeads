@@ -208,6 +208,7 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
       kind: 'common',
       fromVersion: 1,
       toVersion: 3,
+      copyUpdatedAt: (await ownCommon(marketer))?.updatedAt,
       replace: ['company'],
       refresher: false,
       locale: 'ja',
@@ -222,6 +223,18 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
     await expect(
       memberA.aiEmployees.applyTemplateUpdate({ ...send, toVersion: 2 })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // A manager's edit of the copy made after the president read it is never overwritten
+    const read = (await ownCommon(marketer))?.updatedAt;
+    const edited = await ownCommon(marketer);
+    await adminA.aiEmployees.saveTraining({
+      organizationId: orgA,
+      employeeId: marketer,
+      kind: 'common',
+      sections: { ...(edited?.sections as typeof V1) },
+    });
+    await expect(
+      adminA.aiEmployees.applyTemplateUpdate({ ...send, toVersion: 2, copyUpdatedAt: read })
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: 'changed_meanwhile' });
     expect((await ownCommon(marketer))?.templateVersion).toBe(1);
   });
 
@@ -232,6 +245,7 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
       kind: 'common',
       fromVersion: 1,
       toVersion: 2,
+      copyUpdatedAt: (await ownCommon(marketer))?.updatedAt,
       replace: ['company'],
       refresher: true,
       locale: 'ja',
@@ -265,6 +279,14 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
       .orderBy(auditLogs.createdAt)
       .then((rows) => rows.filter((row) => row.metadata?.event === 'employee_training_updated'));
     expect(logged?.metadata).toMatchObject({ replaced: ['company'] });
+    const started = await pg
+      .select({ changes: auditLogs.changes, metadata: auditLogs.metadata })
+      .from(auditLogs)
+      .where(and(eq(auditLogs.organizationId, orgA), eq(auditLogs.resource, 'ai_training')))
+      .then((rows) => rows.filter((row) => row.metadata?.event === 'refresher_started'));
+    expect(started.map((row) => row.changes?.after)).toEqual([
+      { kind: 'common', sessionId: applied.sessionId, sections: ['company'] },
+    ]);
     expect(logged?.changes).toMatchObject({
       before: { kind: 'common', templateVersion: 1, sections: { company: V1.company } },
       after: { kind: 'common', templateVersion: 2, sections: { company: V2.company } },
@@ -332,6 +354,7 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
       kind: 'common',
       fromVersion: 1,
       toVersion: 2,
+      copyUpdatedAt: (await ownCommon(sales))?.updatedAt,
       replace: ['company', 'services'],
       refresher: true,
       locale: 'ja',
@@ -356,6 +379,7 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
           employeeId: marketer,
           fromVersion: 2,
           toVersion: 3,
+          copyUpdatedAt: (await ownCommon(marketer))?.updatedAt,
           replace: ['values'],
         })
       ).toMatchObject({ templateVersion: 3, refresher: 'agent_disabled', sessionId: null });

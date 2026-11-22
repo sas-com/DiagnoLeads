@@ -173,6 +173,8 @@ export const applyTemplateUpdateSchema = employeeScopeSchema
     kind: z.enum(TRAINING_KINDS),
     fromVersion: z.number().int().min(0),
     toVersion: z.number().int().min(1),
+    /** When the employee's copy was last saved, as the president read it */
+    copyUpdatedAt: z.date(),
     replace: z.array(z.string().max(30)).max(10),
     refresher: z.boolean(),
     locale: z.enum(['ja', 'en']),

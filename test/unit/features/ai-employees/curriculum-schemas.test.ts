@@ -149,6 +149,7 @@ describe('applyTemplateUpdateSchema (#1281)', () => {
     kind: 'common',
     fromVersion: 1,
     toVersion: 2,
+    copyUpdatedAt: new Date('2026-11-20T00:00:00Z'),
     replace: ['company'],
     refresher: true,
     locale: 'ja',
@@ -161,6 +162,8 @@ describe('applyTemplateUpdateSchema (#1281)', () => {
       applyTemplateUpdateSchema.safeParse({ ...input, replace: ['company', 'company'] }).success
     ).toBe(false);
     expect(applyTemplateUpdateSchema.safeParse({ ...input, toVersion: 1 }).success).toBe(false);
+    const { copyUpdatedAt: _read, ...unread } = input;
+    expect(applyTemplateUpdateSchema.safeParse(unread).success).toBe(false);
     expect(
       applyTemplateUpdateSchema.safeParse({ ...input, kind: 'role', replace: ['purpose'] }).success
     ).toBe(true);
