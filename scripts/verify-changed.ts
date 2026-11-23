@@ -56,7 +56,14 @@ export const DISK_READERS: { pattern: RegExp; tests: string[] }[] = [
     pattern: /^components\/features\/ax-site\/fonts\.ts$/,
     tests: ['test/unit/components/ax-site/ax-fonts-css.test.ts'],
   },
-  { pattern: /^vercel\.json$/, tests: ['test/unit/lib/middleware/security-headers.test.ts'] },
+  {
+    pattern: /^vercel\.json$/,
+    tests: [
+      'test/unit/lib/middleware/security-headers.test.ts',
+      // The browser's time limit follows the functions' maxDuration (#1254)
+      'test/unit/lib/trpc/request-timeout.test.ts',
+    ],
+  },
   {
     pattern: /^lib\/features\/ax-site\/web-checklist-pdf\.json$/,
     tests: ['test/unit/features/ax-web-checklist.test.ts'],

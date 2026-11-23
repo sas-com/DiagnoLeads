@@ -4,8 +4,13 @@
  */
 import type { db as defaultDb } from '@/lib/db/client';
 import { diagnosticSubmissions, leads, qrCampaigns } from '@/lib/db/schema';
-import { leadIsInterested, leadRequestedConsultation } from '@/lib/features/leads/service';
-import { and, eq, gte, sql } from 'drizzle-orm';
+import {
+  leadIsInterested,
+  leadRequestedConsultation,
+  qrCampaignAnswer,
+} from '@/lib/features/leads/service';
+import { and, eq, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { QrCampaignBreakdown } from './types/schemas';
 
 type Database = typeof defaultDb;
@@ -30,36 +35,31 @@ export async function qrCampaignBreakdown(
   database: Database,
   organizationId: string
 ): Promise<QrCampaignBreakdown[]> {
-  const newLead = diagnosticSubmissions.leadCreated;
+  // The aliases qrCampaignAnswer is written over (leads' public surface)
+  const campaigns = alias(qrCampaigns, 'qrc');
+  const answers = alias(diagnosticSubmissions, 'qra');
+  const newLead = answers.leadCreated;
   // The lead list's own rules over the joined lead (leads' public surface)
   const interested = sql`${newLead} and ${leadIsInterested}`;
   const consulted = sql`${newLead} and ${leadRequestedConsultation}`;
-  return database
-    .select({
-      campaignId: qrCampaigns.id,
-      existingLeadAnswers: sql<number>`count(*) filter (where not ${newLead})`.mapWith(Number),
-      interestedNewLeads: sql<number>`count(${leads.id}) filter (where ${interested})`.mapWith(
-        Number
-      ),
-      consultationNewLeads: sql<number>`count(${leads.id}) filter (where ${consulted})`.mapWith(
-        Number
-      ),
-    })
-    .from(qrCampaigns)
-    .innerJoin(
-      diagnosticSubmissions,
-      and(
-        eq(diagnosticSubmissions.organizationId, organizationId),
-        // The key trackingSchema keeps the code under; compared case-sensitively, as it is counted
-        sql`${diagnosticSubmissions.tracking} ->> 'qr' = ${qrCampaigns.shortCode}`,
-        eq(diagnosticSubmissions.isTest, false),
-        gte(diagnosticSubmissions.createdAt, qrCampaigns.createdAt)
-      )
-    )
-    .leftJoin(
-      leads,
-      and(eq(leads.id, diagnosticSubmissions.leadId), eq(leads.organizationId, organizationId))
-    )
-    .where(eq(qrCampaigns.organizationId, organizationId))
-    .groupBy(qrCampaigns.id);
+  return (
+    database
+      .select({
+        campaignId: campaigns.id,
+        existingLeadAnswers: sql<number>`count(*) filter (where not ${newLead})`.mapWith(Number),
+        interestedNewLeads: sql<number>`count(${leads.id}) filter (where ${interested})`.mapWith(
+          Number
+        ),
+        consultationNewLeads: sql<number>`count(${leads.id}) filter (where ${consulted})`.mapWith(
+          Number
+        ),
+      })
+      .from(campaigns)
+      // The one rule of which answers count for a campaign, shared with the lead list's filter
+      // by a campaign (#1255)
+      .innerJoin(answers, and(eq(answers.organizationId, organizationId), qrCampaignAnswer))
+      .leftJoin(leads, and(eq(leads.id, answers.leadId), eq(leads.organizationId, organizationId)))
+      .where(eq(campaigns.organizationId, organizationId))
+      .groupBy(campaigns.id)
+  );
 }

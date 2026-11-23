@@ -3,6 +3,7 @@
 import { OrganizationProvider } from '@/lib/context/organization-context';
 import { MAX_BATCH_CALLS } from '@/lib/trpc/batch-limit';
 import { trpc } from '@/lib/trpc/client';
+import { fetchWithTimeout } from '@/lib/trpc/request-timeout';
 import { retryUnlessDenied } from '@/lib/trpc/retry';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink } from '@trpc/client';
@@ -90,6 +91,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
           transformer: superjson,
           // The handler refuses larger batches (#405)
           maxItems: MAX_BATCH_CALLS,
+          // A request that gets no answer fails a little after the server's own limit (#1254)
+          fetch: fetchWithTimeout(),
         }),
       ],
     })
