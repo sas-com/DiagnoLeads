@@ -27,7 +27,7 @@ const preview: Preview = {
     options: {
       storySort: { order: ['はじめに', '基礎', '部品'] },
     },
-    // Fail the accessibility panel's checks loudly in the UI, never silently
+    // Show the accessibility panel's violations as warnings in the UI; they do not fail a build
     a11y: { test: 'todo' },
   },
   decorators: [

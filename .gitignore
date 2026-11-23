@@ -65,3 +65,4 @@ drizzle/meta/*
 # Worktrees created by claude --worktree
 .claude/worktrees/
 storybook-static/
+*storybook.log

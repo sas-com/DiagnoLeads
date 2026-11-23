@@ -1,6 +1,8 @@
 /*
- * The app's stylesheet, plus the stories as a source for Tailwind: app/globals.css only scans
- * app/ and components/, and the classes used only in stories must not reach the app's CSS.
+ * The app's stylesheet, plus the stories as an explicit source for Tailwind, so Storybook always
+ * generates their classes. app/globals.css imports tailwindcss without source(none), so Tailwind's
+ * automatic detection scans the whole repository and classes used only in stories can also reach
+ * the app's CSS (unused utilities only; narrowing that is a separate change).
  */
 @import "../app/globals.css";
 @source "../stories/**/*.{ts,tsx,mdx}";
