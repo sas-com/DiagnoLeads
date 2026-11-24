@@ -202,11 +202,9 @@ export async function hireEmployee(
     role: AiEmployeeRole;
     name: string;
     userId: string;
-    /** How many a role may have; AI_EMPLOYEES_PER_ROLE unless a test says otherwise */
-    perRole?: number;
   }
 ): Promise<{ id: string; seat: number } | null> {
-  const perRole = Math.min(input.perRole ?? AI_EMPLOYEES_PER_ROLE, AI_EMPLOYEE_SEATS_PER_ROLE);
+  const perRole = Math.min(AI_EMPLOYEES_PER_ROLE, AI_EMPLOYEE_SEATS_PER_ROLE);
   for (let attempt = 0; attempt < AI_EMPLOYEE_SEATS_PER_ROLE; attempt++) {
     const taken = await db
       .select({ seat: aiEmployees.seat })
@@ -228,9 +226,9 @@ export async function hireEmployee(
         name: input.name,
         createdBy: input.userId,
       })
-      .onConflictDoNothing({
-        target: [aiEmployees.organizationId, aiEmployees.role, aiEmployees.seat],
-      })
+      // Any unique index: the desk taken meanwhile, or the one-per-role index kept until the
+      // limit goes up (#1282). Either way the loser reads the desks again
+      .onConflictDoNothing()
       .returning({ id: aiEmployees.id, seat: aiEmployees.seat });
     if (created) return created;
   }
