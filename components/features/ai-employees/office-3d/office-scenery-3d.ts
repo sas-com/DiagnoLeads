@@ -225,7 +225,8 @@ function plant(b: Builder, { x, y, tall }: PlantPlace): void {
   const lift = tall ? 0.75 : 0;
   b.cylinder(x, y, 0, PLANTER_SIDE, 0.62, ['satin', '#22262d']);
   b.cylinder(x, y, 0.6, PLANTER_SIDE + 0.03, 0.03, ['metal', BRASS]);
-  b.cylinder(x, y, 0.6, PLANTER_SIDE - 0.06, 0.025, ['matte', '#3b2a1c']);
+  // The soil lies on top of the rim's lid (the rim is a closed cylinder): inside it, it is never seen
+  b.cylinder(x, y, 0.63, PLANTER_SIDE - 0.06, 0.02, ['matte', '#3b2a1c']);
   if (tall) b.cylinder(x, y, 0.62, 0.05, 0.9, ['matte', '#5b4630']);
   b.ball(x + 0.05, y + 0.12, 0.98 + lift, 0.58, ['matte', '#1d5c3a']);
   b.ball(x, y, 1.15 + lift, 0.76, ['matte', '#2a8a55']);

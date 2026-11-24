@@ -125,8 +125,16 @@ describe('officeScenery', () => {
     // its back, its arms, two seat cushions and two pillows
     expect(count((p) => p.kind === 'chair' && p.shape === 'rounded')).toBe(ALL_CHAIRS.length * 4);
     expect(count((p) => p.kind === 'lounge' && p.shape === 'rounded')).toBe(7);
-    // Every plant has its soil in the planter
-    expect(count((p) => p.kind === 'plant' && p.colour === '#3b2a1c')).toBe(plants.length);
+    // Every plant has its soil in the planter, on top of the brass rim where it can be seen
+    const soil = parts.filter((p) => p.kind === 'plant' && p.colour === '#3b2a1c');
+    expect(soil).toHaveLength(plants.length);
+    const rims = parts.filter((p) => p.kind === 'plant' && p.finish === 'metal');
+    for (const own of soil) {
+      const rim = rims.find((r) => r.x === own.x && r.y === own.y);
+      expect(own.z - own.h / 2, JSON.stringify(own)).toBeGreaterThanOrEqual(
+        (rim?.z ?? 0) + (rim?.h ?? 0) / 2
+      );
+    }
     for (const kind of ['desk', 'table', 'storage', 'lounge', 'charging', 'rug', 'wall-decor']) {
       expect(count((p) => p.kind === kind), kind).toBeGreaterThan(0);
     }
