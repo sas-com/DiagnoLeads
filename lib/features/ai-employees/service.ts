@@ -15,7 +15,12 @@ import {
   type AiEmployeeProfilePatch,
   resolveAiEmployeeProfile,
 } from './types/profile';
-import { type AiEmployeeRole, isAiEmployeeRole } from './types/roles';
+import {
+  AI_EMPLOYEES_PER_ROLE,
+  AI_EMPLOYEE_SEATS_PER_ROLE,
+  type AiEmployeeRole,
+  isAiEmployeeRole,
+} from './types/roles';
 import {
   AI_EMPLOYEE_RUNS_LIMIT,
   type AiEmployeeRunStatus,
@@ -43,6 +48,8 @@ export interface OfficeRun {
 export interface OfficeEmployee {
   id: string;
   role: AiEmployeeRole;
+  /** Which of the role's desks it sits at, 0 to AI_EMPLOYEE_SEATS_PER_ROLE - 1 (#1282) */
+  seat: number;
   name: string;
   status: AiEmployeeStatus;
   createdAt: Date;
@@ -136,6 +143,7 @@ export async function getOffice(
     office.push({
       id: employee.id,
       role: employee.role,
+      seat: employee.seat,
       name: employee.name,
       status,
       createdAt: employee.createdAt,
@@ -182,22 +190,51 @@ export async function listRuns(
   return rows.map(toOfficeRun);
 }
 
-/** Hires an employee for the role; null when the organization already has one for it */
+/**
+ * Hires an employee for the role at the first free desk of the role (#1282); null when the role
+ * already has as many employees as it may have. Two hires at once never take the same desk (the
+ * database refuses it): the one that lost tries the next free desk.
+ */
 export async function hireEmployee(
   db: Database,
-  input: { organizationId: string; role: AiEmployeeRole; name: string; userId: string }
-): Promise<{ id: string } | null> {
-  const [created] = await db
-    .insert(aiEmployees)
-    .values({
-      organizationId: input.organizationId,
-      role: input.role,
-      name: input.name,
-      createdBy: input.userId,
-    })
-    .onConflictDoNothing({ target: [aiEmployees.organizationId, aiEmployees.role] })
-    .returning({ id: aiEmployees.id });
-  return created ?? null;
+  input: {
+    organizationId: string;
+    role: AiEmployeeRole;
+    name: string;
+    userId: string;
+    /** How many a role may have; AI_EMPLOYEES_PER_ROLE unless a test says otherwise */
+    perRole?: number;
+  }
+): Promise<{ id: string; seat: number } | null> {
+  const perRole = Math.min(input.perRole ?? AI_EMPLOYEES_PER_ROLE, AI_EMPLOYEE_SEATS_PER_ROLE);
+  for (let attempt = 0; attempt < AI_EMPLOYEE_SEATS_PER_ROLE; attempt++) {
+    const taken = await db
+      .select({ seat: aiEmployees.seat })
+      .from(aiEmployees)
+      .where(
+        and(eq(aiEmployees.organizationId, input.organizationId), eq(aiEmployees.role, input.role))
+      );
+    if (taken.length >= perRole) return null;
+    const used = new Set(taken.map((row) => row.seat));
+    let seat = 0;
+    while (used.has(seat)) seat++;
+    if (seat >= AI_EMPLOYEE_SEATS_PER_ROLE) return null;
+    const [created] = await db
+      .insert(aiEmployees)
+      .values({
+        organizationId: input.organizationId,
+        role: input.role,
+        seat,
+        name: input.name,
+        createdBy: input.userId,
+      })
+      .onConflictDoNothing({
+        target: [aiEmployees.organizationId, aiEmployees.role, aiEmployees.seat],
+      })
+      .returning({ id: aiEmployees.id, seat: aiEmployees.seat });
+    if (created) return created;
+  }
+  return null;
 }
 
 /**

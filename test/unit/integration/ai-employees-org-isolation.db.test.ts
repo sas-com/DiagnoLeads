@@ -109,10 +109,36 @@ describe.skipIf(!url)('AI employees: permissions and organization isolation (Pos
     expect(await rowOfA()).toEqual({ name: 'AI 時期', status: 'active' });
   });
 
-  it('hires one employee per role (CONFLICT for a second)', async () => {
+  it('hires up to the employees a role may have, each at a desk (CONFLICT past it, #1282)', async () => {
+    // One per role for now (AI_EMPLOYEES_PER_ROLE), at the role's first desk
+    const office = await adminA.aiEmployees.office({ organizationId: orgA });
+    expect(office.employees.map((e: { seat: number }) => e.seat)).toEqual([0]);
     await expect(
       adminA.aiEmployees.hire({ organizationId: orgA, role: 'back_office', name: '二人目' })
     ).rejects.toMatchObject({ code: 'CONFLICT' });
+    // Two hires of a free role at once: one desk, one employee
+    const both = await Promise.allSettled([
+      adminA.aiEmployees.hire({ organizationId: orgA, role: 'engineer', name: '同時1' }),
+      adminA.aiEmployees.hire({ organizationId: orgA, role: 'engineer', name: '同時2' }),
+    ]);
+    expect(both.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(both.find((result) => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'CONFLICT' },
+    });
+    const engineer = (both.find((result) => result.status === 'fulfilled') as PromiseFulfilledResult<{
+      id: string;
+      seat: number;
+    }>).value;
+    expect(engineer.seat).toBe(0);
+    // A dismissed employee's desk is free again
+    await adminA.aiEmployees.dismiss({ organizationId: orgA, employeeId: engineer.id });
+    const successor = await adminA.aiEmployees.hire({
+      organizationId: orgA,
+      role: 'engineer',
+      name: '後任',
+    });
+    expect(successor).toMatchObject({ seat: 0 });
+    await adminA.aiEmployees.dismiss({ organizationId: orgA, employeeId: successor.id });
     // The same role in another organization is fine
     const other = await adminB.aiEmployees.hire({
       organizationId: orgB,

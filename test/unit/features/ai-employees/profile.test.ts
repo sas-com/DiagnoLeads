@@ -194,7 +194,18 @@ describe('the migration of the AI employee tables', () => {
     expect(training).toContain(`ADD COLUMN "policy" text DEFAULT '' NOT NULL`);
   });
 
-  it('turns it on for the version history of the templates, kept from the templates saved (#1281)', () => {
+  it('gives each employee a desk of its role, keeping the one-per-role index for now (#1282)', () => {
+    const seats = readFileSync(
+      resolve(__dirname, '../../../../drizzle/0043_employees_per_role.sql'),
+      'utf8'
+    );
+    // Existing rows take the first desk; the code before and after the migration both stay valid
+    expect(seats).toContain('ADD COLUMN "seat" integer DEFAULT 0 NOT NULL');
+    expect(seats).toContain('"ai_employees_organization_role_seat_unique"');
+    expect(seats).not.toContain('DROP INDEX "ai_employees_organization_role_unique"');
+  });
+
+    it('turns it on for the version history of the templates, kept from the templates saved (#1281)', () => {
     const updates = readFileSync(
       resolve(__dirname, '../../../../drizzle/0042_training_updates.sql'),
       'utf8'
