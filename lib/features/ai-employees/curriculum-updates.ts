@@ -23,6 +23,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { refresherMessage } from './agent/prompts';
 import { agentEnabled } from './agent/runtime';
 import { type CurriculumLocale, defaultSections } from './curriculum';
+import { isOpenSessionConflict } from './training';
 import {
   type TemplateChange,
   type TemplateScope,
@@ -42,6 +43,11 @@ export interface TemplateUpdate {
   fromVersion: number;
   /** The template's version now */
   toVersion: number;
+  /**
+   * When the employee's copy was last saved, read with the changes: sent back with the update so
+   * an edit made since then refuses it
+   */
+  copyUpdatedAt: Date;
   changes: TemplateChange[];
 }
 
@@ -91,6 +97,7 @@ export async function getTemplateUpdates(
         kind: aiEmployeeTrainings.kind,
         sections: aiEmployeeTrainings.sections,
         templateVersion: aiEmployeeTrainings.templateVersion,
+        updatedAt: aiEmployeeTrainings.updatedAt,
       })
       .from(aiEmployeeTrainings)
       .where(eq(aiEmployeeTrainings.organizationId, input.organizationId)),
@@ -148,6 +155,7 @@ export async function getTemplateUpdates(
     own[kind] = {
       fromVersion: row.templateVersion,
       toVersion: template.version,
+      copyUpdatedAt: row.updatedAt,
       changes: templateChanges(kind, {
         bases: basesOf(scope, row.templateVersion, saved),
         latest: completeSections(kind, template.sections),
@@ -176,12 +184,6 @@ export type RefresherOutcome =
   | 'in_training'
   | 'paused'
   | 'open_session';
-
-/** The one open session of an employee is refused by the database */
-function isOpenSessionConflict(error: unknown): boolean {
-  const code = (error as { code?: unknown; cause?: { code?: unknown } } | null) ?? null;
-  return code?.code === '23505' || code?.cause?.code === '23505';
-}
 
 /**
  * Brings the template's newer version into an employee's training: the chosen sections take the
@@ -331,33 +333,37 @@ export async function applyTemplateUpdate(
     }),
   };
   try {
-    const [session] = await db
-      .insert(aiEmployeeSessions)
-      .values({
+    // The session and the record of which update led to it (it changes the notes without the
+    // president's answer) are written together
+    const sessionId = await db.transaction(async (tx) => {
+      const [session] = await tx
+        .insert(aiEmployeeSessions)
+        .values({
+          organizationId: input.organizationId,
+          employeeId: employee.id,
+          kind: 'refresher',
+          messages: [first],
+          startedBy: input.userId,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning({ id: aiEmployeeSessions.id });
+      if (!session) return null;
+      await tx.insert(auditLogs).values({
         organizationId: input.organizationId,
-        employeeId: employee.id,
-        kind: 'refresher',
-        messages: [first],
-        startedBy: input.userId,
-        createdAt: now,
-        updatedAt: now,
-      })
-      .returning({ id: aiEmployeeSessions.id });
-    if (!session) return done('open_session');
-    // Which update led to the refresher (it changes the notes without the president's answer)
-    await db.insert(auditLogs).values({
-      organizationId: input.organizationId,
-      userId: input.userId,
-      action: 'update',
-      resource: 'ai_training',
-      resourceId: employee.id,
-      changes: {
-        before: null,
-        after: { kind: input.kind, sessionId: session.id, sections: changed },
-      },
-      metadata: { event: 'refresher_started' },
+        userId: input.userId,
+        action: 'update',
+        resource: 'ai_training',
+        resourceId: employee.id,
+        changes: {
+          before: null,
+          after: { kind: input.kind, sessionId: session.id, sections: changed },
+        },
+        metadata: { event: 'refresher_started' },
+      });
+      return session.id;
     });
-    return done('started', session.id);
+    return sessionId ? done('started', sessionId) : done('open_session');
   } catch (error) {
     if (isOpenSessionConflict(error)) return done('open_session');
     throw error;

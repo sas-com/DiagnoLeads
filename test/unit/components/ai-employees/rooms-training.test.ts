@@ -5,6 +5,7 @@ import {
   boardOfKey,
   nextStepDelay,
   onboardingStep,
+  hasOpenSession,
   refresherStep,
   reviewStep,
   runningSession,
@@ -105,9 +106,22 @@ describe('the refresher (#1281)', () => {
         NOW
       )
     ).toBe('due');
-    expect(refresherStep(onboarded)).toBe('none');
-    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'running') })).toBe('running');
-    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'succeeded') })).toBe('done');
-    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'cancelled') })).toBe('failed');
+    expect(refresherStep(onboarded, true)).toBe('none');
+    const running = { ...onboarded, refresher: session('refresher', 'running') };
+    expect(refresherStep(running, true)).toBe('running');
+    // It waits while the employee is paused or the agents are off: it is not said to run
+    expect(refresherStep({ ...running, status: 'paused' }, true)).toBe('paused');
+    expect(refresherStep(running, false)).toBe('disabled');
+    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'succeeded') }, true)).toBe(
+      'done'
+    );
+    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'cancelled') }, true)).toBe(
+      'failed'
+    );
+    // One piece of work at a time: a review waiting or a refresher running holds the next back
+    expect(hasOpenSession(onboarded)).toBe(false);
+    expect(hasOpenSession(running)).toBe(true);
+    expect(hasOpenSession({ ...onboarded, session: session('review', 'waiting') })).toBe(true);
+    expect(hasOpenSession({ ...onboarded, session: session('review', 'failed') })).toBe(false);
   });
 });

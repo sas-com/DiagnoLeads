@@ -180,7 +180,11 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
     ]);
 
     curriculum = await adminA.aiEmployees.curriculum({ organizationId: orgA, locale: 'ja' });
-    expect(curriculum.updates[marketer].common).toEqual({
+    // Read with the changes: what the screen sends back with the update
+    expect(curriculum.updates[marketer].common.copyUpdatedAt).toEqual(
+      (await ownCommon(marketer))?.updatedAt
+    );
+    expect(curriculum.updates[marketer].common).toMatchObject({
       fromVersion: 1,
       toVersion: 2,
       changes: [
@@ -404,5 +408,37 @@ describe.skipIf(!url)('AI employees: bringing a template update (PostgreSQL)', (
       toVersion: 3,
       changes: [{ section: 'values', base: null, edited: null }],
     });
+  });
+
+  it('never lets a save of the copy overwrite an update brought in since it was read', async () => {
+    const read = (await ownCommon(sales))?.updatedAt;
+    const sections = (await ownCommon(sales))?.sections as typeof V1;
+    // Another manager brings an update in meanwhile (here: a manual save moves the copy on)
+    await adminA.aiEmployees.saveTraining({
+      organizationId: orgA,
+      employeeId: sales,
+      kind: 'common',
+      sections: { ...sections, donts: '別の管理者の手直し' },
+    });
+    await expect(
+      adminA.aiEmployees.saveTraining({
+        organizationId: orgA,
+        employeeId: sales,
+        kind: 'common',
+        sections: { ...sections, donts: '古い画面からの保存' },
+        copyUpdatedAt: read,
+      })
+    ).rejects.toMatchObject({ code: 'CONFLICT', message: 'changed_meanwhile' });
+    expect((await ownCommon(sales))?.sections).toMatchObject({ donts: '別の管理者の手直し' });
+    // Read again, it is saved
+    expect(
+      await adminA.aiEmployees.saveTraining({
+        organizationId: orgA,
+        employeeId: sales,
+        kind: 'common',
+        sections: { ...sections, donts: '読み直してからの保存' },
+        copyUpdatedAt: (await ownCommon(sales))?.updatedAt,
+      })
+    ).toEqual({ kind: 'common' });
   });
 });

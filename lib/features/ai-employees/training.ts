@@ -330,7 +330,7 @@ export async function setPolicy(
 }
 
 /** The one open session of an employee is refused by the database: reads it as a failure */
-function isOpenSessionConflict(error: unknown): boolean {
+export function isOpenSessionConflict(error: unknown): boolean {
   const code = (error as { code?: unknown; cause?: { code?: unknown } } | null) ?? null;
   return code?.code === '23505' || code?.cause?.code === '23505';
 }

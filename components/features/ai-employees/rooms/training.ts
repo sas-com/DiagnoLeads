@@ -102,9 +102,7 @@ export function reviewStep(
   if (employee.status === 'paused') return 'paused';
   const due = employee.nextReviewAt ? new Date(employee.nextReviewAt) : null;
   // One open session per employee: a refresher running holds the review back too
-  if ([employee.session, employee.refresher].some((open) => open && isOpen(open.status))) {
-    return 'not_due';
-  }
+  if (hasOpenSession(employee)) return 'not_due';
   return due && due.getTime() <= now.getTime() ? 'due' : 'not_due';
 }
 
@@ -116,21 +114,37 @@ export function runningSession(employee: TrainingEmployeeView): string | null {
   return employee.refresher?.status === 'running' ? employee.refresher.id : null;
 }
 
-const isOpen = (status: AiEmployeeSessionStatus) => status === 'running' || status === 'waiting';
+/** A session that is not over: running, or waiting for the president */
+export const isOpen = (status: AiEmployeeSessionStatus) =>
+  status === 'running' || status === 'waiting';
+
+/** Whether the employee has a piece of work open (one at a time): nothing else may start */
+export function hasOpenSession(employee: TrainingEmployeeView): boolean {
+  return [employee.session, employee.refresher].some(
+    (session) => session !== null && session !== undefined && isOpen(session.status)
+  );
+}
 
 /**
  * Where an employee stands with an update of its training (#1281):
  * - running: the employee reads the change and fixes its notes
+ * - paused / disabled: it is running but waits (the employee is paused, the agents are off)
  * - done: the latest refresher is over (its report is shown)
  * - failed: it stopped (cancelled, refused, ...); the update itself stays
  * - none: no refresher yet
  */
-export type RefresherStep = 'none' | 'running' | 'done' | 'failed';
+export type RefresherStep = 'none' | 'running' | 'paused' | 'disabled' | 'done' | 'failed';
 
-export function refresherStep(employee: TrainingEmployeeView): RefresherStep {
+export function refresherStep(
+  employee: TrainingEmployeeView,
+  agentEnabled: boolean
+): RefresherStep {
   const refresher = employee.refresher;
   if (!refresher) return 'none';
-  if (refresher.status === 'running') return 'running';
+  if (refresher.status === 'running') {
+    if (employee.status === 'paused') return 'paused';
+    return agentEnabled ? 'running' : 'disabled';
+  }
   return refresher.status === 'succeeded' ? 'done' : 'failed';
 }
 

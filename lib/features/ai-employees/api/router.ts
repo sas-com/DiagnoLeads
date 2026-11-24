@@ -229,8 +229,10 @@ export const aiEmployeesRouter = router({
         kind: input.kind,
         sections: input.sections,
         userId: ctx.user.id,
+        ...(input.copyUpdatedAt ? { copyUpdatedAt: input.copyUpdatedAt } : {}),
       });
-      if (!saved) throw notFound();
+      if (saved === 'not_found') throw notFound();
+      if (saved === 'changed_meanwhile') throw trainingError(saved);
       return saved;
     }),
 

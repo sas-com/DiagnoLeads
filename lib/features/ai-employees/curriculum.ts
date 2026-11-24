@@ -243,11 +243,17 @@ async function writeTraining(
     templateVersion: number | null;
     userId: string | null;
     now: Date;
+    /**
+     * When the copy was last saved as the writer read it: written only if it is still so (an update
+     * brought in or another edit since then is never overwritten). Left out, it is always written
+     */
+    expectedUpdatedAt?: Date;
   }
 ) {
   const sections = completeSections(input.kind, input.sections);
+  // Locked until the write is over (the callers write in a transaction)
   const [before] = await db
-    .select({ sections: aiEmployeeTrainings.sections })
+    .select({ sections: aiEmployeeTrainings.sections, updatedAt: aiEmployeeTrainings.updatedAt })
     .from(aiEmployeeTrainings)
     .where(
       and(
@@ -255,7 +261,14 @@ async function writeTraining(
         eq(aiEmployeeTrainings.employeeId, input.employeeId),
         eq(aiEmployeeTrainings.kind, input.kind)
       )
-    );
+    )
+    .for('update');
+  if (
+    input.expectedUpdatedAt &&
+    (!before || before.updatedAt.getTime() !== input.expectedUpdatedAt.getTime())
+  ) {
+    return null;
+  }
   await db
     .insert(aiEmployeeTrainings)
     .values({
@@ -282,7 +295,10 @@ async function writeTraining(
   return { before: before?.sections ?? null, after: sections };
 }
 
-/** A manager edits an employee's own training of one kind; null when there is no such employee */
+/**
+ * A manager edits an employee's own training of one kind. Refused when there is no such employee,
+ * or when the copy was saved since the manager read it (copyUpdatedAt)
+ */
 export async function saveEmployeeTraining(
   db: Database,
   input: {
@@ -291,18 +307,22 @@ export async function saveEmployeeTraining(
     kind: TrainingKind;
     sections: TrainingSections;
     userId: string;
+    /** When the copy was last saved, as the manager read it (none before the first copy) */
+    copyUpdatedAt?: Date;
     now?: Date;
   }
-): Promise<{ kind: TrainingKind } | null> {
+): Promise<{ kind: TrainingKind } | 'not_found' | 'changed_meanwhile'> {
   const employee = await employeeOf(db, input.organizationId, input.employeeId);
-  if (!employee) return null;
+  if (!employee) return 'not_found';
   const now = input.now ?? new Date();
-  await db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
     const written = await writeTraining(tx, {
       ...pickTraining(input),
       templateVersion: null,
       now,
+      ...(input.copyUpdatedAt ? { expectedUpdatedAt: input.copyUpdatedAt } : {}),
     });
+    if (!written) return false;
     await audit(tx, {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -311,8 +331,9 @@ export async function saveEmployeeTraining(
       before: written.before && { kind: input.kind, sections: written.before },
       after: { kind: input.kind, sections: written.after },
     });
+    return true;
   });
-  return { kind: input.kind };
+  return saved ? { kind: input.kind } : 'changed_meanwhile';
 }
 
 /** The fields of a training write, named one by one (never the caller's whole input) */
@@ -387,6 +408,7 @@ export async function copyTemplate(
       userId: input.userId,
       now,
     });
+    if (!written) throw new Error('The training was not copied');
     await audit(tx, {
       organizationId: input.organizationId,
       userId: input.userId,

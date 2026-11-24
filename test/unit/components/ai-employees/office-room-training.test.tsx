@@ -392,6 +392,8 @@ describe('OfficeRoomTraining', () => {
         employeeId: id,
         kind: 'common',
         sections: { ...common, values: '数字で話す' },
+        // When its copy was read: an update brought in meanwhile is never overwritten (#1281)
+        copyUpdatedAt: expect.any(Date),
       },
     });
 
@@ -490,6 +492,7 @@ describe('OfficeRoomTraining', () => {
           common: {
             fromVersion: 2,
             toVersion: 3,
+            copyUpdatedAt: new Date('2026-11-19T00:00:00Z'),
             changes: [
               { section: 'company', base: '古い会社の説明', latest: '新しい会社の説明', own: '古い会社の説明', edited: false },
               { section: 'services', base: '前のサービスの説明', latest: '新しいサービスの説明', own: 'この社員向けのサービスの説明', edited: true },
@@ -505,10 +508,18 @@ describe('OfficeRoomTraining', () => {
     expect(screen.getByRole('heading', { name: 'テンプレートの更新（版 2 → 版 3）' })).toBeInTheDocument();
     expect(screen.getByText('新しい会社の説明')).toBeInTheDocument();
     expect(screen.getByText(/この社員向けに直しています/)).toBeInTheDocument();
-    // By default: the unedited section is replaced, the edited one is kept
-    const boxes = screen.getAllByRole('checkbox', { name: 'テンプレートの文に置き換える' });
-    expect(boxes.map((box) => (box as HTMLInputElement).checked)).toEqual([true, false]);
-    await user.click(boxes[1] as HTMLElement);
+    // By default: the unedited section is replaced, the edited one is kept; each box names its
+    // section, and the choice is said before sending
+    const company = screen.getByRole('checkbox', { name: '「会社の概要」をテンプレートの文に置き換える' });
+    const services = screen.getByRole('checkbox', { name: '「サービス」をテンプレートの文に置き換える' });
+    expect([company, services].map((box) => (box as HTMLInputElement).checked)).toEqual([true, false]);
+    expect(services).toHaveAccessibleDescription(/この社員向けに直しています/);
+    expect(screen.getByText('置き換える：会社の概要／残す：サービス')).toBeInTheDocument();
+    await user.click(services);
+    expect(screen.getByText('置き換える：会社の概要・サービス／残す：なし')).toBeInTheDocument();
+    // The plain update comes first; the refresher is the other button
+    const buttons = screen.getAllByRole('button', { name: /^取り込/ }).map((button) => button.textContent);
+    expect(buttons).toEqual(['取り込む', '取り込んで再研修する']);
     await user.click(screen.getByRole('button', { name: '取り込んで再研修する' }));
     expect(mocks.calls).toEqual([
       {
@@ -526,7 +537,51 @@ describe('OfficeRoomTraining', () => {
         },
       },
     ]);
-    expect(screen.getByText('取り込みました。再研修を始めます。')).toBeInTheDocument();
+    // The result is said and takes the focus: the panel it came from goes away
+    expect(screen.getByText('1項目を置き換えました。 再研修を始めます。')).toHaveFocus();
+  });
+
+  it('offers no refresher while another training is open: an update brought in cannot be read again (#1281)', async () => {
+    const user = userEvent.setup();
+    const id = '770e8400-e29b-41d4-a716-446655440001';
+    const sections = { company: 'a', services: '', customers: '', values: '', donts: '' };
+    mocks.curriculum = {
+      templates: {
+        common: { scope: 'common', sections: { ...sections, company: 'b' }, version: 2, updatedAt: null },
+        marketer: {
+          scope: 'marketer',
+          sections: { purpose: '', scope: '', tasks: '', handoffs: '', measures: '' },
+          version: 0,
+          updatedAt: null,
+        },
+      },
+      employees: { [id]: { common: { kind: 'common', sections, templateVersion: 1, updatedAt: new Date() } } },
+      updates: {
+        [id]: {
+          common: {
+            fromVersion: 1,
+            toVersion: 2,
+            copyUpdatedAt: new Date('2026-11-19T00:00:00Z'),
+            changes: [{ section: 'company', base: 'a', latest: 'b', own: 'a', edited: false }],
+          },
+        },
+      },
+    };
+    const { press } = renderRoom([
+      employee({
+        level: 1,
+        session: { id: 'r', kind: 'review', status: 'waiting', report: null, resultCode: null, steps: 2 },
+        review: { id: 'v', status: 'open', sessionId: 'r' },
+      }),
+    ]);
+    press('1');
+    expect(screen.queryByRole('button', { name: '取り込んで再研修する' })).not.toBeInTheDocument();
+    expect(screen.getByText(/ほかの研修（評価面談・再研修）が進んでいるので、再研修はできません。/)).toBeInTheDocument();
+    // Nothing chosen: the button says that only the version is aligned
+    await user.click(screen.getByRole('checkbox', { name: '「会社の概要」をテンプレートの文に置き換える' }));
+    expect(screen.getByText(/置き換える項目はありません。取り込むと版 2 にそろい/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '置き換えずに版をそろえる' }));
+    expect(mocks.calls[0]?.input).toMatchObject({ replace: [], refresher: false });
   });
 
   it('offers no refresher before the onboarding, and shows how the last refresher went (#1281)', async () => {
@@ -549,6 +604,7 @@ describe('OfficeRoomTraining', () => {
           common: {
             fromVersion: 1,
             toVersion: 2,
+            copyUpdatedAt: new Date('2026-11-19T00:00:00Z'),
             changes: [{ section: 'company', base: null, latest: 'b', own: 'a', edited: null }],
           },
         },
@@ -558,10 +614,13 @@ describe('OfficeRoomTraining', () => {
     press('1');
     expect(screen.getByText(/直したかどうか分かりません/)).toBeInTheDocument();
     // Not known whether it was edited: kept unless the president says otherwise
-    expect(screen.getByRole('checkbox', { name: 'テンプレートの文に置き換える' })).not.toBeChecked();
+    const box = screen.getByRole('checkbox', { name: '「会社の概要」をテンプレートの文に置き換える' });
+    expect(box).not.toBeChecked();
+    await user.click(box);
     expect(screen.queryByRole('button', { name: '取り込んで再研修する' })).not.toBeInTheDocument();
+    expect(screen.getByText(/オンボーディングの前なので、再研修はしません。/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '取り込む' }));
-    expect(mocks.calls[0]?.input).toMatchObject({ replace: [], refresher: false });
+    expect(mocks.calls[0]?.input).toMatchObject({ replace: ['company'], refresher: false });
   });
 
   it('shows a refresher running with a way to stop it, and its report once over (#1281)', async () => {
@@ -648,5 +707,59 @@ describe('OfficeRoomTraining', () => {
     expect(screen.getByText(/の再研修が終わりました（2026年11月20日）。/)).toBeInTheDocument();
     expect(screen.getByText('サービスの説明が新しくなりました。')).toBeInTheDocument();
     expect(screen.getByText('/memories/company.md')).toBeInTheDocument();
+  });
+
+  it('says why a refresher stopped, and that it waits while the employee is paused (#1281)', () => {
+    mocks.curriculum = {
+      templates: {
+        common: {
+          scope: 'common',
+          sections: { company: '', services: '', customers: '', values: '', donts: '' },
+          version: 0,
+          updatedAt: null,
+        },
+        marketer: {
+          scope: 'marketer',
+          sections: { purpose: '', scope: '', tasks: '', handoffs: '', measures: '' },
+          version: 0,
+          updatedAt: null,
+        },
+        sales: {
+          scope: 'sales',
+          sections: { purpose: '', scope: '', tasks: '', handoffs: '', measures: '' },
+          version: 0,
+          updatedAt: null,
+        },
+      },
+      employees: {},
+      updates: {},
+    };
+    const refresher = (status: string, resultCode: string | null) => ({
+      id: 'refresher-1',
+      kind: 'refresher',
+      status,
+      report: null,
+      resultCode,
+      steps: 2,
+      createdAt: new Date('2026-11-20T00:00:00Z'),
+      updatedAt: new Date('2026-11-20T00:00:00Z'),
+    });
+    const { press } = renderRoom([
+      employee({ level: 1, refresher: refresher('failed', 'no_report') }),
+      employee({
+        id: 'b',
+        role: 'sales',
+        name: 'AI 追客',
+        level: 1,
+        status: 'paused',
+        refresher: refresher('running', null),
+      }),
+    ]);
+    press('1');
+    expect(screen.getByText('前回の再研修は、報告が出されないまま止まりました。')).toBeInTheDocument();
+    expect(screen.getByText(/この更新の再研修は、もう一度は始められません。/)).toBeInTheDocument();
+    press('ArrowDown');
+    expect(screen.getByText('休止中のため、AI 追客の再研修は止まっています。呼び戻すと続きます。')).toBeInTheDocument();
+    expect(mocks.advance).not.toHaveBeenCalled();
   });
 });

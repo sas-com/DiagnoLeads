@@ -88,10 +88,22 @@ export const saveTemplateSchema = officeScopeSchema
     ) as TrainingSections,
   }));
 
-/** Save an employee's own training of one kind */
+/**
+ * Save an employee's own training of one kind, with when its copy was last saved as the screen
+ * read it (none before the first copy): an update brought in or another edit since then is never
+ * overwritten (#1281)
+ */
 export const saveEmployeeTrainingSchema = z.discriminatedUnion('kind', [
-  employeeScopeSchema.extend({ kind: z.literal('common'), sections: commonSectionsSchema }),
-  employeeScopeSchema.extend({ kind: z.literal('role'), sections: roleSectionsSchema }),
+  employeeScopeSchema.extend({
+    kind: z.literal('common'),
+    sections: commonSectionsSchema,
+    copyUpdatedAt: z.date().optional(),
+  }),
+  employeeScopeSchema.extend({
+    kind: z.literal('role'),
+    sections: roleSectionsSchema,
+    copyUpdatedAt: z.date().optional(),
+  }),
 ]);
 
 /** Copy the template again into an employee's training of one kind */

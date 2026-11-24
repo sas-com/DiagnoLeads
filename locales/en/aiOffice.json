@@ -950,8 +950,9 @@
             "cancelCopy": "Do not copy",
             "saveTraining": "Save",
             "saveTemplate": "Save the template",
-            "applyUpdate": "Bring in",
-            "applyWithRefresher": "Bring in and refresh"
+            "applyUpdate": "Apply update",
+            "applyWithRefresher": "Apply and retrain",
+            "alignVersion": "Mark as the new version without replacing"
           },
           "errors": {
             "not_found": "Not found. Please enter the room again.",
@@ -985,31 +986,51 @@
             "templateNote": "Saving a template raises its version, used for the employees copied from now on. Employees already copied get a notice of the update and can bring it in section by section.",
             "update": {
               "title": "Template update (version {from} → version {to})",
-              "about": "The sections the template changed. Choose the sections to replace, then bring the update in. Sections edited for this employee are kept by default.",
-              "none": "The changes are already in this employee's training. Bringing the update in marks it as version {to}.",
+              "about": "The sections the template changed. Choose the sections to replace, then apply the update. At first, only the sections not edited for this employee are set to be replaced (edited sections, and sections not known to be edited or not, are kept).",
+              "none": "No section is replaced. Applying marks the training as version {to} and this notice goes away (the kept sections are not shown again until the template changes next).",
               "unedited": "Not edited for this employee",
               "edited": "Edited for this employee (replacing it loses that edit)",
               "unknown": "Not known whether it was edited for this employee (the older version was not kept)",
-              "own": "This employee's text now",
+              "own": "Current text (this employee)",
               "latest": "The template's new text",
-              "replace": "Replace with the template's text",
-              "refresherHint": "With \"Bring in and refresh\", the AI employee then reads what changed and updates its notes."
+              "replace": "Replace \"{section}\" with the template's text",
+              "refresherHint": "With \"Apply and retrain\", the AI employee then reads what changed and updates its notes.",
+              "summary": "Replaced: {replaced} / Kept: {kept}",
+              "nothing": "none",
+              "replacedCount": "{count, plural, one {# section was replaced.} other {# sections were replaced.}}",
+              "aligned": "Marked as the new version without replacing anything.",
+              "noRefresher": {
+                "in_training": "Before the onboarding there is no refresher training: the onboarding reads the new training.",
+                "paused": "The employee is paused, so there can be no refresher training. To have one, bring the employee back before applying.",
+                "open_session": "Another training (a review or a refresher) is in progress, so there can be no refresher training. To have one, apply after it is over."
+              }
             },
             "refresher": {
-              "title": "Refresher",
+              "title": "Refresher training",
               "running": "{name} is reading what changed in its training and updating its notes.",
-              "done": "{name} finished its refresher ({date}).",
-              "failed": "The last refresher stopped. The update of the training stays in.",
+              "done": "{name} finished its refresher training ({date}).",
               "summary": "What changed (in the AI employee's words)",
               "notesChanged": "Notes updated",
               "outcome": {
-                "started": "Brought in. The refresher starts.",
-                "not_asked": "Brought in.",
-                "unchanged": "Brought in. No section was replaced, so there is no refresher.",
-                "agent_disabled": "Brought in. The refresher did not start: the system is not ready yet.",
-                "in_training": "Brought in. Before the onboarding there is no refresher: the onboarding reads the new training.",
-                "paused": "Brought in. The refresher did not start: the employee is paused.",
-                "open_session": "Brought in. The refresher did not start: another training is in progress."
+                "started": "The refresher training starts.",
+                "agent_disabled": "The refresher training did not start: the system is not ready yet.",
+                "in_training": "Before the onboarding there is no refresher training: the onboarding reads the new training.",
+                "paused": "The refresher training did not start: the employee is paused.",
+                "open_session": "The refresher training did not start: another training is in progress."
+              },
+              "paused": "{name}'s refresher training waits: the employee is paused. It goes on once the employee is back.",
+              "disabled": "{name}'s refresher training waits: the system is not ready yet.",
+              "afterFailure": "The refresher training of this update cannot be started again. The notes can be fixed on the Notes board.",
+              "result": {
+                "refused": "The last refresher training stopped: Claude declined.",
+                "max_tokens": "The last refresher training stopped: an answer was too long.",
+                "context_full": "The last refresher training stopped: the conversation grew too long.",
+                "step_limit": "The last refresher training stopped: no report within the allowed steps.",
+                "token_limit": "The last refresher training stopped: the usage limit was reached.",
+                "no_report": "The last refresher training stopped without a report.",
+                "claude_error": "The last refresher training stopped on a Claude setup problem. The operators were told.",
+                "cancelled": "The last refresher training was stopped.",
+                "other": "The last refresher training stopped."
               }
             }
           }
