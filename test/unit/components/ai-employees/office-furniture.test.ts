@@ -132,13 +132,17 @@ describe('officeScenery', () => {
     expect(count((p) => p.kind === 'lounge' && p.shape === 'rounded')).toBe(7);
     // Every desk is closed by a panel between its legs, every rack has a handle, every pendant
     // a brass cap (#1159)
-    const desks = parts.filter((p) => p.kind === 'desk' && p.colour === '#5f3d26' && p.h === 0.36);
-    expect(desks.length).toBe(
+    const panels = parts.filter((p) => p.kind === 'desk' && p.d === 0.03 && p.h === 0.36);
+    expect(panels.length).toBe(
       SALES_DESKS.length +
         MARKETING_DESKS.length +
         Object.values(ROLE_DESKS).filter((own) => !('counter' in own && own.counter)).length +
         TRAINING_DESKS.length +
         SPARE_STUDY_DESKS.length
+    );
+    // In the colour of their desk: light under the study desks
+    expect(panels.filter((p) => p.colour === '#d9dde3')).toHaveLength(
+      TRAINING_DESKS.length + SPARE_STUDY_DESKS.length
     );
     expect(count((p) => p.kind === 'storage' && p.colour === '#8b95a3')).toBe(SERVER_RACKS.length);
     expect(
@@ -157,6 +161,12 @@ describe('officeScenery', () => {
     for (const kind of ['desk', 'table', 'storage', 'lounge', 'charging', 'rug', 'wall-decor']) {
       expect(count((p) => p.kind === kind), kind).toBeGreaterThan(0);
     }
+  });
+
+  it('is drawn in at most 16 calls: a piece added in a new shape and finish costs a call (#1159)', () => {
+    // One InstancedMesh per shape and finish (office-scenery-3d-view.tsx). Raise this only on
+    // purpose, with what it costs written in decision 2026-11-14-office-3d-production
+    expect(new Set(parts.map((p) => `${p.shape}-${p.finish}`)).size).toBeLessThanOrEqual(16);
   });
 
   it('puts each backrest behind the seat, away from where the chair is turned (#1159)', () => {

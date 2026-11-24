@@ -155,9 +155,30 @@ class Builder {
   }
 }
 
-/** The panel that closes a desk on the side of the viewer, between its legs (#1159) */
-function modestyPanel(b: Builder, x: number, y: number, w: number, d: number, top: number): void {
-  b.box(x + 0.12, y + d - 0.07, top - 0.42, w - 0.24, 0.03, 0.36, ['satin', WALNUT_DARK]);
+/**
+ * The panel that closes a desk on the side of the viewer, between its legs, hung from the top
+ * (#1159). In the colour of the desk: walnut under walnut, light under a light study desk
+ */
+function modestyPanel(
+  b: Builder,
+  {
+    x,
+    y,
+    w,
+    d,
+    top,
+    colour,
+  }: { x: number; y: number; w: number; d: number; top: number; colour: string }
+): void {
+  b.box(x + 0.12, y + d - 0.08, top - 0.36, w - 0.24, 0.03, 0.36, ['satin', colour]);
+}
+
+/** The two steel legs of a desk, each on a foot */
+function deskLegs(b: Builder, x: number, y: number, w: number, d: number, top: number): void {
+  for (const lx of [x + 0.05, x + w - 0.12]) {
+    b.box(lx, y + 0.08, 0.03, 0.07, d - 0.16, top - 0.03, ['metal', STEEL]);
+    b.box(lx - 0.02, y + 0.05, 0, 0.11, d - 0.1, 0.03, ['metal', STEEL]);
+  }
 }
 
 /**
@@ -166,14 +187,11 @@ function modestyPanel(b: Builder, x: number, y: number, w: number, d: number, to
  * The screens stay dark: what they would show is not known (#1159)
  */
 function desk(b: Builder, { x, y, w, d, monitors }: DeskPlace): void {
-  for (const lx of [x + 0.05, x + w - 0.12]) {
-    b.box(lx, y + 0.08, 0.03, 0.07, d - 0.16, 0.65, ['metal', STEEL]);
-    b.box(lx - 0.02, y + 0.05, 0, 0.11, d - 0.1, 0.03, ['metal', STEEL]);
-  }
-  modestyPanel(b, x, y, w, d, 0.68);
+  deskLegs(b, x, y, w, d, 0.68);
+  modestyPanel(b, { x, y, w, d, top: 0.68, colour: WALNUT_DARK });
   b.box(x, y, 0.68, w, d, 0.06, ['satin', WALNUT]);
   b.box(x + w * 0.3, y + d * 0.14, 0.74, w * 0.4, d * 0.24, 0.025, ['satin', '#d9dde3']);
-  b.rounded(x + w * 0.74, y + d * 0.16, 0.74, 0.07, 0.11, 0.03, ['satin', '#d9dde3']);
+  b.box(x + w * 0.74, y + d * 0.16, 0.74, 0.07, 0.11, 0.03, ['satin', '#d9dde3']);
   const mw = monitors === 2 ? w * 0.36 : w * 0.5;
   const starts = monitors === 2 ? [x + w * 0.1, x + w * 0.54] : [x + w * 0.25];
   for (const mx of starts) {
@@ -185,9 +203,8 @@ function desk(b: Builder, { x, y, w, d, monitors }: DeskPlace): void {
 }
 
 function studyDesk(b: Builder, { x, y, w, h: d }: FloorRect): void {
-  b.box(x + 0.05, y + 0.08, 0, 0.07, d - 0.16, 0.66, ['metal', STEEL]);
-  b.box(x + w - 0.12, y + 0.08, 0, 0.07, d - 0.16, 0.66, ['metal', STEEL]);
-  modestyPanel(b, x, y, w, d, 0.66);
+  deskLegs(b, x, y, w, d, 0.66);
+  modestyPanel(b, { x, y, w, d, top: 0.66, colour: '#d9dde3' });
   b.box(x, y, 0.66, w, d, 0.06, ['satin', '#eceef1']);
   // An open book
   b.box(x + w / 2 - 0.36, y + 0.16, 0.72, 0.34, 0.44, 0.03, ['matte', '#ffffff']);
@@ -488,7 +505,7 @@ export function officeScenery(): readonly SceneryPart[] {
     for (const fx of [rack.x + 0.04, rack.x + rack.w - 0.08]) {
       b.box(fx, front, 0.16, 0.04, 0.015, 2.04, ['metal', STEEL]);
     }
-    b.box(rack.x + rack.w - 0.11, front + 0.015, 1.05, 0.025, 0.025, 0.32, ['metal', '#8b95a3']);
+    b.box(rack.x + rack.w - 0.12, front, 1.05, 0.025, 0.025, 0.32, ['metal', '#8b95a3']);
     for (let i = 0; i < 6; i++) {
       b.box(rack.x + 0.12, rack.y + rack.h, 0.4 + i * 0.3, 0.48, 0.012, 0.03, [
         'glow',
