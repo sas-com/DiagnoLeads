@@ -1,5 +1,5 @@
 {
-  // `bun run typecheck` (CI): the app plus test/. tsconfig.json leaves test/ out because
+  // `bun run typecheck` (CI): the app plus test/, stories/ and .storybook/. tsconfig.json leaves test/ out because
   // `next build` type-checks with it (#482). The include comes from tsconfig.json
   "extends": "./tsconfig.json",
   "exclude": [
