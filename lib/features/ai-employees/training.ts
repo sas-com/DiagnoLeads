@@ -90,8 +90,10 @@ export interface TrainingEmployee {
   onboardedAt: Date | null;
   levelChangedAt: Date | null;
   policy: string;
-  /** The latest session (open or not) */
+  /** The latest onboarding or review session (open or not) */
   session: TrainingSession | null;
+  /** The latest refresher (#1281): the employee read an update of its training */
+  refresher: TrainingSession | null;
   /** The latest review */
   review: TrainingReview | null;
   /** When the next review may be held; null while in training */
@@ -230,17 +232,26 @@ export async function getTraining(
   for (const employee of employees) {
     if (!isAiEmployeeRole(employee.role)) continue;
     // The conversation itself is never read here: it stays on the server
-    const [session] = await db
-      .select(sessionColumns)
-      .from(aiEmployeeSessions)
-      .where(
-        and(
-          eq(aiEmployeeSessions.organizationId, input.organizationId),
-          eq(aiEmployeeSessions.employeeId, employee.id)
+    const latestOf = async (kinds: AiEmployeeSessionKind[]) => {
+      const [row] = await db
+        .select(sessionColumns)
+        .from(aiEmployeeSessions)
+        .where(
+          and(
+            eq(aiEmployeeSessions.organizationId, input.organizationId),
+            eq(aiEmployeeSessions.employeeId, employee.id),
+            inArray(aiEmployeeSessions.kind, kinds)
+          )
         )
-      )
-      .orderBy(desc(aiEmployeeSessions.createdAt))
-      .limit(1);
+        .orderBy(desc(aiEmployeeSessions.createdAt))
+        .limit(1);
+      return row ? toSession(row) : null;
+    };
+    // A refresher is apart: it never hides the onboarding report or the review's self-review
+    const [session, refresher] = await Promise.all([
+      latestOf(['onboarding', 'review']),
+      latestOf(['refresher']),
+    ]);
     const review = await lastReview(db, input.organizationId, employee.id);
     const level = toLevel(employee.level);
     result.push({
@@ -253,7 +264,8 @@ export async function getTraining(
       onboardedAt: employee.onboardedAt,
       levelChangedAt: employee.levelChangedAt,
       policy: employee.policy,
-      session: session ? toSession(session) : null,
+      session,
+      refresher,
       review: review ? toReview(review) : null,
       nextReviewAt: nextReviewAt({
         level,
@@ -318,7 +330,7 @@ export async function setPolicy(
 }
 
 /** The one open session of an employee is refused by the database: reads it as a failure */
-function isOpenSessionConflict(error: unknown): boolean {
+export function isOpenSessionConflict(error: unknown): boolean {
   const code = (error as { code?: unknown; cause?: { code?: unknown } } | null) ?? null;
   return code?.code === '23505' || code?.cause?.code === '23505';
 }

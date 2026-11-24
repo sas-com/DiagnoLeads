@@ -295,6 +295,13 @@
       "when": 1794870977079,
       "tag": "0041_training_curriculum",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795333686106,
+      "tag": "0042_training_updates",
+      "breakpoints": true
     }
   ]
 }

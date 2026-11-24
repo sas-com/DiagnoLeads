@@ -15,6 +15,11 @@ import {
   saveEmployeeTraining,
   saveTemplate,
 } from '../curriculum';
+import {
+  type TemplateUpdateFailure,
+  applyTemplateUpdate,
+  getTemplateUpdates,
+} from '../curriculum-updates';
 import { dismissEmployee, getOffice, hireEmployee, listRuns, updateEmployee } from '../service';
 import {
   type TrainingFailure,
@@ -28,6 +33,7 @@ import {
   startReview,
 } from '../training';
 import {
+  applyTemplateUpdateSchema,
   copyTemplateSchema,
   curriculumScopeSchema,
   saveEmployeeTrainingSchema,
@@ -74,7 +80,7 @@ function assertCanManage(can: boolean) {
  * A refusal of the training room as an error the screen can name: the message is the failure's
  * code (TrainingFailure), never free text
  */
-function trainingError(failure: TrainingFailure): TRPCError {
+function trainingError(failure: TrainingFailure | TemplateUpdateFailure): TRPCError {
   const code =
     failure === 'not_found'
       ? 'NOT_FOUND'
@@ -160,6 +166,7 @@ export const aiEmployeesRouter = router({
             policy: '',
             notes: [],
             session: employee.session && { ...employee.session, report: null },
+            refresher: employee.refresher && { ...employee.refresher, report: null },
           })),
     };
   }),
@@ -170,12 +177,37 @@ export const aiEmployeesRouter = router({
    */
   curriculum: organizationProcedure.input(curriculumScopeSchema).query(async ({ ctx, input }) => {
     assertCanManage(ctx.ability.can('update', 'Settings'));
-    const [templates, trainings] = await Promise.all([
+    const [templates, trainings, updates] = await Promise.all([
       getTemplates(ctx.db, { organizationId: ctx.organization.id, locale: input.locale }),
       getEmployeeTrainings(ctx.db, { organizationId: ctx.organization.id }),
+      getTemplateUpdates(ctx.db, { organizationId: ctx.organization.id }),
     ]);
-    return { templates, employees: Object.fromEntries(trainings) };
+    return { templates, employees: Object.fromEntries(trainings), updates };
   }),
+
+  /**
+   * Brings a newer template into an employee's training (#1281): the chosen sections are
+   * replaced, and a refresher may follow
+   */
+  applyTemplateUpdate: organizationProcedure
+    .input(applyTemplateUpdateSchema)
+    .mutation(async ({ ctx, input }) => {
+      assertCanManage(ctx.ability.can('update', 'Settings'));
+      const result = await applyTemplateUpdate(ctx.db, {
+        organizationId: ctx.organization.id,
+        employeeId: input.employeeId,
+        kind: input.kind,
+        fromVersion: input.fromVersion,
+        toVersion: input.toVersion,
+        copyUpdatedAt: input.copyUpdatedAt,
+        replace: input.replace,
+        refresher: input.refresher,
+        locale: input.locale,
+        userId: ctx.user.id,
+      });
+      if (!result.ok) throw trainingError(result.failure);
+      return result.value;
+    }),
 
   saveTemplate: organizationProcedure.input(saveTemplateSchema).mutation(async ({ ctx, input }) => {
     assertCanManage(ctx.ability.can('update', 'Settings'));
@@ -197,8 +229,10 @@ export const aiEmployeesRouter = router({
         kind: input.kind,
         sections: input.sections,
         userId: ctx.user.id,
+        ...(input.copyUpdatedAt ? { copyUpdatedAt: input.copyUpdatedAt } : {}),
       });
-      if (!saved) throw notFound();
+      if (saved === 'not_found') throw notFound();
+      if (saved === 'changed_meanwhile') throw trainingError(saved);
       return saved;
     }),
 

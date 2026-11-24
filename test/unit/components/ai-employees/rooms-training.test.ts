@@ -5,6 +5,8 @@ import {
   boardOfKey,
   nextStepDelay,
   onboardingStep,
+  hasOpenSession,
+  refresherStep,
   reviewStep,
   runningSession,
 } from '@/components/features/ai-employees/rooms/training';
@@ -18,7 +20,10 @@ const base = {
   review: null,
   nextReviewAt: null,
 };
-const session = (kind: 'onboarding' | 'review', status: 'running' | 'waiting' | 'failed') => ({
+const session = (
+  kind: 'onboarding' | 'review' | 'refresher',
+  status: 'running' | 'waiting' | 'failed' | 'succeeded' | 'cancelled'
+) => ({
   id: 's',
   kind,
   status,
@@ -77,5 +82,46 @@ describe('the steps of a running session', () => {
     for (const state of ['waiting', 'failed', 'paused', 'disabled', 'closed'] as const) {
       expect(nextStepDelay(state)).toBeNull();
     }
+  });
+});
+
+describe('the refresher (#1281)', () => {
+  const onboarded = { ...base, level: 1 as const };
+  it('is moved on by the room, holds the review back, and says how it went', () => {
+    expect(runningSession({ ...onboarded, refresher: session('refresher', 'running') })).toBe('s');
+    expect(
+      runningSession({ ...onboarded, status: 'paused', refresher: session('refresher', 'running') })
+    ).toBeNull();
+    expect(
+      reviewStep(
+        { ...onboarded, nextReviewAt: '2026-11-14', refresher: session('refresher', 'running') },
+        true,
+        NOW
+      )
+    ).toBe('not_due');
+    expect(
+      reviewStep(
+        { ...onboarded, nextReviewAt: '2026-11-14', refresher: session('refresher', 'succeeded') },
+        true,
+        NOW
+      )
+    ).toBe('due');
+    expect(refresherStep(onboarded, true)).toBe('none');
+    const running = { ...onboarded, refresher: session('refresher', 'running') };
+    expect(refresherStep(running, true)).toBe('running');
+    // It waits while the employee is paused or the agents are off: it is not said to run
+    expect(refresherStep({ ...running, status: 'paused' }, true)).toBe('paused');
+    expect(refresherStep(running, false)).toBe('disabled');
+    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'succeeded') }, true)).toBe(
+      'done'
+    );
+    expect(refresherStep({ ...onboarded, refresher: session('refresher', 'cancelled') }, true)).toBe(
+      'failed'
+    );
+    // One piece of work at a time: a review waiting or a refresher running holds the next back
+    expect(hasOpenSession(onboarded)).toBe(false);
+    expect(hasOpenSession(running)).toBe(true);
+    expect(hasOpenSession({ ...onboarded, session: session('review', 'waiting') })).toBe(true);
+    expect(hasOpenSession({ ...onboarded, session: session('review', 'failed') })).toBe(false);
   });
 });

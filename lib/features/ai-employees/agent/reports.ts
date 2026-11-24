@@ -10,6 +10,7 @@ import { refusedNoteContent } from './memory';
 
 export const ONBOARDING_REPORT_TOOL = 'submit_onboarding_report';
 export const REVIEW_REPORT_TOOL = 'submit_self_review';
+export const REFRESHER_REPORT_TOOL = 'submit_refresher_report';
 
 /** A line of a report: like the notes, never a person's contact details or a secret */
 const line = (max: number) =>
@@ -35,6 +36,13 @@ export const selfReviewSchema = z.object({
   next_goals: z.array(line(200)).min(1).max(5),
 });
 export type SelfReview = z.infer<typeof selfReviewSchema>;
+
+/** What the employee understood of an update of its training (#1281), and the notes it fixed */
+export const refresherReportSchema = z.object({
+  summary: line(600),
+  notes_changed: z.array(line(120)).max(5),
+});
+export type RefresherReport = z.infer<typeof refresherReportSchema>;
 
 const stringArray = (maxItems: number, maxLength: number) => ({
   type: 'array',
@@ -98,12 +106,37 @@ export const REPORT_TOOLS: Readonly<Record<AiEmployeeSessionKind, Anthropic.Tool
       additionalProperties: false,
     },
   },
+  refresher: {
+    name: REFRESHER_REPORT_TOOL,
+    description:
+      'Report to the president what changed in your training and how you updated your notes. Call it exactly once, at the end.',
+    strict: true,
+    input_schema: {
+      type: 'object',
+      properties: {
+        summary: {
+          type: 'string',
+          maxLength: 600,
+          description:
+            'What changed in your training, in your own words, and what it changes in the way you work.',
+        },
+        notes_changed: {
+          ...stringArray(5, 120),
+          description:
+            'The paths of the notes you changed (for example /memories/company.md). May be empty when no note needed a change.',
+        },
+      },
+      required: ['summary', 'notes_changed'],
+      additionalProperties: false,
+    },
+  },
 };
 
 /** The report tool of each kind of work, and the schema that checks what it was given */
 export const REPORT_SCHEMAS = {
   onboarding: onboardingReportSchema,
   review: selfReviewSchema,
+  refresher: refresherReportSchema,
 } as const satisfies Record<AiEmployeeSessionKind, z.ZodTypeAny>;
 
 export function reportToolOf(kind: AiEmployeeSessionKind): string {

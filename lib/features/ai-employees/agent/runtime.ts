@@ -66,8 +66,10 @@ export function agentEnabled(value = process.env.AI_EMPLOYEE_AGENT_ENABLED): boo
 /** One call of Claude; replaced in the tests */
 export type ClaudeCall = (
   params: Anthropic.MessageCreateParamsNonStreaming,
-  scope: { operation: 'ai-employee-onboarding' | 'ai-employee-review'; organizationId: string }
+  scope: { operation: AgentOperation; organizationId: string }
 ) => Promise<Anthropic.Message>;
+
+type AgentOperation = 'ai-employee-onboarding' | 'ai-employee-review' | 'ai-employee-refresher';
 
 const defaultCall: ClaudeCall = (params, scope) =>
   createClaudeMessage(params, scope, { timeoutMs: AGENT_CALL_TIMEOUT_MS });
@@ -89,11 +91,20 @@ export type StepOutcome =
   /** The session is not running (handed in, over) */
   | { state: 'closed'; status: AiEmployeeSessionStatus };
 
-const OPERATION: Readonly<
-  Record<AiEmployeeSessionKind, 'ai-employee-onboarding' | 'ai-employee-review'>
-> = {
+const OPERATION: Readonly<Record<AiEmployeeSessionKind, AgentOperation>> = {
   onboarding: 'ai-employee-onboarding',
   review: 'ai-employee-review',
+  refresher: 'ai-employee-refresher',
+};
+
+/**
+ * What a kind of work becomes once its report is handed in: the onboarding and the review wait
+ * for the president's answer; a refresher is over (its report is only read, #1281)
+ */
+const HANDED_IN: Readonly<Record<AiEmployeeSessionKind, 'waiting' | 'succeeded'>> = {
+  onboarding: 'waiting',
+  review: 'waiting',
+  refresher: 'succeeded',
 };
 
 /** The request of one step: fixed parts first, so the prompt cache keeps them */
@@ -142,7 +153,10 @@ export function runTools(
         results.push({
           type: 'tool_result',
           tool_use_id: block.id,
-          content: 'Handed in. The president will read it and answer.',
+          content:
+            HANDED_IN[kind] === 'waiting'
+              ? 'Handed in. The president will read it and answer.'
+              : 'Handed in. The president will read it. Your work is done.',
         });
       } else {
         results.push({
@@ -327,7 +341,7 @@ export async function advanceSession(
     appended = [assistant, { role: 'user', content: ran.results }];
     if (ran.report) {
       report = ran.report;
-      status = 'waiting';
+      status = HANDED_IN[kind];
     }
   } else if (message.stop_reason === 'pause_turn') {
     appended = [assistant];
@@ -352,7 +366,7 @@ export async function advanceSession(
         ...(report ? { report } : {}),
         lockedUntil: null,
         updatedAt: now,
-        ...(status === 'failed' ? { finishedAt: now } : {}),
+        ...(status === 'failed' || status === 'succeeded' ? { finishedAt: now } : {}),
       })
       .where(and(held, eq(aiEmployeeSessions.status, 'running')))
       .returning({ id: aiEmployeeSessions.id });
@@ -363,5 +377,6 @@ export async function advanceSession(
   if (!saved) return { state: 'closed', status: 'cancelled' };
 
   if (status === 'failed') return { state: 'failed', resultCode: resultCode ?? 'failed' };
+  if (status === 'succeeded') return { state: 'closed', status: 'succeeded' };
   return status === 'waiting' ? { state: 'waiting' } : { state: 'running' };
 }

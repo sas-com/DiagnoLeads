@@ -921,7 +921,7 @@ export const aiEmployeeSessions = pgTable(
     employeeId: uuid('employee_id')
       .notNull()
       .references(() => aiEmployees.id, { onDelete: 'cascade' }),
-    /** 'onboarding' | 'review' */
+    /** 'onboarding' | 'review' | 'refresher' (reads an update of its training, #1281) */
     kind: text('kind').notNull(),
     /**
      * 'running' moves on; 'waiting' waits for the president's answer to what the employee handed
@@ -954,7 +954,10 @@ export const aiEmployeeSessions = pgTable(
     uniqueIndex('ai_employee_sessions_one_open')
       .on(table.employeeId)
       .where(sql`${table.status} IN ('running', 'waiting')`),
-    check('ai_employee_sessions_kind_check', sql`${table.kind} IN ('onboarding', 'review')`),
+    check(
+      'ai_employee_sessions_kind_check',
+      sql`${table.kind} IN ('onboarding', 'review', 'refresher')`
+    ),
     check(
       'ai_employee_sessions_status_check',
       sql`${table.status} IN ('running', 'waiting', 'succeeded', 'failed', 'cancelled')`
@@ -1121,6 +1124,38 @@ export const aiTrainingTemplates = pgTable(
 );
 
 export type AiTrainingTemplate = typeof aiTrainingTemplates.$inferSelect;
+
+/**
+ * AI Training Template Versions (#1281)
+ * A copy of a template at each version it was saved as: what an employee's copy was made from, so
+ * an update can show what the template changed since then, section by section.
+ */
+export const aiTrainingTemplateVersions = pgTable(
+  'ai_training_template_versions',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    organizationId: uuid('organization_id').notNull(),
+    scope: text('scope').notNull(),
+    version: integer('version').notNull(),
+    sections: jsonb('sections').$type<Record<string, string>>().default({}).notNull(),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Named explicitly: the generated name is longer than PostgreSQL's 63-character limit
+    foreignKey({
+      name: 'ai_training_template_versions_organization_fk',
+      columns: [table.organizationId],
+      foreignColumns: [organizations.id],
+    }).onDelete('cascade'),
+    uniqueIndex('ai_training_template_versions_unique').on(
+      table.organizationId,
+      table.scope,
+      table.version
+    ),
+    check('ai_training_template_versions_scope_check', sql`${table.scope} ~ '^[a-z_]{1,30}$'`),
+  ]
+);
 
 /**
  * AI Employee Trainings (#1280)

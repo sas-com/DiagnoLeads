@@ -6,7 +6,13 @@
  * empty. Every query is scoped by organizationId; every save is written to the audit log.
  */
 import type { db as defaultDb } from '@/lib/db/client';
-import { aiEmployeeTrainings, aiEmployees, aiTrainingTemplates, auditLogs } from '@/lib/db/schema';
+import {
+  aiEmployeeTrainings,
+  aiEmployees,
+  aiTrainingTemplateVersions,
+  aiTrainingTemplates,
+  auditLogs,
+} from '@/lib/db/schema';
 import enAiOffice from '@/locales/en/aiOffice.json';
 import jaAiOffice from '@/locales/ja/aiOffice.json';
 import { and, eq, sql } from 'drizzle-orm';
@@ -146,7 +152,7 @@ function audit(
   });
 }
 
-/** Saves a template; its version goes up by one */
+/** Saves a template; its version goes up by one, and a copy of that version is kept */
 export async function saveTemplate(
   db: Database,
   input: {
@@ -192,6 +198,15 @@ export async function saveTemplate(
       })
       .returning({ id: aiTrainingTemplates.id, version: aiTrainingTemplates.version });
     if (!saved) throw new Error('The template was not saved');
+    // A copy of each version: what an employee's copy was made from, to show an update (#1281)
+    await tx.insert(aiTrainingTemplateVersions).values({
+      organizationId: input.organizationId,
+      scope: input.scope,
+      version: saved.version,
+      sections,
+      createdBy: input.userId,
+      createdAt: now,
+    });
     await audit(tx, {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -228,11 +243,17 @@ async function writeTraining(
     templateVersion: number | null;
     userId: string | null;
     now: Date;
+    /**
+     * When the copy was last saved as the writer read it: written only if it is still so (an update
+     * brought in or another edit since then is never overwritten). Left out, it is always written
+     */
+    expectedUpdatedAt?: Date;
   }
 ) {
   const sections = completeSections(input.kind, input.sections);
+  // Locked until the write is over (the callers write in a transaction)
   const [before] = await db
-    .select({ sections: aiEmployeeTrainings.sections })
+    .select({ sections: aiEmployeeTrainings.sections, updatedAt: aiEmployeeTrainings.updatedAt })
     .from(aiEmployeeTrainings)
     .where(
       and(
@@ -240,7 +261,14 @@ async function writeTraining(
         eq(aiEmployeeTrainings.employeeId, input.employeeId),
         eq(aiEmployeeTrainings.kind, input.kind)
       )
-    );
+    )
+    .for('update');
+  if (
+    input.expectedUpdatedAt &&
+    (!before || before.updatedAt.getTime() !== input.expectedUpdatedAt.getTime())
+  ) {
+    return null;
+  }
   await db
     .insert(aiEmployeeTrainings)
     .values({
@@ -267,7 +295,10 @@ async function writeTraining(
   return { before: before?.sections ?? null, after: sections };
 }
 
-/** A manager edits an employee's own training of one kind; null when there is no such employee */
+/**
+ * A manager edits an employee's own training of one kind. Refused when there is no such employee,
+ * or when the copy was saved since the manager read it (copyUpdatedAt)
+ */
 export async function saveEmployeeTraining(
   db: Database,
   input: {
@@ -276,18 +307,22 @@ export async function saveEmployeeTraining(
     kind: TrainingKind;
     sections: TrainingSections;
     userId: string;
+    /** When the copy was last saved, as the manager read it (none before the first copy) */
+    copyUpdatedAt?: Date;
     now?: Date;
   }
-): Promise<{ kind: TrainingKind } | null> {
+): Promise<{ kind: TrainingKind } | 'not_found' | 'changed_meanwhile'> {
   const employee = await employeeOf(db, input.organizationId, input.employeeId);
-  if (!employee) return null;
+  if (!employee) return 'not_found';
   const now = input.now ?? new Date();
-  await db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
     const written = await writeTraining(tx, {
       ...pickTraining(input),
       templateVersion: null,
       now,
+      ...(input.copyUpdatedAt ? { expectedUpdatedAt: input.copyUpdatedAt } : {}),
     });
+    if (!written) return false;
     await audit(tx, {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -296,8 +331,9 @@ export async function saveEmployeeTraining(
       before: written.before && { kind: input.kind, sections: written.before },
       after: { kind: input.kind, sections: written.after },
     });
+    return true;
   });
-  return { kind: input.kind };
+  return saved ? { kind: input.kind } : 'changed_meanwhile';
 }
 
 /** The fields of a training write, named one by one (never the caller's whole input) */
@@ -372,6 +408,7 @@ export async function copyTemplate(
       userId: input.userId,
       now,
     });
+    if (!written) throw new Error('The training was not copied');
     await audit(tx, {
       organizationId: input.organizationId,
       userId: input.userId,
