@@ -17,6 +17,10 @@ import {
   PARTITIONS,
   PENDANTS,
   PLANTS,
+  SALES_DESKS,
+  MARKETING_DESKS,
+  SERVER_RACKS,
+  SPARE_STUDY_DESKS,
   WALL_HEIGHT,
   WALL_THICKNESS,
   chairOfDesk,
@@ -30,6 +34,7 @@ import {
   FLOOR_WIDTH,
   OFFICE_AREAS,
   ROLE_DESKS,
+  TRAINING_DESKS,
   spotOf,
 } from '@/components/features/ai-employees/office-map-layout';
 import { DESK_STATUSES } from '@/lib/features/ai-employees/office';
@@ -125,6 +130,20 @@ describe('officeScenery', () => {
     // its back, its arms, two seat cushions and two pillows
     expect(count((p) => p.kind === 'chair' && p.shape === 'rounded')).toBe(ALL_CHAIRS.length * 4);
     expect(count((p) => p.kind === 'lounge' && p.shape === 'rounded')).toBe(7);
+    // Every desk is closed by a panel between its legs, every rack has a handle, every pendant
+    // a brass cap (#1159)
+    const desks = parts.filter((p) => p.kind === 'desk' && p.colour === '#5f3d26' && p.h === 0.36);
+    expect(desks.length).toBe(
+      SALES_DESKS.length +
+        MARKETING_DESKS.length +
+        Object.values(ROLE_DESKS).filter((own) => !('counter' in own && own.counter)).length +
+        TRAINING_DESKS.length +
+        SPARE_STUDY_DESKS.length
+    );
+    expect(count((p) => p.kind === 'storage' && p.colour === '#8b95a3')).toBe(SERVER_RACKS.length);
+    expect(
+      count((p) => p.kind === 'lamp' && p.shape === 'cylinder' && p.finish === 'metal' && p.w === 0.12)
+    ).toBe(PENDANTS.length);
     // Every plant has its soil in the planter, on top of the brass rim where it can be seen
     const soil = parts.filter((p) => p.kind === 'plant' && p.colour === '#3b2a1c');
     expect(soil).toHaveLength(plants.length);

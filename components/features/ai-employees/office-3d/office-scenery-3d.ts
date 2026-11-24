@@ -155,23 +155,39 @@ class Builder {
   }
 }
 
-/** A desk like the ones of the 2D office: a walnut top on two steel legs, keyboard and monitors */
+/** The panel that closes a desk on the side of the viewer, between its legs (#1159) */
+function modestyPanel(b: Builder, x: number, y: number, w: number, d: number, top: number): void {
+  b.box(x + 0.12, y + d - 0.07, top - 0.42, w - 0.24, 0.03, 0.36, ['satin', WALNUT_DARK]);
+}
+
+/**
+ * A desk like the ones of the 2D office: a walnut top on two steel legs with feet, a panel
+ * between the legs, a keyboard and a mouse, and the monitors with their backs to the viewer.
+ * The screens stay dark: what they would show is not known (#1159)
+ */
 function desk(b: Builder, { x, y, w, d, monitors }: DeskPlace): void {
-  b.box(x + 0.05, y + 0.08, 0, 0.07, d - 0.16, 0.68, ['metal', STEEL]);
-  b.box(x + w - 0.12, y + 0.08, 0, 0.07, d - 0.16, 0.68, ['metal', STEEL]);
+  for (const lx of [x + 0.05, x + w - 0.12]) {
+    b.box(lx, y + 0.08, 0.03, 0.07, d - 0.16, 0.65, ['metal', STEEL]);
+    b.box(lx - 0.02, y + 0.05, 0, 0.11, d - 0.1, 0.03, ['metal', STEEL]);
+  }
+  modestyPanel(b, x, y, w, d, 0.68);
   b.box(x, y, 0.68, w, d, 0.06, ['satin', WALNUT]);
   b.box(x + w * 0.3, y + d * 0.14, 0.74, w * 0.4, d * 0.24, 0.025, ['satin', '#d9dde3']);
+  b.rounded(x + w * 0.74, y + d * 0.16, 0.74, 0.07, 0.11, 0.03, ['satin', '#d9dde3']);
   const mw = monitors === 2 ? w * 0.36 : w * 0.5;
   const starts = monitors === 2 ? [x + w * 0.1, x + w * 0.54] : [x + w * 0.25];
   for (const mx of starts) {
     b.box(mx + mw / 2 - 0.07, y + d - 0.2, 0.74, 0.14, 0.1, 0.14, ['satin', '#3b424d']);
     b.box(mx, y + d - 0.24, 0.86, mw, 0.05, 0.46, ['satin', '#1d2127']);
+    // The housing on the back of the screen, which the viewer sees
+    b.rounded(mx + mw * 0.2, y + d - 0.19, 0.95, mw * 0.6, 0.05, 0.26, ['satin', '#2a2f37']);
   }
 }
 
 function studyDesk(b: Builder, { x, y, w, h: d }: FloorRect): void {
   b.box(x + 0.05, y + 0.08, 0, 0.07, d - 0.16, 0.66, ['metal', STEEL]);
   b.box(x + w - 0.12, y + 0.08, 0, 0.07, d - 0.16, 0.66, ['metal', STEEL]);
+  modestyPanel(b, x, y, w, d, 0.66);
   b.box(x, y, 0.66, w, d, 0.06, ['satin', '#eceef1']);
   // An open book
   b.box(x + w / 2 - 0.36, y + 0.16, 0.72, 0.34, 0.44, 0.03, ['matte', '#ffffff']);
@@ -251,7 +267,9 @@ function roundTable(b: Builder, { x, y, r }: RoundTablePlace): void {
 /** A pendant lamp on its cord: a brass shade, and the bulb that is on at night */
 function pendant(b: Builder, x: number, y: number): void {
   const shadeTop = PENDANT_HEIGHT + 0.28;
-  b.cylinder(x, y, shadeTop, 0.02, PENDANT_CORD_TOP - shadeTop, ['satin', STEEL]);
+  b.cylinder(x, y, shadeTop + 0.04, 0.02, PENDANT_CORD_TOP - shadeTop - 0.04, ['satin', STEEL]);
+  // The brass cap where the cord meets the shade
+  b.cylinder(x, y, shadeTop - 0.01, 0.12, 0.05, ['metal', BRASS]);
   b.cone(x, y, PENDANT_HEIGHT, 0.6, 0.28, ['metal', BRASS]);
   b.ball(x, y, PENDANT_HEIGHT + 0.02, 0.22, ['glow', '#f6efdc', '#fff3cf']);
 }
@@ -462,7 +480,15 @@ export function officeScenery(): readonly SceneryPart[] {
   b.box(0.45, 6.85, 0.7, 0.6, 0.42, 0.28, ['satin', '#e8eaee']);
   b.box(0.5, 6.9, 0.98, 0.5, 0.3, 0.03, ['satin', '#9aa1ab']);
   for (const rack of SERVER_RACKS) {
-    b.box(rack.x, rack.y, 0, rack.w, rack.h, 2.3, ['satin', '#191c22']);
+    // A cabinet on a plinth, its door framed in steel with a handle, the lights behind the door
+    const front = rack.y + rack.h;
+    b.box(rack.x + 0.03, rack.y + 0.03, 0, rack.w - 0.06, rack.h - 0.06, 0.06, ['metal', STEEL]);
+    b.box(rack.x, rack.y, 0.06, rack.w, rack.h, 2.24, ['satin', '#191c22']);
+    b.box(rack.x, rack.y, 2.3, rack.w, rack.h, 0.03, ['metal', STEEL]);
+    for (const fx of [rack.x + 0.04, rack.x + rack.w - 0.08]) {
+      b.box(fx, front, 0.16, 0.04, 0.015, 2.04, ['metal', STEEL]);
+    }
+    b.box(rack.x + rack.w - 0.11, front + 0.015, 1.05, 0.025, 0.025, 0.32, ['metal', '#8b95a3']);
     for (let i = 0; i < 6; i++) {
       b.box(rack.x + 0.12, rack.y + rack.h, 0.4 + i * 0.3, 0.48, 0.012, 0.03, [
         'glow',
