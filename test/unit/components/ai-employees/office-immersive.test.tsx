@@ -82,6 +82,7 @@ const sales = {
   createdAt: new Date('2026-11-01T00:00:00Z'),
   deskStatus: 'training' as const,
   lastRun: null,
+  seat: 0,
   processedToday: 0,
   profile: DEFAULT_AI_EMPLOYEE_PROFILE,
 };

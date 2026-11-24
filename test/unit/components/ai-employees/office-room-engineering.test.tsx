@@ -287,6 +287,7 @@ async function enterRoom(deskStatus: 'vacant' | 'idle' | 'training' = 'vacant') 
             createdAt: new Date('2026-11-01T00:00:00Z'),
             deskStatus,
             lastRun: null,
+            seat: 0,
             processedToday: 0,
             profile: DEFAULT_AI_EMPLOYEE_PROFILE,
           },

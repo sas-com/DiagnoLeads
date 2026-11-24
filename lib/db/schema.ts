@@ -817,6 +817,11 @@ export const aiEmployees = pgTable(
       .references(() => organizations.id, { onDelete: 'cascade' }),
     /** AI_EMPLOYEE_ROLES */
     role: text('role').notNull(),
+    /**
+     * Which of the role's desks the employee sits at (#1282): 0 to 2 (AI_EMPLOYEE_SEATS_PER_ROLE).
+     * Kept, so the others do not move when one is dismissed; one employee per desk
+     */
+    seat: integer('seat').default(0).notNull(),
     /** Name shown on the desk */
     name: text('name').notNull(),
     /** 'active' works on its schedule; 'paused' does not work */
@@ -846,7 +851,16 @@ export const aiEmployees = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
+    // One employee per role, kept while a role may have one (AI_EMPLOYEES_PER_ROLE): the code that
+    // runs before and after this migration both stay valid. Dropped when the limit goes up (#1282)
     uniqueIndex('ai_employees_organization_role_unique').on(table.organizationId, table.role),
+    // One employee per desk of a role (#1282); how many a role may have is checked when hiring
+    uniqueIndex('ai_employees_organization_role_seat_unique').on(
+      table.organizationId,
+      table.role,
+      table.seat
+    ),
+    check('ai_employees_seat_check', sql`${table.seat} BETWEEN 0 AND 2`),
     check('ai_employees_status_check', sql`${table.status} IN ('active', 'paused')`),
     check('ai_employees_level_check', sql`${table.level} BETWEEN 0 AND 4`),
     check('ai_employees_policy_check', sql`char_length(${table.policy}) <= 400`),

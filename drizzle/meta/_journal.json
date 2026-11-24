@@ -302,6 +302,13 @@
       "when": 1795333686106,
       "tag": "0042_training_updates",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1795562742295,
+      "tag": "0043_employees_per_role",
+      "breakpoints": true
     }
   ]
 }

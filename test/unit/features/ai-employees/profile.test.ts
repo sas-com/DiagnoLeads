@@ -16,6 +16,7 @@ import {
   stepAiStat,
 } from '@/lib/features/ai-employees/types/profile';
 import { updateAiEmployeeSchema } from '@/lib/features/ai-employees/types/schemas';
+import { AI_EMPLOYEE_SEATS_PER_ROLE } from '@/lib/features/ai-employees/types/roles';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -192,6 +193,19 @@ describe('the migration of the AI employee tables', () => {
     // The new columns of ai_employees have defaults: the running code keeps inserting
     expect(training).toContain('ADD COLUMN "level" integer DEFAULT 0 NOT NULL');
     expect(training).toContain(`ADD COLUMN "policy" text DEFAULT '' NOT NULL`);
+  });
+
+  it('gives each employee a desk of its role, keeping the one-per-role index for now (#1282)', () => {
+    const seats = readFileSync(
+      resolve(__dirname, '../../../../drizzle/0043_employees_per_role.sql'),
+      'utf8'
+    );
+    // Existing rows take the first desk; the code before and after the migration both stay valid
+    expect(seats).toContain('ADD COLUMN "seat" integer DEFAULT 0 NOT NULL');
+    expect(seats).toContain('"ai_employees_organization_role_seat_unique"');
+    expect(seats).not.toContain('DROP INDEX "ai_employees_organization_role_unique"');
+    // The database refuses a desk the office does not have
+    expect(seats).toContain(`"seat" BETWEEN 0 AND ${AI_EMPLOYEE_SEATS_PER_ROLE - 1}`);
   });
 
   it('turns it on for the version history of the templates, kept from the templates saved (#1281)', () => {

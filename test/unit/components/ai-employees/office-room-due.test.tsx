@@ -255,6 +255,7 @@ async function enterCounter(deskStatus: 'vacant' | 'idle' = 'vacant') {
             createdAt: new Date('2026-11-01T00:00:00Z'),
             deskStatus,
             lastRun: null,
+            seat: 0,
             processedToday: 0,
             profile: DEFAULT_AI_EMPLOYEE_PROFILE,
           },

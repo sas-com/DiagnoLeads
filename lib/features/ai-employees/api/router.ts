@@ -125,7 +125,7 @@ export const aiEmployeesRouter = router({
     if (!hired) {
       throw new TRPCError({
         code: 'CONFLICT',
-        message: 'An AI employee already has this role',
+        message: 'The role already has as many AI employees as it may have',
       });
     }
     return hired;
