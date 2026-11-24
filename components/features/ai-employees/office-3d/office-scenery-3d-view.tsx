@@ -14,6 +14,7 @@ import {
   Vector3,
 } from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import {
   BACK_WINDOWS,
   LEFT_WINDOWS,
@@ -53,6 +54,12 @@ function useDisposal(textures: readonly CanvasTexture[]): void {
   );
 }
 
+/**
+ * The unit box with soft edges that every `rounded` part is stretched from. One for the office:
+ * the module is loaded with the 3D floor only, and the geometry lives as long as the page
+ */
+const ROUNDED_BOX = new RoundedBoxGeometry(1, 1, 1, 1, 0.16);
+
 function ShapeGeometry({ shape }: { shape: SceneryShape }) {
   switch (shape) {
     case 'cylinder':
@@ -60,7 +67,10 @@ function ShapeGeometry({ shape }: { shape: SceneryShape }) {
     case 'cone':
       return <cylinderGeometry args={[0.14, 0.5, 1, 28]} />;
     case 'ball':
-      return <sphereGeometry args={[0.5, 20, 14]} />;
+      return <sphereGeometry args={[0.5, 14, 10]} />;
+    case 'rounded':
+      // One unit box with soft edges, stretched to each part: thin parts keep thin edges
+      return <primitive object={ROUNDED_BOX} attach="geometry" />;
     default:
       return <boxGeometry args={[1, 1, 1]} />;
   }
@@ -299,7 +309,7 @@ function LampLight() {
   );
 }
 
-const SHAPES: readonly SceneryShape[] = ['box', 'cylinder', 'cone', 'ball'];
+const SHAPES: readonly SceneryShape[] = ['box', 'rounded', 'cylinder', 'cone', 'ball'];
 const FINISHES: readonly SceneryFinish[] = ['matte', 'satin', 'polished', 'metal', 'glow', 'glass'];
 
 /**

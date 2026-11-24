@@ -121,8 +121,40 @@ describe('officeScenery', () => {
     expect(count((p) => p.kind === 'window' && p.finish === 'glass')).toBe(
       BACK_WINDOWS.length + LEFT_WINDOWS.length
     );
+    // Padded, with soft edges (#1159): each chair a seat, a backrest and two armrests; the sofa
+    // its back, its arms, two seat cushions and two pillows
+    expect(count((p) => p.kind === 'chair' && p.shape === 'rounded')).toBe(ALL_CHAIRS.length * 4);
+    expect(count((p) => p.kind === 'lounge' && p.shape === 'rounded')).toBe(7);
+    // Every plant has its soil in the planter, on top of the brass rim where it can be seen
+    const soil = parts.filter((p) => p.kind === 'plant' && p.colour === '#3b2a1c');
+    expect(soil).toHaveLength(plants.length);
+    const rims = parts.filter((p) => p.kind === 'plant' && p.finish === 'metal');
+    for (const own of soil) {
+      const rim = rims.find((r) => r.x === own.x && r.y === own.y);
+      expect(own.z - own.h / 2, JSON.stringify(own)).toBeGreaterThanOrEqual(
+        (rim?.z ?? 0) + (rim?.h ?? 0) / 2
+      );
+    }
     for (const kind of ['desk', 'table', 'storage', 'lounge', 'charging', 'rug', 'wall-decor']) {
       expect(count((p) => p.kind === kind), kind).toBeGreaterThan(0);
+    }
+  });
+
+  it('puts each backrest behind the seat, away from where the chair is turned (#1159)', () => {
+    for (const chair of ALL_CHAIRS) {
+      const own = parts.filter(
+        (p) =>
+          p.kind === 'chair' &&
+          p.shape === 'rounded' &&
+          Math.abs(p.x - chair.x) < 0.4 &&
+          Math.abs(p.y - chair.y) < 0.4
+      );
+      const back = own.find((p) => p.h > 0.5);
+      expect(back, JSON.stringify(chair)).toBeDefined();
+      if (!back) continue;
+      const offset = { '+y': [0, -1], '-y': [0, 1], '+x': [-1, 0], '-x': [1, 0] }[chair.facing];
+      expect(Math.sign(Math.round((back.x - chair.x) * 100)), JSON.stringify(chair)).toBe(offset[0]);
+      expect(Math.sign(Math.round((back.y - chair.y) * 100)), JSON.stringify(chair)).toBe(offset[1]);
     }
   });
 
