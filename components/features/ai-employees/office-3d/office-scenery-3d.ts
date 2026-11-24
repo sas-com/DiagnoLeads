@@ -60,7 +60,8 @@ import {
   TRAINING_DESKS,
 } from '../office-map-layout';
 
-export type SceneryShape = 'box' | 'cylinder' | 'cone' | 'ball';
+/** `rounded` is a box with soft edges: cushions, seats and backrests (#1159) */
+export type SceneryShape = 'box' | 'rounded' | 'cylinder' | 'cone' | 'ball';
 /**
  * How a surface takes the light: `matte` plaster and cloth, `satin` wood, leather and laminate,
  * `polished` marble, `metal` brass and steel, `glass`, and `glow` for what shines by itself
@@ -125,6 +126,10 @@ class Builder {
   box(x: number, y: number, z: number, w: number, d: number, h: number, look: Look): void {
     this.add('box', x + w / 2, y + d / 2, z + h / 2, w, d, h, look);
   }
+  /** A box with soft edges, from its corner like `box`: a cushion, a seat, an armrest */
+  rounded(x: number, y: number, z: number, w: number, d: number, h: number, look: Look): void {
+    this.add('rounded', x + w / 2, y + d / 2, z + h / 2, w, d, h, look);
+  }
   /** A standing cylinder of the diameter, from `z` up */
   cylinder(x: number, y: number, z: number, diameter: number, h: number, look: Look): void {
     this.add('cylinder', x, y, z + h / 2, diameter, diameter, h, look);
@@ -186,23 +191,41 @@ function counter(b: Builder, { x, y, w, d }: { x: number; y: number; w: number; 
   b.box(x + w / 2 - 0.45, y + d - 0.2, 1.25, 0.9, 0.05, 0.44, ['satin', '#1d2127']);
 }
 
-/** An office chair on its base; its backrest is on the side it is turned away from */
+/**
+ * An office chair on its base: a padded seat, a padded backrest on the side it is turned away
+ * from, and an armrest on each side of whoever sits in it
+ */
 function chair(b: Builder, { x, y, facing, cognac }: ChairPlace): void {
   const colour = cognac ? COGNAC : LEATHER;
   b.cylinder(x, y, 0, 0.56, 0.03, ['satin', FRAME]);
   b.cylinder(x, y, 0.03, 0.08, 0.37, ['metal', '#3a4049']);
-  b.box(x - 0.3, y - 0.3, 0.4, 0.6, 0.6, 0.1, ['satin', colour]);
-  if (facing === '+y') b.box(x - 0.3, y - 0.36, 0.5, 0.6, 0.1, 0.66, ['satin', colour]);
-  else if (facing === '-y') b.box(x - 0.3, y + 0.26, 0.5, 0.6, 0.1, 0.66, ['satin', colour]);
-  else if (facing === '+x') b.box(x - 0.36, y - 0.3, 0.5, 0.1, 0.6, 0.66, ['satin', colour]);
-  else b.box(x + 0.26, y - 0.3, 0.5, 0.1, 0.6, 0.66, ['satin', colour]);
+  b.rounded(x - 0.3, y - 0.3, 0.38, 0.6, 0.6, 0.13, ['satin', colour]);
+  // Turned towards y (the backrest along x) or towards x (the backrest along y)
+  const alongX = facing === '+y' || facing === '-y';
+  const back = facing === '+y' || facing === '+x' ? -1 : 1;
+  if (alongX) b.rounded(x - 0.29, y + back * 0.27 - 0.06, 0.5, 0.58, 0.12, 0.64, ['satin', colour]);
+  else b.rounded(x + back * 0.27 - 0.06, y - 0.29, 0.5, 0.12, 0.58, 0.64, ['satin', colour]);
+  for (const side of [-1, 1]) {
+    const [ax, ay] = alongX
+      ? [x + side * 0.31 - 0.035, y - 0.2]
+      : [x - 0.2, y + side * 0.31 - 0.035];
+    const [aw, ad] = alongX ? [0.07, 0.4] : [0.4, 0.07];
+    // A post from the seat, and the pad on it
+    const [px, py] = alongX ? [ax + 0.01, y - 0.025] : [x - 0.025, ay + 0.01];
+    b.box(px, py, 0.5, 0.05, 0.05, 0.14, ['metal', '#3a4049']);
+    b.rounded(ax, ay, 0.64, aw, ad, 0.05, ['satin', FRAME]);
+  }
 }
 
-/** A plant in a black planter with a brass rim; a tall one grows on a stem */
+/**
+ * A plant in a black planter with a brass rim and dark soil; a tall one grows on a stem. The
+ * leaves are clusters of many sizes, darker inside and lighter where the light falls
+ */
 function plant(b: Builder, { x, y, tall }: PlantPlace): void {
   const lift = tall ? 0.75 : 0;
   b.cylinder(x, y, 0, PLANTER_SIDE, 0.62, ['satin', '#22262d']);
   b.cylinder(x, y, 0.6, PLANTER_SIDE + 0.03, 0.03, ['metal', BRASS]);
+  b.cylinder(x, y, 0.6, PLANTER_SIDE - 0.06, 0.025, ['matte', '#3b2a1c']);
   if (tall) b.cylinder(x, y, 0.62, 0.05, 0.9, ['matte', '#5b4630']);
   b.ball(x + 0.05, y + 0.12, 0.98 + lift, 0.58, ['matte', '#1d5c3a']);
   b.ball(x, y, 1.15 + lift, 0.76, ['matte', '#2a8a55']);
@@ -210,6 +233,11 @@ function plant(b: Builder, { x, y, tall }: PlantPlace): void {
   b.ball(x - 0.15, y + 0.1, 1.48 + lift, 0.54, ['matte', '#226f45']);
   b.ball(x - 0.2, y - 0.14, 1.08 + lift, 0.5, ['matte', '#2f9a5f']);
   b.ball(x + 0.14, y + 0.2, 1.27 + lift, 0.44, ['matte', '#3fae70']);
+  // Smaller leaves at the edge and on top: the round outline breaks up
+  b.ball(x - 0.3, y + 0.05, 1.3 + lift, 0.3, ['matte', '#3a9e66']);
+  b.ball(x + 0.28, y + 0.14, 1.12 + lift, 0.28, ['matte', '#2a8a55']);
+  b.ball(x + 0.02, y - 0.26, 1.22 + lift, 0.32, ['matte', '#46b778']);
+  b.ball(x + 0.06, y + 0.02, 1.66 + lift, 0.3, ['matte', '#4cc07f']);
 }
 
 /** A round table: a marble top on a brass pedestal */
@@ -473,13 +501,26 @@ export function officeScenery(): readonly SceneryPart[] {
   ] as const) {
     b.box(u, 10.862, z, 0.12, 0.03, 0.34, ['polished', colour]);
   }
-  // A velvet sofa with two cushions
-  b.box(SOFA.x, SOFA.y, 0, SOFA.w, SOFA.h, 0.45, ['matte', EMERALD]);
-  b.box(SOFA.x, SOFA.y, 0.45, 0.32, SOFA.h, 0.62, ['matte', '#1b5f4b']);
-  b.box(SOFA.x, SOFA.y, 0.45, SOFA.w, 0.25, 0.3, ['matte', '#1b5f4b']);
-  b.box(SOFA.x, SOFA.y + SOFA.h - 0.25, 0.45, SOFA.w, 0.25, 0.3, ['matte', '#1b5f4b']);
-  b.box(8.95, 11.6, 0.45, 0.22, 0.5, 0.42, ['matte', '#e9e2d2']);
-  b.box(8.95, 14.1, 0.45, 0.22, 0.5, 0.42, ['matte', BRASS]);
+  // A velvet sofa on brass feet: a padded back and arms, two seat cushions, two pillows
+  const VELVET = '#1b5f4b';
+  for (const [u, v] of [
+    [SOFA.x + 0.06, SOFA.y + 0.06],
+    [SOFA.x + SOFA.w - 0.12, SOFA.y + 0.06],
+    [SOFA.x + 0.06, SOFA.y + SOFA.h - 0.12],
+    [SOFA.x + SOFA.w - 0.12, SOFA.y + SOFA.h - 0.12],
+  ] as const) {
+    b.box(u, v, 0, 0.06, 0.06, 0.1, ['metal', BRASS]);
+  }
+  b.box(SOFA.x, SOFA.y, 0.1, SOFA.w, SOFA.h, 0.22, ['matte', '#174f3f']);
+  b.rounded(SOFA.x, SOFA.y, 0.3, 0.32, SOFA.h, 0.78, ['matte', VELVET]);
+  b.rounded(SOFA.x, SOFA.y, 0.3, SOFA.w, 0.26, 0.48, ['matte', VELVET]);
+  b.rounded(SOFA.x, SOFA.y + SOFA.h - 0.26, 0.3, SOFA.w, 0.26, 0.48, ['matte', VELVET]);
+  const seat = (SOFA.h - 0.52) / 2;
+  for (const v of [SOFA.y + 0.26, SOFA.y + 0.26 + seat]) {
+    b.rounded(SOFA.x + 0.3, v + 0.01, 0.3, SOFA.w - 0.3, seat - 0.02, 0.2, ['matte', EMERALD]);
+  }
+  b.rounded(8.95, 11.6, 0.5, 0.22, 0.5, 0.42, ['matte', '#e9e2d2']);
+  b.rounded(8.95, 14.1, 0.5, 0.22, 0.5, 0.42, ['matte', BRASS]);
   // A marble coffee table on brass legs, a book on it
   for (const [u, v] of [
     [11.0, 12.5],
